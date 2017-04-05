@@ -1378,11 +1378,18 @@ config KRYO_PMU_WORKAROUND
 
 	  Enable this flag for effect SoCs.
 
+config BUILD_ARM64_DTC
+	string "dtc to use"
+
+config BUILD_ARM64_DTC_FLAGS
+	string "extra dtc flags"
+
 config BUILD_ARM64_DT_OVERLAY
 	bool "enable DT overlay compilation support"
 	depends on OF
 	help
 	  This option enables support for DT overlay compilation.
+
 endmenu
 
 menu "Userspace binary formats"
