@@ -28,6 +28,8 @@ DTB_LIST := $(dtb-y)
 endif
 DTB_OBJS := $(shell find $(obj)/dts/ -name \*.dtb)
 
+DTBO_OBJS := $(shell find -L $(obj)/dts/ -name \*.dtbo)
+
 # Add RTIC DTB to the DTB list if RTIC MPGen is enabled
 ifdef RTIC_MPGEN
 DTB_OBJS += rtic_mp.dtb
@@ -68,7 +70,7 @@ $(obj)/Image.gz-dtb: $(obj)/Image.gz $(DTB_OBJS) FORCE
 	$(call if_changed,cat)
 
 
-$(obj)/dtbo.img: $(obj)/dts/dtboimg.cfg FORCE
+$(obj)/dtbo.img: $(obj)/dts/dtboimg.cfg $(DTBO_OBJS) FORCE
 	$(call if_changed,mkdtimg)
 
 install:
