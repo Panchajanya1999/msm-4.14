@@ -1558,6 +1558,7 @@ extern struct pid *cad_pid;
 #define PF_MUTEX_TESTER		0x20000000	/* Thread belongs to the rt mutex tester */
 #define PF_FREEZER_SKIP		0x40000000	/* Freezer should not count it as freezable */
 #define PF_SUSPEND_TASK		0x80000000      /* This thread called freeze_processes() and should not be frozen */
+#define PF_PERF_CRITICAL 0x01000000	/* Thread is performance-critical */
 
 /*
  * Only the _current_ task can read/write to tsk->flags, but other
