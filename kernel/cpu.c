@@ -584,9 +584,12 @@ static int cpuhp_up_callbacks(unsigned int cpu, struct cpuhp_cpu_state *st,
 static void cpuhp_create(unsigned int cpu)
 {
 	struct cpuhp_cpu_state *st = per_cpu_ptr(&cpuhp_state, cpu);
+	struct cpumask newmask;
 
 	init_completion(&st->done_up);
 	init_completion(&st->done_down);
+
+	cpumask_andnot(&newmask, cpu_online_mask, cpumask_of(cpu));
 }
 
 static int cpuhp_should_run(unsigned int cpu)
@@ -2018,6 +2021,8 @@ static ssize_t write_cpuhp_fail(struct device *dev,
 	if (ret)
 		return ret;
 
+		reaffine_perf_irqs();
+
 	/*
 	 * Cannot fail STARTING/DYING callbacks.
 	 */
@@ -2156,6 +2161,7 @@ static int cpuhp_smt_disable(enum cpuhp_smt_control ctrlval)
 	}
 	if (!ret)
 		cpu_smt_control = ctrlval;
+	reaffine_perf_irqs();
 	cpu_maps_update_done();
 	return ret;
 }
@@ -2327,6 +2333,20 @@ EXPORT_SYMBOL(__cpu_active_mask);
 
 struct cpumask __cpu_isolated_mask __read_mostly;
 EXPORT_SYMBOL(__cpu_isolated_mask);
+/*
+ * This assumes that half of the CPUs are little and that they have lower
+ * CPU numbers than the big CPUs (e.g., on an 8-core system, CPUs 0-5 would be
+ * little and CPUs 6-7 would be big).
+ */
+#define LITTLE_CPU_MASK	((1UL << 6) - 1)
+#define BIG_CPU_MASK	(((1UL << NR_CPUS) - 1) & ~LITTLE_CPU_MASK)
+static const unsigned long little_cluster_cpus = LITTLE_CPU_MASK;
+const struct cpumask *const cpu_lp_mask = to_cpumask(&little_cluster_cpus);
+EXPORT_SYMBOL(cpu_lp_mask);
+
+static const unsigned long big_cluster_cpus = BIG_CPU_MASK;
+const struct cpumask *const cpu_perf_mask = to_cpumask(&big_cluster_cpus);
+EXPORT_SYMBOL(cpu_perf_mask);
 
 void init_cpu_present(const struct cpumask *src)
 {
