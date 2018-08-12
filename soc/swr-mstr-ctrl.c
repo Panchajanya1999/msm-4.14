@@ -60,7 +60,7 @@ enum {
 #define TRUE 1
 #define FALSE 0
 
-#define SWRM_MAX_PORT_REG    40
+#define SWRM_MAX_PORT_REG    200
 #define SWRM_MAX_INIT_REG    8
 
 #define SWR_MSTR_MAX_REG_ADDR	0x1740
@@ -301,12 +301,12 @@ static int swr_master_bulk_write(struct swr_mstr_ctrl *swrm, u32 *reg_addr,
 				u32 *val, unsigned int length)
 {
 	int i = 0;
-
 	if (swrm->bulk_write)
 		swrm->bulk_write(swrm->handle, reg_addr, val, length);
 	else {
 		for (i = 0; i < length; i++) {
 		/* wait for FIFO WR command to complete to avoid overflow */
+
 			usleep_range(100, 105);
 			swr_master_write(swrm, reg_addr[i], val[i]);
 		}
@@ -1277,13 +1277,13 @@ static int swrm_get_logical_dev_num(struct swr_master *mstr, u64 dev_id,
 		num_dev = swrm->num_dev;
 	else
 		num_dev = mstr->num_dev;
-
 	pm_runtime_get_sync(swrm->dev);
 	for (i = 1; i < (num_dev + 1); i++) {
 		id = ((u64)(swr_master_read(swrm,
 			    SWRM_ENUMERATOR_SLAVE_DEV_ID_2(i))) << 32);
 		id |= swr_master_read(swrm,
 					SWRM_ENUMERATOR_SLAVE_DEV_ID_1(i));
+
 		/*
 		 * As pm_runtime_get_sync() brings all slaves out of reset
 		 * update logical device number for all slaves.
@@ -1719,6 +1719,8 @@ static int swrm_runtime_suspend(struct device *dev)
 	struct swr_device *swr_dev;
 	int current_state = 0;
 
+	if (1)
+		return 0;
 	dev_dbg(dev, "%s: pm_runtime: suspend state: %d\n",
 		__func__, swrm->state);
 	mutex_lock(&swrm->reslock);

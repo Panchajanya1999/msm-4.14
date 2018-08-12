@@ -4390,7 +4390,8 @@ static int msm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 	case MSM_BACKEND_DAI_WSA_CDC_DMA_TX_1:
 	case MSM_BACKEND_DAI_WSA_CDC_DMA_TX_2:
 	case MSM_BACKEND_DAI_TX_CDC_DMA_TX_0:
-	case MSM_BACKEND_DAI_TX_CDC_DMA_TX_1:
+	case MSM_BACKEND_DAI_TX_CDC_DMA_TX_3:
+	case MSM_BACKEND_DAI_TX_CDC_DMA_TX_4:
 		idx = msm_cdc_dma_get_idx_from_beid(dai_link->id);
 		param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
 				cdc_dma_tx_cfg[idx].bit_format);
@@ -5118,7 +5119,8 @@ static int msm_snd_cdc_dma_hw_params(struct snd_pcm_substream *substream,
 		case MSM_BACKEND_DAI_WSA_CDC_DMA_TX_1:
 		case MSM_BACKEND_DAI_WSA_CDC_DMA_TX_2:
 		case MSM_BACKEND_DAI_TX_CDC_DMA_TX_0:
-		case MSM_BACKEND_DAI_TX_CDC_DMA_TX_1:
+		case MSM_BACKEND_DAI_TX_CDC_DMA_TX_3:
+		case MSM_BACKEND_DAI_TX_CDC_DMA_TX_4:
 		{
 			ch_id = msm_cdc_dma_get_idx_from_beid(dai_link->id);
 			pr_debug("%s: id %d tx_ch=%d\n", __func__,

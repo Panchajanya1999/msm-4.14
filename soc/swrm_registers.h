@@ -185,7 +185,7 @@
 							0x40*m)
 
 #define SWRM_DP_BLOCK_CTRL_1(n)		(SWRM_BASE_ADDRESS + \
-							0x0000112C + 0x100*n)
+							0x0000112C + 0x100*(n-1))
 
 #define SWRM_DP_BLOCK_CTRL2_BANK(n, m)	(SWRM_BASE_ADDRESS + \
 							0x00001130 + \
@@ -204,7 +204,7 @@
 
 
 #define SWRM_DIN_DPn_PCM_PORT_CTRL(n) (SWRM_BASE_ADDRESS + \
-						0x00001054 + 0x100*n)
+						0x00001054 + 0x100*(n-1))
 
 #define SWRM_MAX_REGISTER SWRM_DIN_DPn_PCM_PORT_CTRL(7)
 
@@ -215,7 +215,7 @@
 #define SWRS_DP_REG_OFFSET(port, bank)		((0x100*port)+(0x10*bank))
 
 #define SWRS_SCP_CONTROL				0x44
-#define SWRS_DP_BLOCK_CONTROL_1(n)		(SWRS_BASE_ADDRESS + 0x120 + \
+#define SWRS_DP_BLOCK_CONTROL_1(n)		(SWRS_BASE_ADDRESS + 0x103 + \
 						0x100 * n)
 
 #define SWRS_DP_CHANNEL_ENABLE_BANK(n, m)	(SWRS_BASE_ADDRESS + 0x120 + \

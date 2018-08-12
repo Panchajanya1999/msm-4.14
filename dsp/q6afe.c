@@ -2895,6 +2895,8 @@ static int afe_send_cmd_port_start(u16 port_id)
 	if (ret) {
 		pr_err("%s: AFE enable for port 0x%x failed %d\n", __func__,
 		       port_id, ret);
+		//BUG_ON(1);
+		//msleep(600000);
 	} else if (this_afe.task != current) {
 		this_afe.task = current;
 		pr_debug("task_name = %s pid = %d\n",
@@ -4453,6 +4455,34 @@ int afe_get_port_index(u16 port_id)
 		return IDX_AFE_PORT_ID_WSA_CODEC_DMA_TX_1;
 	case AFE_PORT_ID_WSA_CODEC_DMA_TX_2:
 		return IDX_AFE_PORT_ID_WSA_CODEC_DMA_TX_2;
+	case AFE_PORT_ID_RX_CODEC_DMA_RX_0:
+		return IDX_AFE_PORT_ID_RX_CODEC_DMA_RX_0;
+	case AFE_PORT_ID_TX_CODEC_DMA_TX_0:
+		return IDX_AFE_PORT_ID_TX_CODEC_DMA_TX_0;
+	case AFE_PORT_ID_RX_CODEC_DMA_RX_1:
+		return IDX_AFE_PORT_ID_RX_CODEC_DMA_RX_1;
+	case AFE_PORT_ID_TX_CODEC_DMA_TX_1:
+		return IDX_AFE_PORT_ID_TX_CODEC_DMA_TX_1;
+	case AFE_PORT_ID_RX_CODEC_DMA_RX_2:
+		return IDX_AFE_PORT_ID_RX_CODEC_DMA_RX_2;
+	case AFE_PORT_ID_TX_CODEC_DMA_TX_2:
+		return IDX_AFE_PORT_ID_TX_CODEC_DMA_TX_2;
+	case AFE_PORT_ID_RX_CODEC_DMA_RX_3:
+		return IDX_AFE_PORT_ID_RX_CODEC_DMA_RX_3;
+	case AFE_PORT_ID_TX_CODEC_DMA_TX_3:
+		return IDX_AFE_PORT_ID_TX_CODEC_DMA_TX_3;
+	case AFE_PORT_ID_RX_CODEC_DMA_RX_4:
+		return IDX_AFE_PORT_ID_RX_CODEC_DMA_RX_4;
+	case AFE_PORT_ID_TX_CODEC_DMA_TX_4:
+		return IDX_AFE_PORT_ID_TX_CODEC_DMA_TX_4;
+	case AFE_PORT_ID_RX_CODEC_DMA_RX_5:
+		return IDX_AFE_PORT_ID_RX_CODEC_DMA_RX_5;
+	case AFE_PORT_ID_TX_CODEC_DMA_TX_5:
+		return IDX_AFE_PORT_ID_TX_CODEC_DMA_TX_5;
+	case AFE_PORT_ID_RX_CODEC_DMA_RX_6:
+		return IDX_AFE_PORT_ID_RX_CODEC_DMA_RX_6;
+	case AFE_PORT_ID_RX_CODEC_DMA_RX_7:
+		return IDX_AFE_PORT_ID_RX_CODEC_DMA_RX_7;
 	default:
 		pr_err("%s: port 0x%x\n", __func__, port_id);
 		return -EINVAL;
