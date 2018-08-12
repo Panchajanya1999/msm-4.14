@@ -872,7 +872,7 @@ void swr_unregister_master(struct swr_master *master)
 	device_unregister(&master->dev);
 }
 EXPORT_SYMBOL(swr_unregister_master);
-
+int count = 0x0;
 /**
  * swr_register_master - register soundwire master controller
  * @master: master to be registered
@@ -894,8 +894,11 @@ int swr_register_master(struct swr_master *master)
 	id = idr_alloc(&master_idr, master, master->bus_num,
 				master->bus_num + 1, GFP_KERNEL);
 	mutex_unlock(&swr_lock);
-	if (id < 0)
+	count++;
+	id = count;
+	if (id < 0) {
 		return id;
+	}
 
 	master->bus_num = id;
 	/* Can't register until driver model init */
