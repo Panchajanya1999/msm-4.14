@@ -154,6 +154,8 @@ struct devfreq {
 
 	unsigned long min_freq;
 	unsigned long max_freq;
+	bool is_boost_device;
+	bool max_boost;
 	bool stop_polling;
 
 	/* information for device frequency transition */
@@ -215,6 +217,8 @@ extern void devm_devfreq_unregister_notifier(struct device *dev,
 				unsigned int list);
 extern struct devfreq *devfreq_get_devfreq_by_phandle(struct device *dev,
 						int index);
+/* Caution: devfreq->lock must be locked before calling update_devfreq */
+extern int update_devfreq(struct devfreq *devfreq);
 
 #if IS_ENABLED(CONFIG_DEVFREQ_GOV_SIMPLE_ONDEMAND)
 /**
@@ -272,6 +276,7 @@ struct devfreq_passive_data {
 	struct notifier_block nb;
 };
 #endif
+
 
 #else /* !CONFIG_PM_DEVFREQ */
 static inline struct devfreq *devfreq_add_device(struct device *dev,
@@ -375,6 +380,11 @@ static inline struct devfreq *devfreq_get_devfreq_by_phandle(struct device *dev,
 }
 
 static inline int devfreq_update_stats(struct devfreq *df)
+{
+	return -EINVAL;
+}
+
+static inline int update_devfreq(struct devfreq *devfreq)
 {
 	return -EINVAL;
 }
