@@ -1732,7 +1732,7 @@ static int wma_process_fw_event_mc_thread_ctx(void *ctx, void *ev)
 	}
 
 	params_buf->wmi_handle = (struct wmi_unified *)ctx;
-	params_buf->evt_buf = (wmi_buf_t *)ev;
+	params_buf->evt_buf = ev;
 
 	wma = cds_get_context(QDF_MODULE_ID_WMA);
 	event_id = WMI_GET_FIELD(qdf_nbuf_data(params_buf->evt_buf),
@@ -1785,8 +1785,7 @@ int wma_process_fw_event_handler(void *ctx, void *htc_packet, uint8_t rx_ctx)
 		return err;
 	}
 
-	tgt_hdl = (struct target_psoc_info *)wlan_psoc_get_tgt_if_handle(
-						psoc);
+	tgt_hdl = wlan_psoc_get_tgt_if_handle(psoc);
 	if (!tgt_hdl) {
 		WMA_LOGE("target_psoc_info is null");
 		return err;
@@ -1794,8 +1793,8 @@ int wma_process_fw_event_handler(void *ctx, void *htc_packet, uint8_t rx_ctx)
 
 	is_wmi_ready = target_psoc_get_wmi_ready(tgt_hdl);
 	if (!is_wmi_ready) {
-		WMA_LOGW("wmi event recvd before wmi_ready_event is fully processed");
-		WMA_LOGW("therefore use worker thread");
+		WMA_LOGD("fw event recvd before ready event processed");
+		WMA_LOGD("therefore use worker thread");
 		wmi_process_fw_event_worker_thread_ctx(ctx, htc_packet);
 		return err;
 	}
@@ -4368,14 +4367,7 @@ end:
 	return qdf_status;
 }
 
-/**
- * wma_stop() - wma stop function.
- *              cleanup timers and suspend target.
- * @reason: reason for wma_stop.
- *
- * Return: 0 on success, QDF Error on failure
- */
-QDF_STATUS wma_stop(uint8_t reason)
+QDF_STATUS wma_stop(void)
 {
 	tp_wma_handle wma_handle;
 	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
@@ -5312,6 +5304,13 @@ static void wma_update_ra_rate_limit(tp_wma_handle wma_handle,
 }
 #endif
 
+static void
+wma_update_sar_version(struct wlan_psoc_host_service_ext_param *param,
+		       struct wma_tgt_cfg *cfg)
+{
+	cfg->sar_version = param ? param->sar_version : SAR_VERSION_1;
+}
+
 /**
  * wma_update_hdd_band_cap() - update band cap which hdd understands
  * @supported_band: supported band which has been given by FW
@@ -5477,6 +5476,7 @@ static void wma_update_hdd_cfg(tp_wma_handle wma_handle)
 	wma_update_ra_rate_limit(wma_handle, &tgt_cfg);
 	wma_update_hdd_band_cap(target_if_get_phy_capability(tgt_hdl),
 				&tgt_cfg);
+	wma_update_sar_version(service_ext_param, &tgt_cfg);
 	tgt_cfg.fine_time_measurement_cap =
 		target_if_get_wmi_fw_sub_feat_caps(tgt_hdl);
 	tgt_cfg.wmi_max_len = wmi_get_max_msg_len(wma_handle->wmi_handle)
@@ -5576,19 +5576,24 @@ static void wma_update_ra__limit(tp_wma_handle handle)
 static void wma_set_pmo_caps(struct wlan_objmgr_psoc *psoc)
 {
 	QDF_STATUS status;
+	tp_wma_handle wma;
 	struct pmo_device_caps caps;
 
+	wma = cds_get_context(QDF_MODULE_ID_WMA);
 	caps.arp_ns_offload =
-		wma_is_service_enabled(wmi_service_arpns_offload);
+		wmi_service_enabled(wma->wmi_handle, wmi_service_arpns_offload);
 	caps.apf =
-		wma_is_service_enabled(wmi_service_apf_offload);
+		wmi_service_enabled(wma->wmi_handle, wmi_service_apf_offload);
 	caps.packet_filter =
-		wma_is_service_enabled(wmi_service_packet_filter_offload);
+		wmi_service_enabled(wma->wmi_handle,
+				    wmi_service_packet_filter_offload);
 	caps.unified_wow =
-		wma_is_service_enabled(wmi_service_unified_wow_capability);
+		wmi_service_enabled(wma->wmi_handle,
+				    wmi_service_unified_wow_capability);
 	caps.li_offload =
-		wma_is_service_enabled(
-				wmi_service_listen_interval_offload_support);
+		wmi_service_enabled(wma->wmi_handle,
+				    wmi_service_listen_interval_offload_support
+				    );
 
 	status = ucfg_pmo_psoc_set_caps(psoc, &caps);
 	if (QDF_IS_STATUS_ERROR(status))
@@ -6654,32 +6659,26 @@ bool wma_needshutdown(void)
  */
 QDF_STATUS wma_wait_for_ready_event(WMA_HANDLE handle)
 {
-	tp_wma_handle wma_handle = (tp_wma_handle) handle;
-	QDF_STATUS qdf_status;
+	tp_wma_handle wma_handle = (tp_wma_handle)handle;
+	QDF_STATUS status;
 	struct target_psoc_info *tgt_hdl;
-	int timeleft;
 
 	tgt_hdl = wlan_psoc_get_tgt_if_handle(wma_handle->psoc);
 	if (!tgt_hdl) {
-		WMA_LOGE("%s: target psoc info is NULL", __func__);
+		wma_err("target psoc info is NULL");
 		return QDF_STATUS_E_INVAL;
 	}
 
-	timeleft = qdf_wait_queue_timeout(
-			tgt_hdl->info.event_queue,
-			((tgt_hdl->info.wmi_service_ready) &&
-			(tgt_hdl->info.wmi_ready)),
-			WMA_READY_EVENTID_TIMEOUT);
-	if (!timeleft) {
-		WMA_LOGE("%s: Timeout waiting for ready event from FW",
-			 __func__);
-		qdf_status = QDF_STATUS_E_FAILURE;
-	} else {
-		WMA_LOGI("%s Ready event received from FW", __func__);
-		qdf_status = QDF_STATUS_SUCCESS;
-	}
+	status = qdf_wait_for_event_completion(&tgt_hdl->info.event,
+					       WMA_READY_EVENTID_TIMEOUT);
+	if (status == QDF_STATUS_E_TIMEOUT)
+		wma_err("Timeout waiting for FW ready event");
+	else if (QDF_IS_STATUS_ERROR(status))
+		wma_err("Failed to wait for FW ready event; status:%u", status);
+	else
+		wma_info("FW ready event received");
 
-	return qdf_status;
+	return status;
 }
 
 /**

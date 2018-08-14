@@ -375,6 +375,8 @@ struct addstafor_sessioncmd {
 struct delstafor_sessionCmd {
 	/* Session self mac addr */
 	tSirMacAddr selfMacAddr;
+	csr_session_close_cb session_close_cb;
+	void *context;
 };
 
 struct csr_neighbor_roamconfig {
@@ -1226,7 +1228,7 @@ QDF_STATUS csr_open(tpAniSirGlobal pMac);
 QDF_STATUS csr_init_chan_list(tpAniSirGlobal mac, uint8_t *alpha2);
 QDF_STATUS csr_close(tpAniSirGlobal pMac);
 QDF_STATUS csr_start(tpAniSirGlobal pMac);
-QDF_STATUS csr_stop(tpAniSirGlobal pMac, tHalStopType stopType);
+QDF_STATUS csr_stop(tpAniSirGlobal pMac);
 QDF_STATUS csr_ready(tpAniSirGlobal pMac);
 
 #ifdef FEATURE_WLAN_WAPI
@@ -1275,9 +1277,6 @@ QDF_STATUS csr_get_tsm_stats(tpAniSirGlobal pMac,
 		struct qdf_mac_addr bssId,
 		void *pContext, uint8_t tid);
 #endif
-
-/* Remove this code once SLM_Sessionization is supported */
-void csr_disconnect_all_active_sessions(tpAniSirGlobal pMac);
 
 /* Returns whether "Legacy Fast Roaming" is enabled...or not */
 bool csr_roam_is_fast_roam_enabled(tpAniSirGlobal pMac,

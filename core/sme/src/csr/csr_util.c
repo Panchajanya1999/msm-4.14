@@ -623,33 +623,42 @@ bool csr_is_bss_id_equal(tSirBssDescription *pSirBssDesc1,
 	return fEqual;
 }
 
-bool csr_is_conn_state_connected_ibss(tpAniSirGlobal pMac, uint32_t sessionId)
+static bool csr_is_conn_state(tpAniSirGlobal mac_ctx, uint32_t session_id,
+			      eCsrConnectState state)
 {
-	return eCSR_ASSOC_STATE_TYPE_IBSS_CONNECTED ==
-		pMac->roam.roamSession[sessionId].connectState;
+	QDF_BUG(session_id < CSR_ROAM_SESSION_MAX);
+	if (session_id >= CSR_ROAM_SESSION_MAX)
+		return false;
+
+	return mac_ctx->roam.roamSession[session_id].connectState == state;
 }
 
-bool csr_is_conn_state_disconnected_ibss(tpAniSirGlobal pMac,
-					 uint32_t sessionId)
+bool csr_is_conn_state_connected_ibss(tpAniSirGlobal mac_ctx,
+				      uint32_t session_id)
 {
-	return eCSR_ASSOC_STATE_TYPE_IBSS_DISCONNECTED ==
-		pMac->roam.roamSession[sessionId].connectState;
+	return csr_is_conn_state(mac_ctx, session_id,
+				 eCSR_ASSOC_STATE_TYPE_IBSS_CONNECTED);
 }
 
-bool csr_is_conn_state_connected_infra(tpAniSirGlobal pMac, uint32_t sessionId)
+bool csr_is_conn_state_disconnected_ibss(tpAniSirGlobal mac_ctx,
+					 uint32_t session_id)
 {
-	return eCSR_ASSOC_STATE_TYPE_INFRA_ASSOCIATED ==
-		pMac->roam.roamSession[sessionId].connectState;
+	return csr_is_conn_state(mac_ctx, session_id,
+				 eCSR_ASSOC_STATE_TYPE_IBSS_DISCONNECTED);
+}
+
+bool csr_is_conn_state_connected_infra(tpAniSirGlobal mac_ctx,
+				       uint32_t session_id)
+{
+	return csr_is_conn_state(mac_ctx, session_id,
+				 eCSR_ASSOC_STATE_TYPE_INFRA_ASSOCIATED);
 }
 
 bool csr_is_conn_state_connected(tpAniSirGlobal pMac, uint32_t sessionId)
 {
-	if (csr_is_conn_state_connected_ibss(pMac, sessionId)
-	    || csr_is_conn_state_connected_infra(pMac, sessionId)
-	    || csr_is_conn_state_connected_wds(pMac, sessionId))
-		return true;
-	else
-		return false;
+	return csr_is_conn_state_connected_ibss(pMac, sessionId) ||
+		csr_is_conn_state_connected_infra(pMac, sessionId) ||
+		csr_is_conn_state_connected_wds(pMac, sessionId);
 }
 
 bool csr_is_conn_state_infra(tpAniSirGlobal pMac, uint32_t sessionId)
@@ -663,25 +672,27 @@ bool csr_is_conn_state_ibss(tpAniSirGlobal pMac, uint32_t sessionId)
 	       csr_is_conn_state_disconnected_ibss(pMac, sessionId);
 }
 
-bool csr_is_conn_state_connected_wds(tpAniSirGlobal pMac, uint32_t sessionId)
+bool csr_is_conn_state_connected_wds(tpAniSirGlobal mac_ctx,
+				     uint32_t session_id)
 {
-	return eCSR_ASSOC_STATE_TYPE_WDS_CONNECTED ==
-		pMac->roam.roamSession[sessionId].connectState;
+	return csr_is_conn_state(mac_ctx, session_id,
+				 eCSR_ASSOC_STATE_TYPE_WDS_CONNECTED);
 }
 
-bool csr_is_conn_state_connected_infra_ap(tpAniSirGlobal pMac,
-					  uint32_t sessionId)
+bool csr_is_conn_state_connected_infra_ap(tpAniSirGlobal mac_ctx,
+					  uint32_t session_id)
 {
-	return (eCSR_ASSOC_STATE_TYPE_INFRA_CONNECTED ==
-		 pMac->roam.roamSession[sessionId].connectState) ||
-	       (eCSR_ASSOC_STATE_TYPE_INFRA_DISCONNECTED ==
-		 pMac->roam.roamSession[sessionId].connectState);
+	return csr_is_conn_state(mac_ctx, session_id,
+				 eCSR_ASSOC_STATE_TYPE_INFRA_CONNECTED) ||
+		csr_is_conn_state(mac_ctx, session_id,
+				  eCSR_ASSOC_STATE_TYPE_INFRA_DISCONNECTED);
 }
 
-bool csr_is_conn_state_disconnected_wds(tpAniSirGlobal pMac, uint32_t sessionId)
+bool csr_is_conn_state_disconnected_wds(tpAniSirGlobal mac_ctx,
+					uint32_t session_id)
 {
-	return eCSR_ASSOC_STATE_TYPE_WDS_DISCONNECTED ==
-		pMac->roam.roamSession[sessionId].connectState;
+	return csr_is_conn_state(mac_ctx, session_id,
+				 eCSR_ASSOC_STATE_TYPE_WDS_DISCONNECTED);
 }
 
 bool csr_is_conn_state_wds(tpAniSirGlobal pMac, uint32_t sessionId)
@@ -6124,64 +6135,35 @@ uint16_t sme_chn_to_freq(uint8_t chanNum)
 	return 0;
 }
 
-/* Disconnect all active sessions by sending disassoc. This is mainly
- * used to disconnect the remaining session when we transition from
- * concurrent sessions to a single session. The use case is Infra STA
- * and wifi direct multiple sessions are up and P2P session is removed.
- * The Infra STA session remains and should resume BMPS if BMPS is enabled
- * by default. However, there are some issues seen with BMPS resume during
- * this transition and this is a workaround which will allow the Infra STA
- * session to disconnect and auto connect back and enter BMPS this giving
- * the same effect as resuming BMPS
- */
-
-/* Remove this code once SLM_Sessionization is supported */
-/* BMPS_WORKAROUND_NOT_NEEDED */
-void csr_disconnect_all_active_sessions(tpAniSirGlobal pMac)
-{
-	uint8_t i;
-
-	/* Disconnect all the active sessions */
-	for (i = 0; i < CSR_ROAM_SESSION_MAX; i++) {
-		if (CSR_IS_SESSION_VALID(pMac, i)
-		    && !csr_is_conn_state_disconnected(pMac, i))
-			csr_roam_disconnect_internal(pMac, i,
-					eCSR_DISCONNECT_REASON_UNSPECIFIED);
-	}
-}
-
-struct lim_channel_status *csr_get_channel_status(
-	void *p_mac, uint32_t channel_id)
+struct lim_channel_status *
+csr_get_channel_status(tpAniSirGlobal mac, uint32_t channel_id)
 {
 	uint8_t i;
 	struct lim_scan_channel_status *channel_status;
-	tpAniSirGlobal mac_ptr = (tpAniSirGlobal)p_mac;
+	struct lim_channel_status *entry;
 
-	if (!mac_ptr->sap.acs_with_more_param)
+	if (!mac->sap.acs_with_more_param)
 		return NULL;
 
-	channel_status = (struct lim_scan_channel_status *)
-				&mac_ptr->lim.scan_channel_status;
+	channel_status = &mac->lim.scan_channel_status;
 	for (i = 0; i < channel_status->total_channel; i++) {
-		if (channel_status->channel_status_list[i].channel_id ==
-		    channel_id)
-			return &channel_status->channel_status_list[i];
+		entry = &channel_status->channel_status_list[i];
+		if (entry->channel_id == channel_id)
+			return entry;
 	}
-	cds_err("Channel %d status info not exist", channel_id);
+	sme_err("Channel %d status info not exist", channel_id);
 
 	return NULL;
 }
 
-void csr_clear_channel_status(void *p_mac)
+void csr_clear_channel_status(tpAniSirGlobal mac)
 {
-	tpAniSirGlobal mac_ptr = (tpAniSirGlobal)p_mac;
 	struct lim_scan_channel_status *channel_status;
 
-	if (!mac_ptr->sap.acs_with_more_param)
+	if (!mac->sap.acs_with_more_param)
 		return;
 
-	channel_status = (struct lim_scan_channel_status *)
-			&mac_ptr->lim.scan_channel_status;
+	channel_status = &mac->lim.scan_channel_status;
 	channel_status->total_channel = 0;
 
 	return;

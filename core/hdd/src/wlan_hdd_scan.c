@@ -561,19 +561,20 @@ static int __wlan_hdd_cfg80211_scan(struct wiphy *wiphy,
 		    !hdd_ctx->last_scan_reject_timestamp) {
 			hdd_ctx->last_scan_reject_session_id = curr_session_id;
 			hdd_ctx->last_scan_reject_reason = curr_reason;
-			hdd_ctx->last_scan_reject_timestamp =
-				jiffies_to_msecs(jiffies) +
-				SCAN_REJECT_THRESHOLD_TIME;
+			hdd_ctx->last_scan_reject_timestamp = jiffies +
+				msecs_to_jiffies(SCAN_REJECT_THRESHOLD_TIME);
 			hdd_ctx->scan_reject_cnt = 0;
 		} else {
 			hdd_ctx->scan_reject_cnt++;
 			if ((hdd_ctx->scan_reject_cnt >=
 			   SCAN_REJECT_THRESHOLD) &&
-			   qdf_system_time_after(jiffies_to_msecs(jiffies),
+			   qdf_system_time_after(jiffies,
 			   hdd_ctx->last_scan_reject_timestamp)) {
-				hdd_err("scan reject threshold reached Session %d Reason %d count %d",
+				hdd_err("scan reject threshold reached Session %d Reason %d count %d reject timestamp %lu jiffies %lu",
 					curr_session_id, curr_reason,
-					hdd_ctx->scan_reject_cnt);
+					hdd_ctx->scan_reject_cnt,
+					hdd_ctx->last_scan_reject_timestamp,
+					jiffies);
 				hdd_ctx->last_scan_reject_timestamp = 0;
 				hdd_ctx->scan_reject_cnt = 0;
 				if (hdd_ctx->config->enable_fatal_event) {
@@ -1352,7 +1353,8 @@ int wlan_hdd_sched_scan_stop(struct net_device *dev)
  */
 static int __wlan_hdd_cfg80211_sched_scan_stop(struct net_device *dev)
 {
-	int err;
+	struct hdd_adapter *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
+	int errno;
 
 	hdd_enter_dev(dev);
 
@@ -1378,10 +1380,19 @@ static int __wlan_hdd_cfg80211_sched_scan_stop(struct net_device *dev)
 		return 0;
 	}
 
-	err = wlan_hdd_sched_scan_stop(dev);
+	errno = hdd_validate_adapter(adapter);
+	if (errno)
+		return errno;
+
+	errno = wlan_hdd_validate_context(WLAN_HDD_GET_CTX(adapter));
+	if (errno)
+		return errno;
+
+	errno = wlan_hdd_sched_scan_stop(dev);
 
 	hdd_exit();
-	return err;
+
+	return errno;
 }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 12, 0)

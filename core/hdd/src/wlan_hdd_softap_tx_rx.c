@@ -371,6 +371,11 @@ int hdd_inspect_dhcp_packet(struct hdd_adapter *adapter,
 
 	hdd_debug("sta_id=%d, dir=%d", sta_id, dir);
 
+	if (sta_id >= WLAN_MAX_STA_COUNT) {
+		hdd_err("Invalid sta id: %d", sta_id);
+		return -EINVAL;
+	}
+
 	if (((adapter->device_mode == QDF_SAP_MODE) ||
 	     (adapter->device_mode == QDF_P2P_GO_MODE)) &&
 	    ((dir == QDF_TX && QDF_NBUF_CB_PACKET_TYPE_DHCP ==
@@ -744,14 +749,13 @@ QDF_STATUS hdd_softap_init_tx_rx(struct hdd_adapter *adapter)
 
 QDF_STATUS hdd_softap_deinit_tx_rx(struct hdd_adapter *adapter)
 {
-	if (adapter == NULL) {
-		hdd_err("Called with adapter = NULL.");
+	QDF_BUG(adapter);
+	if (!adapter)
 		return QDF_STATUS_E_FAILURE;
-	}
 
 	adapter->txrx_vdev = NULL;
 	adapter->tx_fn = NULL;
-	hdd_info("Deregistering TX function hook !");
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -894,10 +898,10 @@ QDF_STATUS hdd_softap_rx_packet_cbk(void *context, qdf_nbuf_t rx_buf)
 				adapter->sta_info[staid].rx_bytes += skb->len;
 				adapter->sta_info[staid].last_tx_rx_ts =
 					qdf_system_ticks();
+				hdd_inspect_dhcp_packet(adapter, staid,
+							skb, QDF_RX);
 			}
 		}
-
-		hdd_inspect_dhcp_packet(adapter, staid, skb, QDF_RX);
 
 		hdd_event_eapol_log(skb, QDF_RX);
 		qdf_dp_trace_log_pkt(adapter->session_id,
@@ -1161,21 +1165,13 @@ QDF_STATUS hdd_softap_stop_bss(struct hdd_adapter *adapter)
 			}
 		}
 	}
+	if (adapter->device_mode == QDF_SAP_MODE)
+		wlan_hdd_restore_channels(hdd_ctx, true);
 
 	/*  Mark the indoor channel (passive) to enable  */
 	if (hdd_ctx->config->force_ssc_disable_indoor_channel) {
 		hdd_update_indoor_channel(hdd_ctx, false);
 		sme_update_channel_list(hdd_ctx->mac_handle);
-	}
-
-	if (ucfg_ipa_is_enabled()) {
-		if (ucfg_ipa_wlan_evt(hdd_ctx->hdd_pdev,
-				adapter->dev, adapter->device_mode,
-				ap_ctx->broadcast_sta_id,
-				adapter->session_id,
-				WLAN_IPA_AP_DISCONNECT,
-				adapter->dev->dev_addr) != QDF_STATUS_SUCCESS)
-			hdd_err("WLAN_AP_DISCONNECT event failed");
 	}
 
 	return qdf_status;

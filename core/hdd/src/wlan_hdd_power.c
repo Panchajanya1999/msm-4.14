@@ -76,6 +76,7 @@
 #include "wlan_cfg80211_scan.h"
 #include "wlan_ipa_ucfg_api.h"
 #include <wlan_cfg80211_mc_cp_stats.h>
+#include "wlan_p2p_ucfg_api.h"
 
 /* Preprocessor definitions and constants */
 #ifdef QCA_WIFI_NAPIER_EMULATION
@@ -877,13 +878,13 @@ void hdd_enable_arp_offload(struct hdd_adapter *adapter,
 
 	status = pmo_ucfg_cache_arp_offload_req(arp_req);
 	if (QDF_IS_STATUS_ERROR(status)) {
-		hdd_err("failed to cache arp offload request");
+		hdd_err("failed to cache arp offload req; status:%d", status);
 		goto free_req;
 	}
 
 	status = pmo_ucfg_enable_arp_offload_in_fwr(adapter->hdd_vdev, trigger);
 	if (QDF_IS_STATUS_ERROR(status)) {
-		hdd_err("failed to configure arp offload in firmware");
+		hdd_err("failed arp offload config in fw; status:%d", status);
 		goto free_req;
 	}
 
@@ -920,40 +921,48 @@ out:
 }
 
 void hdd_enable_mc_addr_filtering(struct hdd_adapter *adapter,
-		enum pmo_offload_trigger trigger)
+				  enum pmo_offload_trigger trigger)
 {
 	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
 	QDF_STATUS status;
-	struct wlan_objmgr_psoc *psoc = hdd_ctx->hdd_psoc;
 
 	hdd_enter();
+
 	if (wlan_hdd_validate_context(hdd_ctx))
 		goto out;
 
-	status = pmo_ucfg_enable_mc_addr_filtering_in_fwr(psoc,
-				adapter->session_id, trigger);
+	if (!hdd_adapter_is_connected_sta(adapter))
+		goto out;
+
+	status = pmo_ucfg_enable_mc_addr_filtering_in_fwr(hdd_ctx->hdd_psoc,
+							  adapter->session_id,
+							  trigger);
 	if (QDF_IS_STATUS_ERROR(status))
-		hdd_info("failed to enable mc list status %d", status);
+		hdd_err("failed to enable mc list; status:%d", status);
+
 out:
 	hdd_exit();
-
 }
 
 void hdd_disable_mc_addr_filtering(struct hdd_adapter *adapter,
-		enum pmo_offload_trigger trigger)
+				   enum pmo_offload_trigger trigger)
 {
 	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
-	QDF_STATUS status = QDF_STATUS_SUCCESS;
-	struct wlan_objmgr_psoc *psoc = hdd_ctx->hdd_psoc;
+	QDF_STATUS status;
 
 	hdd_enter();
+
 	if (wlan_hdd_validate_context(hdd_ctx))
 		goto out;
 
-	status = pmo_ucfg_disable_mc_addr_filtering_in_fwr(psoc,
-				adapter->session_id, trigger);
-	if (status != QDF_STATUS_SUCCESS)
-		hdd_info("failed to disable mc list status %d", status);
+	if (!hdd_adapter_is_connected_sta(adapter))
+		goto out;
+
+	status = pmo_ucfg_disable_mc_addr_filtering_in_fwr(hdd_ctx->hdd_psoc,
+							   adapter->session_id,
+							   trigger);
+	if (QDF_IS_STATUS_ERROR(status))
+		hdd_err("failed to disable mc list; status:%d", status);
 
 out:
 	hdd_exit();
@@ -971,23 +980,28 @@ int hdd_cache_mc_addr_list(struct pmo_mc_addr_list_params *mc_list_config)
 }
 
 void hdd_disable_and_flush_mc_addr_list(struct hdd_adapter *adapter,
-	enum pmo_offload_trigger trigger)
+					enum pmo_offload_trigger trigger)
 {
 	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
-	struct wlan_objmgr_psoc *psoc = hdd_ctx->hdd_psoc;
-	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	QDF_STATUS status;
 
 	hdd_enter();
-	/* disable mc list first */
-	status = pmo_ucfg_disable_mc_addr_filtering_in_fwr(psoc,
-			adapter->session_id, trigger);
-	if (status != QDF_STATUS_SUCCESS)
-		hdd_info("fail to disable mc list");
 
-	/* flush mc list */
-	status = pmo_ucfg_flush_mc_addr_list(psoc, adapter->session_id);
-	if (status != QDF_STATUS_SUCCESS)
-		hdd_info("fail to flush mc list status %d", status);
+	if (!hdd_adapter_is_connected_sta(adapter))
+		goto flush_mc_list;
+
+	/* disable mc list first because the mc list is cached in PMO */
+	status = pmo_ucfg_disable_mc_addr_filtering_in_fwr(hdd_ctx->hdd_psoc,
+							   adapter->session_id,
+							   trigger);
+	if (QDF_IS_STATUS_ERROR(status))
+		hdd_err("failed to disable mc list; status:%d", status);
+
+flush_mc_list:
+	status = pmo_ucfg_flush_mc_addr_list(hdd_ctx->hdd_psoc,
+					     adapter->session_id);
+	if (QDF_IS_STATUS_ERROR(status))
+		hdd_err("failed to flush mc list; status:%d", status);
 
 	hdd_exit();
 
@@ -1047,10 +1061,8 @@ hdd_suspend_wlan(void)
 	}
 
 	hdd_for_each_adapter(hdd_ctx, adapter) {
-		if (wlan_hdd_validate_session_id(adapter->session_id)) {
-			hdd_err("invalid session id: %d", adapter->session_id);
+		if (wlan_hdd_validate_session_id(adapter->session_id))
 			continue;
-		}
 
 		/* stop all TX queues before suspend */
 		hdd_debug("Disabling queues for dev mode %s",
@@ -1227,13 +1239,10 @@ QDF_STATUS hdd_wlan_shutdown(void)
 	}
 #endif
 
-	hdd_bus_bandwidth_destroy(hdd_ctx);
-
 	hdd_wlan_stop_modules(hdd_ctx, false);
 
+	hdd_bus_bandwidth_deinit(hdd_ctx);
 	hdd_lpass_notify_stop(hdd_ctx);
-
-	wlan_objmgr_print_ref_all_objects_per_psoc(hdd_ctx->hdd_psoc);
 
 	hdd_info("WLAN driver shutdown complete");
 
@@ -1310,9 +1319,7 @@ QDF_STATUS hdd_wlan_re_init(void)
 		hdd_err("Failed to get adapter");
 
 	hdd_dp_trace_init(hdd_ctx->config);
-
 	hdd_bus_bandwidth_init(hdd_ctx);
-
 
 	ret = hdd_wlan_start_modules(hdd_ctx, true);
 	if (ret) {
@@ -1350,6 +1357,8 @@ QDF_STATUS hdd_wlan_re_init(void)
 	goto success;
 
 err_re_init:
+	hdd_bus_bandwidth_deinit(hdd_ctx);
+
 	/* Allow the phone to go to sleep */
 	hdd_allow_suspend(WIFI_POWER_EVENT_WAKELOCK_DRIVER_REINIT);
 	if (bug_on_reinit_failure)
@@ -1654,6 +1663,9 @@ static int __wlan_hdd_cfg80211_suspend_wlan(struct wiphy *wiphy,
 			}
 		}
 	}
+	/* p2p cleanup task based on scheduler */
+	ucfg_p2p_cleanup_tx_by_psoc(hdd_ctx->hdd_psoc);
+	ucfg_p2p_cleanup_roc_by_psoc(hdd_ctx->hdd_psoc);
 
 	/* Stop ongoing scan on each interface */
 	hdd_for_each_adapter(hdd_ctx, adapter) {
@@ -1673,8 +1685,12 @@ static int __wlan_hdd_cfg80211_suspend_wlan(struct wiphy *wiphy,
 	}
 
 	/* flush any pending powersave timers */
-	hdd_for_each_adapter(hdd_ctx, adapter)
+	hdd_for_each_adapter(hdd_ctx, adapter) {
+		if (wlan_hdd_validate_session_id(adapter->session_id))
+			continue;
+
 		sme_ps_timer_flush_sync(mac_handle, adapter->session_id);
+	}
 
 	/*
 	 * Suspend IPA early before proceeding to suspend other entities like

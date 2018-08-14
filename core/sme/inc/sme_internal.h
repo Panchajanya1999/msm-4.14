@@ -36,6 +36,8 @@
 #include "host_diag_core_event.h"
 #include "csr_link_list.h"
 #include "sme_power_save.h"
+#include "nan_api.h"
+
 struct wmi_twt_enable_complete_event_param;
 /*--------------------------------------------------------------------------
   Type declarations
@@ -49,6 +51,7 @@ typedef enum eSmeCommandType {
 	eSmeCsrCommandMask = 0x10000,
 	eSmeCommandRoam,
 	eSmeCommandWmStatusChange,
+	e_sme_command_del_sta_session,
 #ifdef FEATURE_WLAN_TDLS
 	/*
 	 * eSmeTdlsCommandMask = 0x80000,
@@ -117,8 +120,10 @@ typedef struct sSelfRecoveryStats {
 } tSelfRecoveryStats;
 
 typedef void (*ocb_callback)(void *context, void *response);
-typedef void (*sme_set_thermal_level_callback)(void *context, u_int8_t level);
-typedef void (*p2p_lo_callback)(void *context, void *event);
+typedef void (*sme_set_thermal_level_callback)(hdd_handle_t hdd_handle,
+					       u_int8_t level);
+typedef void (*p2p_lo_callback)(void *context,
+				struct sir_p2p_lo_event *event);
 #ifdef FEATURE_OEM_DATA_SUPPORT
 typedef void (*sme_send_oem_data_rsp_msg)(struct oem_data_rsp *);
 #endif
@@ -177,6 +182,14 @@ typedef void (*pwr_save_fail_cb)(hdd_handle_t hdd_handle,
 			struct chip_pwr_save_fail_detected_params *params);
 
 /**
+ * typedef bt_activity_info_cb - bluetooth activity callback function
+ * @hdd_handle: HDD handle registered with SME
+ * @bt_activity: bluetooth activity information
+ */
+typedef void (*bt_activity_info_cb)(hdd_handle_t hdd_handle,
+				    uint32_t bt_activity);
+
+/**
  * typedef congestion_cb - congestion callback function
  * @hdd_handle: HDD handle registered with SME
  * @congestion: Current congestion value
@@ -184,6 +197,22 @@ typedef void (*pwr_save_fail_cb)(hdd_handle_t hdd_handle,
  */
 typedef void (*congestion_cb)(hdd_handle_t hdd_handle, uint32_t congestion,
 			      uint32_t vdev_id);
+
+/**
+ * typedef rso_cmd_status_cb - RSO command status  callback function
+ * @hdd_handle: HDD handle registered with SME
+ * @rso_status: Status of the operation
+ */
+typedef void (*rso_cmd_status_cb)(hdd_handle_t hdd_handle,
+				  struct rso_cmd_status *rso_status);
+
+/**
+ * typedef lost_link_info_cb - lost link indication callback function
+ * @hdd_handle: HDD handle registered with SME
+ * @lost_link_info: Information about the lost link
+ */
+typedef void (*lost_link_info_cb)(hdd_handle_t hdd_handle,
+				  struct sir_lost_link_info *lost_link_info);
 
 typedef struct tagSmeStruct {
 	eSmeState state;
@@ -198,8 +227,9 @@ typedef struct tagSmeStruct {
 	host_event_wlan_status_payload_type eventPayload;
 #endif
 #ifdef WLAN_FEATURE_LINK_LAYER_STATS
-	void (*pLinkLayerStatsIndCallback)(void *callbackContext,
-			int indType, void *pRsp);
+	void *ll_stats_context;
+	void (*pLinkLayerStatsIndCallback)(void *callback_ctx, int ind_type,
+					   void *rsp, void *context);
 	void (*link_layer_stats_ext_cb)(hdd_handle_t callback_ctx,
 					tSirLLStatsResults *rsp);
 #endif /* WLAN_FEATURE_LINK_LAYER_STATS */
@@ -231,11 +261,11 @@ typedef struct tagSmeStruct {
 	void (*pExtScanIndCb)(void *, const uint16_t, void *);
 #endif /* FEATURE_WLAN_EXTSCAN */
 #ifdef WLAN_FEATURE_NAN
-	void (*nanCallback)(void *, tSirNanEvent *);
+	nan_callback nan_callback;
 #endif
 	bool enableSelfRecovery;
-	tCsrLinkStatusCallback linkStatusCallback;
-	void *linkStatusContext;
+	csr_link_status_callback link_status_callback;
+	void *link_status_context;
 	int (*get_tsf_cb)(void *pcb_cxt, struct stsf *ptsf);
 	void *get_tsf_cxt;
 	/* get temperature event context and callback */
@@ -265,18 +295,16 @@ typedef struct tagSmeStruct {
 #endif
 	sme_encrypt_decrypt_callback encrypt_decrypt_cb;
 	void *encrypt_decrypt_context;
-	void (*lost_link_info_cb)(void *context,
-			struct sir_lost_link_info *lost_link_info);
+	lost_link_info_cb lost_link_info_cb;
 
 	bool (*set_connection_info_cb)(bool);
 	bool (*get_connection_info_cb)(uint8_t *session_id,
 			enum scan_reject_states *reason);
-	void (*rso_cmd_status_cb)(void *hdd_context,
-			struct rso_cmd_status *rso_status);
+	rso_cmd_status_cb rso_cmd_status_cb;
 	congestion_cb congestion_cb;
 	void (*stats_ext2_cb)(void *, struct sir_sme_rx_aggr_hole_ind *);
 	pwr_save_fail_cb chip_power_save_fail_cb;
-	void (*bt_activity_info_cb)(void *context, uint32_t bt_activity);
+	bt_activity_info_cb bt_activity_info_cb;
 	void *get_arp_stats_context;
 	void (*get_arp_stats_cb)(void *, struct rsp_stats *, void *);
 	get_chain_rssi_callback get_chain_rssi_cb;

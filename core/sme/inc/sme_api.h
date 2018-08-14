@@ -288,7 +288,22 @@ QDF_STATUS sme_init_chan_list(tHalHandle hal, uint8_t *alpha2,
 		enum country_src cc_src);
 QDF_STATUS sme_close(tHalHandle hHal);
 QDF_STATUS sme_start(tHalHandle hHal);
-QDF_STATUS sme_stop(tHalHandle hHal, tHalStopType stopType);
+
+/**
+ * sme_stop() - Stop all SME modules and put them at idle state
+ * @mac_handle: Opaque handle to the MAC context
+ *
+ * The function stops each module in SME. Upon return, all modules are
+ * at idle state ready to start.
+ *
+ * This is a synchronous call
+ *
+ * Return: QDF_STATUS_SUCCESS if SME is stopped.  Other status means
+ *         SME failed to stop one or more modules but caller should
+ *         still consider SME is stopped.
+ */
+QDF_STATUS sme_stop(mac_handle_t mac_handle);
+
 /*
  * sme_open_session() - Open a session for given persona
  *
@@ -974,11 +989,13 @@ QDF_STATUS sme_ll_stats_clear_req(tHalHandle hHal,
 		tSirLLStatsClearReq * pclearStatsReq);
 QDF_STATUS sme_ll_stats_set_req(tHalHandle hHal,
 		tSirLLStatsSetReq *psetStatsReq);
-QDF_STATUS sme_ll_stats_get_req(tHalHandle hHal,
-		tSirLLStatsGetReq *pgetStatsReq);
-QDF_STATUS sme_set_link_layer_stats_ind_cb(tHalHandle hHal,
-		void (*callbackRoutine)(void *callbackCtx,
-				int indType, void *pRsp));
+QDF_STATUS sme_ll_stats_get_req(mac_handle_t mac_handle,
+				tSirLLStatsGetReq *get_stats_req,
+				void *context);
+QDF_STATUS sme_set_link_layer_stats_ind_cb(mac_handle_t mac_handle,
+					   void (*callback_routine)(
+					   void *callback_ctx, int ind_type,
+					   void *rsp, void *cookie));
 QDF_STATUS sme_set_link_layer_ext_cb(tHalHandle hal,
 		     void (*ll_stats_ext_cb)(hdd_handle_t callback_ctx,
 					     tSirLLStatsResults * rsp));
@@ -1000,9 +1017,9 @@ QDF_STATUS sme_update_roam_key_mgmt_offload_enabled(tHalHandle hal_ctx,
 #ifdef WLAN_FEATURE_NAN
 QDF_STATUS sme_nan_event(tHalHandle hHal, void *pMsg);
 #endif /* WLAN_FEATURE_NAN */
-QDF_STATUS sme_get_link_status(tHalHandle hHal,
-		tCsrLinkStatusCallback callback,
-		void *pContext, uint8_t sessionId);
+QDF_STATUS sme_get_link_status(mac_handle_t mac_handle,
+			       csr_link_status_callback callback,
+			       void *context, uint8_t session_id);
 QDF_STATUS sme_get_temperature(tHalHandle hHal,
 		void *tempContext,
 		void (*pCallbackfn)(int temperature,
@@ -1550,13 +1567,13 @@ QDF_STATUS sme_update_sta_inactivity_timeout(tHalHandle hal_handle,
 
 /**
  * sme_set_lost_link_info_cb() - plug in callback function for receiving
- * @hal: HAL handle
+ * @mac_handle: Opaque handle to the MAC context
  * @cb: callback function
  *
  * Return: HAL status
  */
-QDF_STATUS sme_set_lost_link_info_cb(tHalHandle hal,
-		void (*cb)(void *, struct sir_lost_link_info *));
+QDF_STATUS sme_set_lost_link_info_cb(mac_handle_t mac_handle,
+				     lost_link_info_cb cb);
 
 /**
  * sme_update_new_channel_event() - update new channel event for sapFsm
@@ -1705,15 +1722,15 @@ QDF_STATUS sme_deregister_tx_queue_cb(tHalHandle hal);
 
 /**
  * sme_rso_cmd_status_cb() - Set RSO cmd status callback
- * @hal: HAL Handle
- * @cb: HDD Callback to rso comman status read
+ * @mac_handle: Opaque handle for the MAC context
+ * @cb: HDD Callback to rso command status read
  *
  * This function is used to save HDD RSO Command status callback in MAC
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS sme_rso_cmd_status_cb(tHalHandle hal,
-		void (*cb)(void *, struct rso_cmd_status *));
+QDF_STATUS sme_rso_cmd_status_cb(mac_handle_t mac_handle,
+				 rso_cmd_status_cb cb);
 
 /**
  * sme_register_set_connection_info_cb() - Register connection
@@ -1829,13 +1846,13 @@ int sme_cli_set_command(int vdev_id, int param_id, int sval, int vpdev);
 
 /**
  * sme_set_bt_activity_info_cb - set the callback handler for bt events
- * @hal: handle returned by mac_open
+ * @mac_handle: handle returned by mac_open
  * @cb: callback handler
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS sme_set_bt_activity_info_cb(tHalHandle hal,
-				void (*cb)(void *, uint32_t profile_info));
+QDF_STATUS sme_set_bt_activity_info_cb(mac_handle_t mac_handle,
+				       bt_activity_info_cb cb);
 
 /**
  * sme_set_smps_cfg() - set SMPS config params

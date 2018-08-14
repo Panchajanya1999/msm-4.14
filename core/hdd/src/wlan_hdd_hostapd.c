@@ -778,6 +778,7 @@ static int hdd_stop_bss_link(struct hdd_adapter *adapter)
 		return errno;
 
 	if (test_bit(SOFTAP_BSS_STARTED, &adapter->event_flags)) {
+		hdd_ipa_ap_disconnect(adapter);
 		status = wlansap_stop_bss(
 			WLAN_HDD_GET_SAP_CTX_PTR(adapter));
 		if (QDF_IS_STATUS_SUCCESS(status))
@@ -2863,6 +2864,19 @@ QDF_STATUS wlan_hdd_get_channel_for_sap_restart(
 		return QDF_STATUS_E_FAILURE;
 	}
 
+	if (policy_mgr_get_connection_count(psoc) == 1) {
+		/*
+		 * If STA+SAP sessions are on DFS channel and STA+SAP SCC is
+		 * enabled on DFS channel then move the SAP out of DFS channel
+		 * as soon as STA gets disconnect.
+		 */
+		if (policy_mgr_is_sap_restart_required_after_sta_disconnect(
+			psoc, &intf_ch)) {
+			hdd_debug("Move the sap to user configured channel %u",
+				  intf_ch);
+			goto sap_restart;
+		}
+	}
 	/*
 	 * Check if STA's channel is DFS or passive or part of LTE avoided
 	 * channel list. In that case move SAP to other band if DBS is
@@ -2885,6 +2899,7 @@ QDF_STATUS wlan_hdd_get_channel_for_sap_restart(
 		}
 	}
 
+sap_restart:
 	if (intf_ch == 0) {
 		hdd_debug("interface channel is 0");
 		return QDF_STATUS_E_FAILURE;
@@ -4958,6 +4973,7 @@ __iw_softap_stopbss(struct net_device *dev,
 			WLAN_HDD_GET_HOSTAP_STATE_PTR(adapter);
 
 		qdf_event_reset(&hostapd_state->qdf_stop_bss_event);
+		hdd_ipa_ap_disconnect(adapter);
 		status = wlansap_stop_bss(
 			WLAN_HDD_GET_SAP_CTX_PTR(adapter));
 		if (QDF_IS_STATUS_SUCCESS(status)) {
@@ -7322,6 +7338,217 @@ static int wlan_hdd_setup_driver_overrides(struct hdd_adapter *ap_adapter)
 		return 0;
 }
 
+static void hdd_check_and_disconnect_sta_on_invalid_channel(
+		struct hdd_context *hdd_ctx)
+{
+	struct hdd_adapter *sta_adapter;
+	uint8_t sta_chan;
+
+	sta_chan = hdd_get_operating_channel(hdd_ctx, QDF_STA_MODE);
+
+	if (!sta_chan) {
+		hdd_err("STA not connected");
+		return;
+	}
+
+	hdd_err("STA connected on chan %d", sta_chan);
+
+	if (sme_is_channel_valid(hdd_ctx->mac_handle, sta_chan)) {
+		hdd_err("STA connected on chan %d and it is valid", sta_chan);
+		return;
+	}
+
+	sta_adapter = hdd_get_adapter(hdd_ctx, QDF_STA_MODE);
+
+	if (!sta_adapter) {
+		hdd_err("STA adapter does not exist");
+		return;
+	}
+
+	hdd_err("chan %d not valid, issue disconnect", sta_chan);
+	/* Issue Disconnect request */
+	wlan_hdd_disconnect(sta_adapter, eCSR_DISCONNECT_REASON_DEAUTH);
+}
+
+#ifdef DISABLE_CHANNEL_LIST
+/**
+ * wlan_hdd_get_wiphy_channel() - Get wiphy channel
+ * @wiphy: Pointer to wiphy structure
+ * @freq: Frequency of the channel for which the wiphy hw value is required
+ *
+ * Return: wiphy channel for valid frequency else return NULL
+ */
+static struct ieee80211_channel *wlan_hdd_get_wiphy_channel(
+						struct wiphy *wiphy,
+						uint32_t freq)
+{
+	uint32_t band_num, channel_num;
+	struct ieee80211_channel *wiphy_channel = NULL;
+
+	for (band_num = 0; band_num < HDD_NUM_NL80211_BANDS; band_num++) {
+		for (channel_num = 0; channel_num <
+				wiphy->bands[band_num]->n_channels;
+				channel_num++) {
+			wiphy_channel = &(wiphy->bands[band_num]->
+							channels[channel_num]);
+			if (wiphy_channel->center_freq == freq)
+				return wiphy_channel;
+		}
+	}
+	return wiphy_channel;
+}
+
+int wlan_hdd_restore_channels(struct hdd_context *hdd_ctx,
+			      bool notify_sap_event)
+{
+	struct hdd_cache_channels *cache_chann;
+	struct wiphy *wiphy;
+	int freq, status, rf_channel;
+	int i;
+	struct ieee80211_channel *wiphy_channel = NULL;
+
+	hdd_enter();
+
+	if (!hdd_ctx) {
+		hdd_err("HDD Context is NULL");
+		return -EINVAL;
+	}
+
+	wiphy = hdd_ctx->wiphy;
+	if (!wiphy) {
+		hdd_err("Wiphy is NULL");
+		return -EINVAL;
+	}
+
+	qdf_mutex_acquire(&hdd_ctx->cache_channel_lock);
+
+	cache_chann = hdd_ctx->original_channels;
+
+	if (!cache_chann || !cache_chann->num_channels) {
+		qdf_mutex_release(&hdd_ctx->cache_channel_lock);
+		hdd_err("channel list is NULL or num channels are zero");
+		return -EINVAL;
+	}
+
+	for (i = 0; i < cache_chann->num_channels; i++) {
+		freq = reg_chan_to_freq(
+				hdd_ctx->hdd_pdev,
+				cache_chann->channel_info[i].channel_num);
+		if (!freq)
+			continue;
+
+		wiphy_channel = wlan_hdd_get_wiphy_channel(wiphy, freq);
+		if (!wiphy_channel)
+			continue;
+		rf_channel = wiphy_channel->hw_value;
+		/*
+		 * Restore the orginal states of the channels
+		 * only if we have cached non zero values
+		 */
+		if (cache_chann->channel_info[i].wiphy_status && wiphy_channel)
+			wiphy_channel->flags =
+				cache_chann->channel_info[i].wiphy_status;
+	}
+
+	qdf_mutex_release(&hdd_ctx->cache_channel_lock);
+	if (notify_sap_event)
+		ucfg_reg_notify_sap_event(hdd_ctx->hdd_pdev, false);
+	else
+		ucfg_reg_restore_cached_channels(hdd_ctx->hdd_pdev);
+	status = sme_update_channel_list(hdd_ctx->mac_handle);
+	if (status)
+		hdd_err("Can't Restore channel list");
+	hdd_exit();
+
+	return 0;
+}
+
+/**
+ * wlan_hdd_disable_channels() - Cache the channels
+ * and current state of the channels from the channel list
+ * received in the command and disable the channels on the
+ * wiphy and reg table.
+ * @hdd_ctx: Pointer to hdd context
+ *
+ * Return: 0 on success, Error code on failure
+ */
+static int wlan_hdd_disable_channels(struct hdd_context *hdd_ctx)
+{
+	struct hdd_cache_channels *cache_chann;
+	struct wiphy *wiphy;
+	int freq, status, rf_channel;
+	int i;
+	struct ieee80211_channel *wiphy_channel = NULL;
+
+	hdd_enter();
+
+	if (!hdd_ctx) {
+		hdd_err("HDD Context is NULL");
+		return -EINVAL;
+	}
+
+	wiphy = hdd_ctx->wiphy;
+	if (!wiphy) {
+		hdd_err("Wiphy is NULL");
+		return -EINVAL;
+	}
+
+	qdf_mutex_acquire(&hdd_ctx->cache_channel_lock);
+	cache_chann = hdd_ctx->original_channels;
+
+	if (!cache_chann || !cache_chann->num_channels) {
+		qdf_mutex_release(&hdd_ctx->cache_channel_lock);
+		hdd_err("channel list is NULL or num channels are zero");
+		return -EINVAL;
+	}
+
+	for (i = 0; i < cache_chann->num_channels; i++) {
+		freq = reg_chan_to_freq(hdd_ctx->hdd_pdev,
+					cache_chann->
+						channel_info[i].channel_num);
+		if (!freq)
+			continue;
+		wiphy_channel = wlan_hdd_get_wiphy_channel(wiphy, freq);
+		if (!wiphy_channel)
+			continue;
+		rf_channel = wiphy_channel->hw_value;
+		/*
+		 * Cache the current states of
+		 * the channels
+		 */
+		cache_chann->channel_info[i].reg_status =
+					reg_get_channel_state(
+							hdd_ctx->hdd_pdev,
+							rf_channel);
+		cache_chann->channel_info[i].wiphy_status =
+							wiphy_channel->flags;
+		hdd_debug("Disable channel %d reg_stat %d wiphy_stat 0x%x",
+			  cache_chann->channel_info[i].channel_num,
+			  cache_chann->channel_info[i].reg_status,
+			  wiphy_channel->flags);
+
+		wiphy_channel->flags |= IEEE80211_CHAN_DISABLED;
+	}
+
+	qdf_mutex_release(&hdd_ctx->cache_channel_lock);
+	status = ucfg_reg_notify_sap_event(hdd_ctx->hdd_pdev, true);
+	status = sme_update_channel_list(hdd_ctx->mac_handle);
+
+	hdd_exit();
+	return status;
+}
+#else
+static int wlan_hdd_disable_channels(struct hdd_context *hdd_ctx)
+{
+	return 0;
+}
+
+int wlan_hdd_restore_channels(struct hdd_context *hdd_ctx,
+			      bool notify_sap_event)
+{
+	return 0;
+}
+#endif
 /**
  * wlan_hdd_cfg80211_start_bss() - start bss
  * @adapter: Pointer to hostapd adapter
@@ -7352,7 +7579,6 @@ int wlan_hdd_cfg80211_start_bss(struct hdd_adapter *adapter,
 	tpWLAN_SAPEventCB pSapEventCallback;
 	struct hdd_hostapd_state *hostapd_state;
 	mac_handle_t mac_handle;
-	struct qc_mac_acl_entry *acl_entry = NULL;
 	int32_t i;
 	struct hdd_config *iniConfig;
 	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
@@ -7440,7 +7666,18 @@ int wlan_hdd_cfg80211_start_bss(struct hdd_adapter *adapter,
 			goto free;
 		}
 	}
-
+	if (adapter->device_mode == QDF_SAP_MODE) {
+		/*
+		 * Disable the channels received in command
+		 * SET_DISABLE_CHANNEL_LIST
+		 */
+		status = wlan_hdd_disable_channels(hdd_ctx);
+		if (!QDF_IS_STATUS_SUCCESS(status))
+			hdd_err("Disable channel list fail");
+		else
+			hdd_check_and_disconnect_sta_on_invalid_channel(
+								hdd_ctx);
+	}
 	pConfig = &adapter->session.ap.sap_config;
 
 	pBeacon = adapter->session.ap.beacon;
@@ -7489,6 +7726,8 @@ int wlan_hdd_cfg80211_start_bss(struct hdd_adapter *adapter,
 		pConfig->acs_dfs_mode = wlan_hdd_get_dfs_mode(mode);
 	}
 
+	policy_mgr_update_user_config_sap_chan(hdd_ctx->hdd_psoc,
+					       pConfig->channel);
 	hdd_debug("pConfig->channel %d, pConfig->acs_dfs_mode %d",
 		pConfig->channel, pConfig->acs_dfs_mode);
 
@@ -7762,59 +8001,6 @@ int wlan_hdd_cfg80211_start_bss(struct hdd_adapter *adapter,
 		pConfig->cc_switch_mode = iniConfig->WlanMccToSccSwitchMode;
 #endif
 
-	pIe = wlan_get_vendor_ie_ptr_from_oui(BLACKLIST_OUI_TYPE,
-					      WPA_OUI_TYPE_SIZE, pBeacon->tail,
-					      pBeacon->tail_len);
-
-	/* pIe for black list is following form:
-	 * type    : 1 byte
-	 * length  : 1 byte
-	 * OUI     : 4 bytes
-	 * acl type : 1 byte
-	 * no of mac addr in black list: 1 byte
-	 * list of mac_acl_entries: variable, 6 bytes per mac
-	 * address + sizeof(int) for vlan id
-	 */
-	if ((pIe != NULL) && (pIe[1] != 0)) {
-		pConfig->SapMacaddr_acl = pIe[6];
-		pConfig->num_deny_mac = pIe[7];
-		hdd_debug("acl type = %d no deny mac = %d", pIe[6], pIe[7]);
-		if (pConfig->num_deny_mac > MAX_ACL_MAC_ADDRESS)
-			pConfig->num_deny_mac = MAX_ACL_MAC_ADDRESS;
-		acl_entry = (struct qc_mac_acl_entry *)(pIe + 8);
-		for (i = 0; i < pConfig->num_deny_mac; i++) {
-			qdf_mem_copy(&pConfig->deny_mac[i], acl_entry->addr,
-				     sizeof(qcmacaddr));
-			acl_entry++;
-		}
-	}
-	pIe = wlan_get_vendor_ie_ptr_from_oui(WHITELIST_OUI_TYPE,
-			WPA_OUI_TYPE_SIZE, pBeacon->tail,
-			pBeacon->tail_len);
-
-	/* pIe for white list is following form:
-	 * type    : 1 byte
-	 * length  : 1 byte
-	 * OUI     : 4 bytes
-	 * acl type : 1 byte
-	 * no of mac addr in white list: 1 byte
-	 * list of mac_acl_entries: variable, 6 bytes per mac
-	 * address + sizeof(int) for vlan id
-	 */
-	if ((pIe != NULL) && (pIe[1] != 0)) {
-		pConfig->SapMacaddr_acl = pIe[6];
-		pConfig->num_accept_mac = pIe[7];
-		hdd_debug("acl type = %d no accept mac = %d",
-		       pIe[6], pIe[7]);
-		if (pConfig->num_accept_mac > MAX_ACL_MAC_ADDRESS)
-			pConfig->num_accept_mac = MAX_ACL_MAC_ADDRESS;
-		acl_entry = (struct qc_mac_acl_entry *)(pIe + 8);
-		for (i = 0; i < pConfig->num_accept_mac; i++) {
-			qdf_mem_copy(&pConfig->accept_mac[i], acl_entry->addr,
-				     sizeof(qcmacaddr));
-			acl_entry++;
-		}
-	}
 	if (!(ssid && qdf_str_len(PRE_CAC_SSID) == ssid_len &&
 	      (0 == qdf_mem_cmp(ssid, PRE_CAC_SSID, ssid_len)))) {
 		pIe = wlan_get_ie_ptr_from_eid(WLAN_EID_SUPP_RATES,
@@ -8062,6 +8248,9 @@ int wlan_hdd_cfg80211_start_bss(struct hdd_adapter *adapter,
 	goto free;
 
 error:
+	if (adapter->device_mode == QDF_SAP_MODE)
+		wlan_hdd_restore_channels(hdd_ctx, true);
+
 	/* Revert the indoor to passive marking if START BSS fails */
 	if (iniConfig->force_ssc_disable_indoor_channel) {
 		hdd_update_indoor_channel(hdd_ctx, false);
@@ -8210,6 +8399,7 @@ static int __wlan_hdd_cfg80211_stop_ap(struct wiphy *wiphy,
 		       adapter->session_id);
 		return -EINVAL;
 	}
+	wlan_hdd_cleanup_actionframe(adapter);
 	wlan_hdd_cleanup_remain_on_channel_ctx(adapter);
 	mutex_lock(&hdd_ctx->sap_lock);
 	if (test_bit(SOFTAP_BSS_STARTED, &adapter->event_flags)) {
@@ -8221,6 +8411,7 @@ static int __wlan_hdd_cfg80211_stop_ap(struct wiphy *wiphy,
 			WLAN_HDD_GET_SAP_CTX_PTR(adapter), true);
 
 		qdf_event_reset(&hostapd_state->qdf_stop_bss_event);
+		hdd_ipa_ap_disconnect(adapter);
 		status = wlansap_stop_bss(WLAN_HDD_GET_SAP_CTX_PTR(adapter));
 		if (QDF_IS_STATUS_SUCCESS(status)) {
 			qdf_status =
@@ -8894,3 +9085,23 @@ bool hdd_is_peer_associated(struct hdd_adapter *adapter,
 
 	return false;
 }
+
+void hdd_ipa_ap_disconnect(struct hdd_adapter *adapter)
+{
+	struct hdd_context *hdd_ctx;
+	struct hdd_ap_ctx *ap_ctx;
+
+	hdd_ctx = WLAN_HDD_GET_CTX(adapter);
+	ap_ctx = WLAN_HDD_GET_AP_CTX_PTR(adapter);
+
+	if (ucfg_ipa_is_enabled()) {
+		if (ucfg_ipa_wlan_evt(hdd_ctx->hdd_pdev,
+				adapter->dev, adapter->device_mode,
+				ap_ctx->broadcast_sta_id,
+				adapter->session_id,
+				WLAN_IPA_AP_DISCONNECT,
+				adapter->dev->dev_addr) != QDF_STATUS_SUCCESS)
+		hdd_err("WLAN_AP_DISCONNECT event failed");
+	}
+}
+

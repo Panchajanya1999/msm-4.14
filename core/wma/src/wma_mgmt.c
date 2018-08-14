@@ -2534,11 +2534,11 @@ static int wmi_unified_probe_rsp_tmpl_send(tp_wma_handle wma,
 	adjusted_tsf_le = cpu_to_le64(0ULL -
 				      wma->interfaces[vdev_id].tsfadjust);
 	/* Update the timstamp in the probe response buffer with adjusted TSF */
-	wh = (struct ieee80211_frame *)probe_rsp_info->pProbeRespTemplate;
+	wh = (struct ieee80211_frame *)probe_rsp_info->probeRespTemplate;
 	A_MEMCPY(&wh[1], &adjusted_tsf_le, sizeof(adjusted_tsf_le));
 
 	params.prb_rsp_template_len = probe_rsp_info->probeRespTemplateLen;
-	params.prb_rsp_template_frm = probe_rsp_info->pProbeRespTemplate;
+	params.prb_rsp_template_frm = probe_rsp_info->probeRespTemplate;
 
 	return wmi_unified_probe_rsp_tmpl_send_cmd(wma->wmi_handle, vdev_id,
 						   &params);
@@ -2757,7 +2757,8 @@ int wma_tbttoffset_update_event_handler(void *handle, uint8_t *event,
 
 		qdf_spin_lock_bh(&bcn->lock);
 		qdf_mem_zero(&bcn_info, sizeof(bcn_info));
-		bcn_info.beacon = qdf_nbuf_data(bcn->buf);
+		qdf_mem_copy(bcn_info.beacon, qdf_nbuf_data(bcn->buf),
+			     bcn->len);
 		bcn_info.p2pIeOffset = bcn->p2p_ie_offset;
 		bcn_info.beaconLength = bcn->len;
 		bcn_info.timIeOffset = bcn->tim_ie_offset;
@@ -2811,7 +2812,8 @@ void wma_send_probe_rsp_tmpl(tp_wma_handle wma,
 		return;
 	}
 
-	probe_rsp = (struct sAniProbeRspStruct *) (probe_rsp_info->pProbeRespTemplate);
+	probe_rsp = (struct sAniProbeRspStruct *)
+				 (probe_rsp_info->probeRespTemplate);
 	if (!probe_rsp) {
 		WMA_LOGE(FL("probe_rsp is NULL"));
 		return;
@@ -3166,12 +3168,21 @@ void wma_process_update_opmode(tp_wma_handle wma_handle,
 void wma_process_update_rx_nss(tp_wma_handle wma_handle,
 			       tUpdateRxNss *update_rx_nss)
 {
+	struct target_psoc_info *tgt_hdl;
 	struct wma_txrx_node *intr =
 		&wma_handle->interfaces[update_rx_nss->smesessionId];
 	int rx_nss = update_rx_nss->rxNss;
+	int num_rf_chains;
 
-	if (rx_nss > WMA_MAX_NSS)
-		rx_nss = WMA_MAX_NSS;
+	tgt_hdl = wlan_psoc_get_tgt_if_handle(wma_handle->psoc);
+	if (!tgt_hdl) {
+		WMA_LOGE("%s: target psoc info is NULL", __func__);
+		return;
+	}
+
+	num_rf_chains = target_if_get_num_rf_chains(tgt_hdl);
+	if (rx_nss > num_rf_chains || rx_nss > WMA_MAX_NSS)
+		rx_nss = QDF_MIN(num_rf_chains, WMA_MAX_NSS);
 
 	intr->nss = (uint8_t)rx_nss;
 	update_rx_nss->rxNss = (uint32_t)rx_nss;
@@ -3485,20 +3496,28 @@ int wma_process_bip(tp_wma_handle wma_handle,
 	qdf_nbuf_t wbuf
 )
 {
+	uint16_t mmie_size;
 	uint16_t key_id;
 	uint8_t *efrm;
 
 	efrm = qdf_nbuf_data(wbuf) + qdf_nbuf_len(wbuf);
 
 	if (iface->key.key_cipher == WMI_CIPHER_AES_CMAC) {
-		key_id = (uint16_t)*(efrm - cds_get_mmie_size() + 2);
+		mmie_size = cds_get_mmie_size();
 	} else if (iface->key.key_cipher == WMI_CIPHER_AES_GMAC) {
-		key_id = (uint16_t)*(efrm - cds_get_gmac_mmie_size() + 2);
+		mmie_size = cds_get_gmac_mmie_size();
 	} else {
 		WMA_LOGE(FL("Invalid key cipher %d"), iface->key.key_cipher);
 		return -EINVAL;
 	}
 
+	/* Check if frame is invalid length */
+	if (efrm - (uint8_t *)wh < sizeof(*wh) + mmie_size) {
+		WMA_LOGE(FL("Invalid frame length"));
+		return -EINVAL;
+	}
+
+	key_id = (uint16_t)*(efrm - mmie_size + 2);
 	if (!((key_id == WMA_IGTK_KEY_INDEX_4)
 	     || (key_id == WMA_IGTK_KEY_INDEX_5))) {
 		WMA_LOGE(FL("Invalid KeyID(%d) dropping the frame"), key_id);

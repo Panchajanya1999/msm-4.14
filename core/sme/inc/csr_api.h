@@ -1729,7 +1729,7 @@ typedef void (*csr_readyToSuspendCallback)(void *pContext, bool suspended);
 #ifdef WLAN_FEATURE_EXTWOW_SUPPORT
 typedef void (*csr_readyToExtWoWCallback)(void *pContext, bool status);
 #endif
-typedef void (*tCsrLinkStatusCallback)(uint8_t status, void *pContext);
+typedef void (*csr_link_status_callback)(uint8_t status, void *context);
 #ifdef FEATURE_WLAN_TDLS
 void csr_roam_fill_tdls_info(tpAniSirGlobal mac_ctx,
 			     struct csr_roam_info *roam_info,
@@ -1744,19 +1744,19 @@ void csr_packetdump_timer_stop(void);
 
 /**
  * csr_get_channel_status() - get chan info via channel number
- * @p_mac: Pointer to Global MAC structure
+ * @mac: Pointer to Global MAC structure
  * @channel_id: channel id
  *
  * Return: chan status info
  */
-struct lim_channel_status *csr_get_channel_status(void *p_mac,
-						  uint32_t channel_id);
+struct lim_channel_status *
+csr_get_channel_status(tpAniSirGlobal mac, uint32_t channel_id);
 
 /**
  * csr_clear_channel_status() - clear chan info
- * @p_mac: Pointer to Global MAC structure
+ * @mac: Pointer to Global MAC structure
  *
  * Return: none
  */
-void csr_clear_channel_status(void *p_mac);
+void csr_clear_channel_status(tpAniSirGlobal mac);
 #endif

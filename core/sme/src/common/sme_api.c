@@ -116,11 +116,6 @@ tpAniSirGlobal sme_get_mac_context(void)
 	}
 
 	mac_ctx = PMAC_STRUCT(h_hal);
-	if (NULL == mac_ctx) {
-		QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_ERROR,
-		FL("Invalid MAC context"));
-		return NULL;
-	}
 
 	return mac_ctx;
 }
@@ -376,6 +371,11 @@ static void dump_csr_command_info(tpAniSirGlobal pMac, tSmeCmd *pCmd)
 			pCmd->u.wmStatusChangeCmd.Type);
 		break;
 
+	case e_sme_command_del_sta_session:
+		sme_debug("Issue del STA command for session:%d",
+			   pCmd->sessionId);
+		break;
+
 	default:
 		sme_debug("default: Unhandled command %d",
 			pCmd->command);
@@ -485,9 +485,10 @@ QDF_STATUS sme_ser_handle_active_cmd(struct wlan_serialization_command *cmd)
 	}
 
 	hal = cds_get_context(QDF_MODULE_ID_SME);
-	mac_ctx = PMAC_STRUCT(hal);
-	if (!mac_ctx) {
-		sme_err("No mac_ctx found");
+	if (NULL != hal) {
+		mac_ctx = PMAC_STRUCT(hal);
+	} else {
+		sme_err("No hal found");
 		return QDF_STATUS_E_FAILURE;
 	}
 	sme_cmd = cmd->umac_cmd;
@@ -503,6 +504,9 @@ QDF_STATUS sme_ser_handle_active_cmd(struct wlan_serialization_command *cmd)
 	case eSmeCommandWmStatusChange:
 		csr_roam_process_wm_status_change_command(mac_ctx,
 					sme_cmd);
+		break;
+	case e_sme_command_del_sta_session:
+		csr_process_del_sta_session_command(mac_ctx, sme_cmd);
 		break;
 	case eSmeCommandAddTs:
 	case eSmeCommandDelTs:
@@ -543,9 +547,10 @@ QDF_STATUS sme_ser_cmd_callback(void *buf,
 	tSmeCmd *sme_cmd;
 
 	hal = cds_get_context(QDF_MODULE_ID_SME);
-	mac_ctx = PMAC_STRUCT(hal);
-	if (!mac_ctx) {
-		sme_err("mac_ctx is null");
+	if (hal != NULL) {
+		mac_ctx = PMAC_STRUCT(hal);
+	} else {
+		sme_err("hal is null");
 		return QDF_STATUS_E_FAILURE;
 	}
 	/*
@@ -1896,6 +1901,7 @@ static QDF_STATUS sme_process_antenna_mode_resp(tpAniSirGlobal mac,
 	tListElem *entry;
 	tSmeCmd *command;
 	bool found;
+	void *context = NULL;
 	antenna_mode_cb callback;
 	struct sir_antenna_mode_resp *param;
 
@@ -1923,13 +1929,13 @@ static QDF_STATUS sme_process_antenna_mode_resp(tpAniSirGlobal mac,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	callback =
-		command->u.set_antenna_mode_cmd.set_antenna_mode_resp;
+	context = command->u.set_antenna_mode_cmd.set_antenna_mode_ctx;
+	callback = command->u.set_antenna_mode_cmd.set_antenna_mode_resp;
 	if (callback) {
 		if (!param)
 			sme_err("Set antenna mode call back is NULL");
 		else
-			callback(param->status);
+			callback(param->status, context);
 	} else {
 		sme_err("Callback does not exist");
 	}
@@ -2167,13 +2173,13 @@ QDF_STATUS sme_process_msg(tpAniSirGlobal pMac, struct scheduler_msg *pMsg)
 		tAniGetLinkStatus *pLinkStatus =
 			(tAniGetLinkStatus *) pMsg->bodyptr;
 		if (pLinkStatus) {
-			if (pMac->sme.linkStatusCallback)
-				pMac->sme.linkStatusCallback(
+			if (pMac->sme.link_status_callback)
+				pMac->sme.link_status_callback(
 					pLinkStatus->linkStatus,
-					pMac->sme.linkStatusContext);
+					pMac->sme.link_status_context);
 
-			pMac->sme.linkStatusCallback = NULL;
-			pMac->sme.linkStatusContext = NULL;
+			pMac->sme.link_status_callback = NULL;
+			pMac->sme.link_status_context = NULL;
 			qdf_mem_free(pLinkStatus);
 		}
 		break;
@@ -2448,42 +2454,27 @@ static QDF_STATUS sme_process_nss_update_resp(tpAniSirGlobal mac, uint8_t *msg)
 	return QDF_STATUS_SUCCESS;
 }
 
-/*
- * sme_stop() - Stop all SME modules and put them at idle state
- *
- *  The function stops each module in SME, PMC, CSR, etc. . Upon
- *  return, all modules are at idle state ready to start.
- *  This is a synchronous call
- *
- * hHal - The handle returned by mac_open
- * tHalStopType - reason for stopping
- * Return QDF_STATUS_SUCCESS - SME is stopped.
- *  Other status means SME is failed to stop but caller should still
- *  consider SME is stopped.
- */
-QDF_STATUS sme_stop(tHalHandle hHal, tHalStopType stopType)
+QDF_STATUS sme_stop(mac_handle_t mac_handle)
 {
-	QDF_STATUS status = QDF_STATUS_E_FAILURE;
-	QDF_STATUS fail_status = QDF_STATUS_SUCCESS;
-	tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
+	QDF_STATUS status;
+	QDF_STATUS ret_status = QDF_STATUS_SUCCESS;
+	tpAniSirGlobal mac = MAC_CONTEXT(mac_handle);
 
-	status = rrm_stop(pMac);
-	if (!QDF_IS_STATUS_SUCCESS(status)) {
+	status = rrm_stop(mac);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		ret_status = status;
 		sme_err("rrm_stop failed with status: %d", status);
 	}
 
-	status = csr_stop(pMac, stopType);
-	if (!QDF_IS_STATUS_SUCCESS(status)) {
+	status = csr_stop(mac);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		ret_status = status;
 		sme_err("csr_stop failed with status: %d", status);
-		fail_status = status;
 	}
 
-	if (!QDF_IS_STATUS_SUCCESS(fail_status))
-		status = fail_status;
+	mac->sme.state = SME_STATE_STOP;
 
-	pMac->sme.state = SME_STATE_STOP;
-
-	return status;
+	return ret_status;
 }
 
 /*
@@ -3147,12 +3138,6 @@ QDF_STATUS sme_roam_connect(tHalHandle hHal, uint8_t sessionId,
 QDF_STATUS sme_set_phy_mode(tHalHandle hHal, eCsrPhyMode phyMode)
 {
 	tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
-
-	if (NULL == pMac) {
-		QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_ERROR,
-			  "%s: invalid context", __func__);
-		return QDF_STATUS_E_FAILURE;
-	}
 
 	pMac->roam.configParam.phyMode = phyMode;
 	pMac->roam.configParam.uCfgDot11Mode =
@@ -4210,48 +4195,43 @@ QDF_STATUS sme_get_statistics(tHalHandle hHal,
 }
 #endif
 
-QDF_STATUS sme_get_link_status(tHalHandle hHal,
-			       tCsrLinkStatusCallback callback,
-			       void *pContext, uint8_t sessionId)
+QDF_STATUS sme_get_link_status(mac_handle_t mac_handle,
+			       csr_link_status_callback callback,
+			       void *context, uint8_t session_id)
 {
 	QDF_STATUS status = QDF_STATUS_E_FAILURE;
-	tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
-	tAniGetLinkStatus *pMsg;
+	tpAniSirGlobal mac = MAC_CONTEXT(mac_handle);
+	tAniGetLinkStatus *msg;
 	struct scheduler_msg message = {0};
 
-	status = sme_acquire_global_lock(&pMac->sme);
+	status = sme_acquire_global_lock(&mac->sme);
 	if (QDF_IS_STATUS_SUCCESS(status)) {
-		pMsg = qdf_mem_malloc(sizeof(tAniGetLinkStatus));
-		if (NULL == pMsg) {
-			QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_ERROR,
-				  "%s: Not able to allocate memory for link status",
-				  __func__);
-			sme_release_global_lock(&pMac->sme);
+		msg = qdf_mem_malloc(sizeof(*msg));
+		if (!msg) {
+			sme_err("Malloc failure");
+			sme_release_global_lock(&mac->sme);
 			return QDF_STATUS_E_NOMEM;
 		}
 
-		pMsg->msgType = WMA_LINK_STATUS_GET_REQ;
-		pMsg->msgLen = (uint16_t) sizeof(tAniGetLinkStatus);
-		pMsg->sessionId = sessionId;
-		pMac->sme.linkStatusContext = pContext;
-		pMac->sme.linkStatusCallback = callback;
+		msg->msgType = WMA_LINK_STATUS_GET_REQ;
+		msg->msgLen = sizeof(*msg);
+		msg->sessionId = session_id;
+		mac->sme.link_status_context = context;
+		mac->sme.link_status_callback = callback;
 
 		message.type = WMA_LINK_STATUS_GET_REQ;
-		message.bodyptr = pMsg;
+		message.bodyptr = msg;
 		message.reserved = 0;
 
-		if (!QDF_IS_STATUS_SUCCESS
-			    (scheduler_post_msg(QDF_MODULE_ID_WMA,
-						 &message))) {
-			QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_ERROR,
-				  "%s: Post LINK STATUS MSG fail", __func__);
-			qdf_mem_free(pMsg);
-			pMac->sme.linkStatusContext = NULL;
-			pMac->sme.linkStatusCallback = NULL;
-			status = QDF_STATUS_E_FAILURE;
+		status = scheduler_post_msg(QDF_MODULE_ID_WMA, &message);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			sme_err("post msg failed, %d", status);
+			qdf_mem_free(msg);
+			mac->sme.link_status_context = NULL;
+			mac->sme.link_status_callback = NULL;
 		}
 
-		sme_release_global_lock(&pMac->sme);
+		sme_release_global_lock(&mac->sme);
 	}
 
 	return status;
@@ -8718,14 +8698,15 @@ void sme_get_command_q_status(tHalHandle hHal)
 {
 	tSmeCmd *pTempCmd = NULL;
 	tListElem *pEntry;
-	tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
+	tpAniSirGlobal pMac;
 
-	if (NULL == pMac) {
+	if (NULL != hHal) {
+		pMac = PMAC_STRUCT(hHal);
+	} else {
 		QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_ERROR,
-			  "%s: pMac is NULL", __func__);
+			  "%s: Invalid hHal pointer", __func__);
 		return;
 	}
-
 	pEntry = csr_nonscan_active_ll_peek_head(pMac, LL_ACCESS_LOCK);
 	if (pEntry)
 		pTempCmd = GET_BASE_ADDR(pEntry, tSmeCmd, Link);
@@ -11753,37 +11734,39 @@ QDF_STATUS sme_ll_stats_set_req(tHalHandle hHal, tSirLLStatsSetReq
 	return status;
 }
 
-/*
- * sme_ll_stats_get_req() -
- * SME API to get the Link Layer Statistics
+/**
+ * sme_ll_stats_get_req() - SME API to get the Link Layer Statistics
+ * @mac_handle: Global MAC handle
+ * @get_stats_req: Link Layer get stats request params structure
+ * @context: Callback context for ll stats
  *
- * hHal
- * pgetStatsReq: Link Layer get stats request params structure
- * Return QDF_STATUS
+ * Return: QDF_STATUS
  */
-QDF_STATUS sme_ll_stats_get_req(tHalHandle hHal, tSirLLStatsGetReq
-				*pgetStatsReq)
+QDF_STATUS sme_ll_stats_get_req(mac_handle_t mac_handle,
+				tSirLLStatsGetReq *get_stats_req,
+				void *context)
 {
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
-	tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
+	tpAniSirGlobal mac = MAC_CONTEXT(mac_handle);
 	struct scheduler_msg message = {0};
-	tSirLLStatsGetReq *get_stats_req;
+	tSirLLStatsGetReq *ll_stats_get_req;
 
-	get_stats_req = qdf_mem_malloc(sizeof(*get_stats_req));
+	ll_stats_get_req = qdf_mem_malloc(sizeof(*ll_stats_get_req));
 
-	if (!get_stats_req) {
+	if (!ll_stats_get_req) {
 		QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_ERROR,
 			  "%s: Not able to allocate memory for WMA_LL_STATS_GET_REQ",
 			  __func__);
 		return QDF_STATUS_E_NOMEM;
 	}
 
-	*get_stats_req = *pgetStatsReq;
+	*ll_stats_get_req = *get_stats_req;
 
-	if (QDF_STATUS_SUCCESS == sme_acquire_global_lock(&pMac->sme)) {
+	mac->sme.ll_stats_context = context;
+	if (sme_acquire_global_lock(&mac->sme) == QDF_STATUS_SUCCESS) {
 		/* Serialize the req through MC thread */
-		message.bodyptr = get_stats_req;
+		message.bodyptr = ll_stats_get_req;
 		message.type = WMA_LINK_LAYER_STATS_GET_REQ;
 		MTRACE(qdf_trace(QDF_MODULE_ID_SME, TRACE_CODE_SME_TX_WMA_MSG,
 				 NO_SESSION, message.type));
@@ -11794,32 +11777,35 @@ QDF_STATUS sme_ll_stats_get_req(tHalHandle hHal, tSirLLStatsGetReq
 				  "%s: not able to post WMA_LL_STATS_GET_REQ",
 				  __func__);
 
-			qdf_mem_free(get_stats_req);
+			qdf_mem_free(ll_stats_get_req);
 			status = QDF_STATUS_E_FAILURE;
 
 		}
-		sme_release_global_lock(&pMac->sme);
+		sme_release_global_lock(&mac->sme);
 	} else {
 		QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_ERROR,
 			"%s: sme_acquire_global_lock error", __func__);
-		qdf_mem_free(get_stats_req);
+		qdf_mem_free(ll_stats_get_req);
 		status = QDF_STATUS_E_FAILURE;
 	}
 
 	return status;
 }
 
-/*
- * sme_set_link_layer_stats_ind_cb() -
- * SME API to trigger the stats are available  after get request
+/**
+ * sme_set_link_layer_stats_ind_cb() - Link layer stats indication callback
+ * @hHal: handle in hdd context
+ * @callback_routine: HDD callback which needs to be invoked after
+ *                    getting status notification from FW
  *
- * hHal
- * callback_routine - HDD callback which needs to be invoked after
-	   getting status notification from FW
- * Return QDF_STATUS
+ * SME API to trigger the stats are available  after get request.
+ *
+ * Return: QDF_STATUS
  */
 QDF_STATUS sme_set_link_layer_stats_ind_cb(tHalHandle hHal,
-	void (*callback_routine)(void *callbackCtx, int indType, void *pRsp))
+					   void (*callback_routine)(
+					   void *callback_ctx, int ind_type,
+					   void *rsp, void *cookie))
 {
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
@@ -12287,10 +12273,6 @@ QDF_STATUS sme_enable_dfs_chan_scan(tHalHandle h_hal, uint8_t dfs_flag)
 	}
 
 	mac = PMAC_STRUCT(h_hal);
-	if (!mac) {
-		sme_err("mac is NULL");
-		return QDF_STATUS_E_INVAL;
-	}
 
 	mac->scan.fEnableDFSChnlScan = dfs_flag;
 
@@ -13609,9 +13591,11 @@ void sme_update_tgt_services(tHalHandle hal, struct wma_tgt_services *cfg)
  */
 bool sme_is_session_id_valid(tHalHandle hal, uint32_t session_id)
 {
-	tpAniSirGlobal mac = PMAC_STRUCT(hal);
+	tpAniSirGlobal mac;
 
-	if (!mac) {
+	if (NULL != hal) {
+		mac = PMAC_STRUCT(hal);
+	} else {
 		QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_ERROR,
 			"%s: null mac pointer", __func__);
 		return false;
@@ -14347,7 +14331,7 @@ void sme_update_hw_dbs_capable(tHalHandle hal, uint8_t hw_dbs_capable)
  * Return: none
  */
 void sme_register_p2p_lo_event(tHalHandle hHal, void *context,
-					p2p_lo_callback callback)
+			       p2p_lo_callback callback)
 {
 	tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
 	QDF_STATUS status = QDF_STATUS_E_FAILURE;
@@ -14673,11 +14657,11 @@ QDF_STATUS sme_update_tx_fail_cnt_threshold(tHalHandle hal_handle,
 	return status;
 }
 
-QDF_STATUS sme_set_lost_link_info_cb(tHalHandle hal,
-				void (*cb)(void *, struct sir_lost_link_info *))
+QDF_STATUS sme_set_lost_link_info_cb(mac_handle_t mac_handle,
+				     lost_link_info_cb cb)
 {
-	QDF_STATUS status = QDF_STATUS_SUCCESS;
-	tpAniSirGlobal mac = PMAC_STRUCT(hal);
+	QDF_STATUS status;
+	tpAniSirGlobal mac = MAC_CONTEXT(mac_handle);
 
 	status = sme_acquire_global_lock(&mac->sme);
 	if (QDF_IS_STATUS_SUCCESS(status)) {
@@ -15263,11 +15247,11 @@ QDF_STATUS sme_register_set_connection_info_cb(tHalHandle hHal,
 	return status;
 }
 
-QDF_STATUS sme_rso_cmd_status_cb(tHalHandle hal,
-		void (*cb)(void *, struct rso_cmd_status *))
+QDF_STATUS sme_rso_cmd_status_cb(mac_handle_t mac_handle,
+				 rso_cmd_status_cb cb)
 {
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
-	tpAniSirGlobal mac = PMAC_STRUCT(hal);
+	tpAniSirGlobal mac = MAC_CONTEXT(mac_handle);
 
 	mac->sme.rso_cmd_status_cb = cb;
 	sme_debug("Registered RSO command status callback");
@@ -15522,11 +15506,11 @@ int sme_cli_set_command(int vdev_id, int param_id, int sval, int vpdev)
 	return wma_cli_set_command(vdev_id, param_id, sval, vpdev);
 }
 
-QDF_STATUS sme_set_bt_activity_info_cb(tHalHandle hal,
-			void (*cb)(void *, uint32_t bt_activity))
+QDF_STATUS sme_set_bt_activity_info_cb(mac_handle_t mac_handle,
+				       bt_activity_info_cb cb)
 {
 	QDF_STATUS status;
-	tpAniSirGlobal mac = PMAC_STRUCT(hal);
+	tpAniSirGlobal mac = MAC_CONTEXT(mac_handle);
 
 	status = sme_acquire_global_lock(&mac->sme);
 	if (QDF_IS_STATUS_SUCCESS(status)) {

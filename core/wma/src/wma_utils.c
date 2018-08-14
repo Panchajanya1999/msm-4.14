@@ -1246,14 +1246,14 @@ static int wma_unified_link_peer_stats_event_handler(void *handle,
 	bool excess_data = false;
 	uint32_t buf_len = 0;
 
-	tpAniSirGlobal pMac = cds_get_context(QDF_MODULE_ID_PE);
+	tpAniSirGlobal mac = cds_get_context(QDF_MODULE_ID_PE);
 
-	if (!pMac) {
-		WMA_LOGD("%s: NULL pMac ptr. Exiting", __func__);
+	if (!mac) {
+		WMA_LOGD("%s: NULL mac ptr. Exiting", __func__);
 		return -EINVAL;
 	}
 
-	if (!pMac->sme.pLinkLayerStatsIndCallback) {
+	if (!mac->sme.pLinkLayerStatsIndCallback) {
 		WMA_LOGD("%s: HDD callback is null", __func__);
 		return -EINVAL;
 	}
@@ -1375,9 +1375,10 @@ static int wma_unified_link_peer_stats_event_handler(void *handle,
 	 * vdev_id/ifacId in link_stats_results will be
 	 * used to retrieve the correct HDD context
 	 */
-	pMac->sme.pLinkLayerStatsIndCallback(pMac->hdd_handle,
+	mac->sme.pLinkLayerStatsIndCallback(mac->hdd_handle,
 					     WMA_LINK_LAYER_STATS_RESULTS_RSP,
-					     link_stats_results);
+					     link_stats_results,
+					     mac->sme.ll_stats_context);
 	qdf_mem_free(link_stats_results);
 
 	return 0;
@@ -1572,8 +1573,9 @@ post_stats:
 	 * used to retrieve the correct HDD context
 	 */
 	mac->sme.pLinkLayerStatsIndCallback(mac->hdd_handle,
-		WMA_LINK_LAYER_STATS_RESULTS_RSP,
-		link_stats_results);
+					    WMA_LINK_LAYER_STATS_RESULTS_RSP,
+					    link_stats_results,
+					    mac->sme.ll_stats_context);
 	wma_unified_radio_tx_mem_free(handle);
 
 	return 0;
@@ -1604,14 +1606,14 @@ static int wma_unified_link_radio_stats_event_handler(void *handle,
 	tSirWifiRadioStat *rs_results;
 	tSirWifiChannelStats *chn_results;
 
-	tpAniSirGlobal pMac = cds_get_context(QDF_MODULE_ID_PE);
+	tpAniSirGlobal mac = cds_get_context(QDF_MODULE_ID_PE);
 
-	if (!pMac) {
-		WMA_LOGD("%s: NULL pMac ptr. Exiting", __func__);
+	if (!mac) {
+		WMA_LOGD("%s: NULL mac ptr. Exiting", __func__);
 		return -EINVAL;
 	}
 
-	if (!pMac->sme.pLinkLayerStatsIndCallback) {
+	if (!mac->sme.pLinkLayerStatsIndCallback) {
 		WMA_LOGD("%s: HDD callback is null", __func__);
 		return -EINVAL;
 	}
@@ -1779,9 +1781,10 @@ static int wma_unified_link_radio_stats_event_handler(void *handle,
 		return 0;
 	}
 
-	pMac->sme.pLinkLayerStatsIndCallback(pMac->hdd_handle,
+	mac->sme.pLinkLayerStatsIndCallback(mac->hdd_handle,
 					     WMA_LINK_LAYER_STATS_RESULTS_RSP,
-					     link_stats_results);
+					     link_stats_results,
+					     mac->sme.ll_stats_context);
 	wma_unified_radio_tx_mem_free(handle);
 
 	return 0;
@@ -2065,14 +2068,14 @@ int wma_unified_link_iface_stats_event_handler(void *handle,
 	size_t link_stats_results_size, offload_stats_size;
 	size_t total_ac_size, total_offload_size;
 
-	tpAniSirGlobal pMac = cds_get_context(QDF_MODULE_ID_PE);
+	tpAniSirGlobal mac = cds_get_context(QDF_MODULE_ID_PE);
 
-	if (!pMac) {
-		WMA_LOGD("%s: NULL pMac ptr. Exiting", __func__);
+	if (!mac) {
+		WMA_LOGD("%s: NULL mac ptr. Exiting", __func__);
 		return -EINVAL;
 	}
 
-	if (!pMac->sme.pLinkLayerStatsIndCallback) {
+	if (!mac->sme.pLinkLayerStatsIndCallback) {
 		WMA_LOGD("%s: HDD callback is null", __func__);
 		return -EINVAL;
 	}
@@ -2181,9 +2184,10 @@ int wma_unified_link_iface_stats_event_handler(void *handle,
 	 * vdev_id/ifacId in link_stats_results will be
 	 * used to retrieve the correct HDD context
 	 */
-	pMac->sme.pLinkLayerStatsIndCallback(pMac->hdd_handle,
+	mac->sme.pLinkLayerStatsIndCallback(mac->hdd_handle,
 					     WMA_LINK_LAYER_STATS_RESULTS_RSP,
-					     link_stats_results);
+					     link_stats_results,
+					     mac->sme.ll_stats_context);
 	qdf_mem_free(link_stats_results);
 
 	return 0;
@@ -4276,12 +4280,27 @@ wma_config_debug_module_cmd(wmi_unified_t wmi_handle, A_UINT32 param,
  */
 bool wma_is_p2p_lo_capable(void)
 {
-	return wma_is_service_enabled(wmi_service_p2p_listen_offload_support);
+	tp_wma_handle wma = cds_get_context(QDF_MODULE_ID_WMA);
+
+	if (wma) {
+		return wmi_service_enabled
+				(wma->wmi_handle,
+				 wmi_service_p2p_listen_offload_support);
+	}
+
+	return 0;
 }
 
 bool wma_capability_enhanced_mcast_filter(void)
 {
-	return wma_is_service_enabled(wmi_service_enhanced_mcast_filter);
+	tp_wma_handle wma = cds_get_context(QDF_MODULE_ID_WMA);
+
+	if (wma) {
+		return wmi_service_enabled(wma->wmi_handle,
+					   wmi_service_enhanced_mcast_filter);
+	}
+
+	return 0;
 }
 
 
@@ -4444,23 +4463,7 @@ int wma_rcpi_event_handler(void *handle, uint8_t *cmd_param_info,
 	return 0;
 }
 
-bool wma_is_service_enabled(uint32_t service_type)
-{
-	tp_wma_handle wma;
 
-	wma = cds_get_context(QDF_MODULE_ID_WMA);
-	if (!wma) {
-		WMA_LOGE("%s: Invalid WMA handle", __func__);
-		return false;
-	}
-
-	if (service_type >= WMI_MAX_SERVICE) {
-		WMA_LOGE("%s: Invalid service type %d", __func__, service_type);
-		return false;
-	}
-
-	return wmi_service_enabled(wma->wmi_handle, service_type);
-}
 
 QDF_STATUS wma_send_vdev_up_to_fw(t_wma_handle *wma,
 				  struct vdev_up_params *params,

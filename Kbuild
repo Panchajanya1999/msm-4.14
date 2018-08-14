@@ -704,6 +704,19 @@ IPA_OBJS :=	$(IPA_DIR)/dispatcher/src/wlan_ipa_ucfg_api.o \
 		$(IPA_DIR)/core/src/wlan_ipa_rm.o
 endif
 
+########## ACTION OUI ##########
+
+ACTION_OUI_DIR := components/action_oui
+ACTION_OUI_INC := -I$(WLAN_ROOT)/$(ACTION_OUI_DIR)/core/inc \
+		  -I$(WLAN_ROOT)/$(ACTION_OUI_DIR)/dispatcher/inc
+
+ifeq ($(CONFIG_WLAN_FEATURE_ACTION_OUI), y)
+ACTION_OUI_OBJS := $(ACTION_OUI_DIR)/core/src/wlan_action_oui_main.o \
+		$(ACTION_OUI_DIR)/core/src/wlan_action_oui_parse.o \
+		$(ACTION_OUI_DIR)/dispatcher/src/wlan_action_oui_tgt_api.o \
+		$(ACTION_OUI_DIR)/dispatcher/src/wlan_action_oui_ucfg_api.o
+endif
+
 ########## CLD TARGET_IF #######
 CLD_TARGET_IF_DIR := components/target_if
 
@@ -737,6 +750,11 @@ endif
 ifeq ($(CONFIG_IPA_OFFLOAD), y)
 CLD_TARGET_IF_INC += -I$(WLAN_ROOT)/$(CLD_TARGET_IF_DIR)/ipa/inc
 CLD_TARGET_IF_OBJ += $(CLD_TARGET_IF_DIR)/ipa/src/target_if_ipa.o
+endif
+
+ifeq ($(CONFIG_WLAN_FEATURE_ACTION_OUI), y)
+CLD_TARGET_IF_INC += -I$(WLAN_ROOT)/$(CLD_TARGET_IF_DIR)/action_oui/inc
+CLD_TARGET_IF_OBJ += $(CLD_TARGET_IF_DIR)/action_oui/src/target_if_action_oui.o
 endif
 
 ############## UMAC P2P ###########
@@ -841,6 +859,10 @@ endif
 
 ifeq ($(CONFIG_QCACLD_FEATURE_APF), y)
 WMI_OBJS += $(WMI_OBJ_DIR)/wmi_unified_apf_tlv.o
+endif
+
+ifeq ($(CONFIG_WLAN_FEATURE_ACTION_OUI), y)
+WMI_OBJS += $(WMI_OBJ_DIR)/wmi_unified_action_oui_tlv.o
 endif
 
 ifeq ($(CONFIG_WLAN_FEATURE_DSRC), y)
@@ -1386,6 +1408,7 @@ INCS +=		$(HOST_DIAG_LOG_INC)
 endif
 
 INCS +=		$(DISA_INC)
+INCS +=		$(ACTION_OUI_INC)
 
 INCS +=		$(UMAC_DISP_INC)
 INCS +=		$(UMAC_SCAN_INC)
@@ -1470,6 +1493,10 @@ endif
 
 ifeq ($(CONFIG_WLAN_FEATURE_DISA), y)
 OBJS +=		$(DISA_OBJS)
+endif
+
+ifeq ($(CONFIG_WLAN_FEATURE_ACTION_OUI), y)
+OBJS +=		$(ACTION_OUI_OBJS)
 endif
 
 OBJS +=		$(UMAC_DISP_OBJS)
@@ -1768,6 +1795,9 @@ cppflags-y += -DANI_BIG_BYTE_ENDIAN
 cppflags-y += -DBIG_ENDIAN_HOST
 endif
 
+#Enable MWS COEX support for 4G quick TDM and 5G NR pwr limit
+cppflags-y += -DMWS_COEX
+
 #Enable TX reclaim support
 cppflags-$(CONFIG_TX_CREDIT_RECLAIM_SUPPORT) += -DTX_CREDIT_RECLAIM_SUPPORT
 
@@ -1828,9 +1858,9 @@ cppflags-$(CONFIG_WLAN_ENABLE_SOCIAL_CHANNELS_5G_ONLY) += -DWLAN_ENABLE_SOCIAL_C
 #Green AP feature
 cppflags-$(CONFIG_QCACLD_FEATURE_GREEN_AP) += -DWLAN_SUPPORT_GREEN_AP
 
-ifeq ($(CONFIG_QCACLD_FEATURE_APF), y)
 cppflags-$(CONFIG_QCACLD_FEATURE_APF) += -DFEATURE_WLAN_APF
-endif
+
+cppflags-$(CONFIG_WLAN_FEATURE_SARV1_TO_SARV2) += -DWLAN_FEATURE_SARV1_TO_SARV2
 
 #Stats & Quota Metering feature
 ifeq ($(CONFIG_IPA_OFFLOAD), y)
@@ -1888,6 +1918,8 @@ cppflags-$(CONFIG_FEATURE_EPPING) += -DWLAN_FEATURE_EPPING
 cppflags-$(CONFIG_WLAN_OFFLOAD_PACKETS) += -DWLAN_FEATURE_OFFLOAD_PACKETS
 
 cppflags-$(CONFIG_WLAN_FEATURE_DISA) += -DWLAN_FEATURE_DISA
+
+cppflags-$(CONFIG_WLAN_FEATURE_ACTION_OUI) += -DWLAN_FEATURE_ACTION_OUI
 
 cppflags-$(CONFIG_WLAN_FEATURE_FIPS) += -DWLAN_FEATURE_FIPS
 
@@ -1952,6 +1984,9 @@ cppflags-$(CONFIG_ENABLE_SMMU_S1_TRANSLATION) += -DENABLE_SMMU_S1_TRANSLATION
 
 #Flag to enable NUD tracking
 cppflags-$(CONFIG_WLAN_NUD_TRACKING) += -DWLAN_NUD_TRACKING
+
+#Flag to enable set and get disable channel list feature
+cppflags-$(CONFIG_DISABLE_CHANNEL_LIST) += -DDISABLE_CHANNEL_LIST
 
 # configure log buffer size
 ifdef CONFIG_CFG_NUM_DP_TRACE_RECORD

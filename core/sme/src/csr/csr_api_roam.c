@@ -1211,7 +1211,7 @@ QDF_STATUS csr_start(tpAniSirGlobal pMac)
 	return status;
 }
 
-QDF_STATUS csr_stop(tpAniSirGlobal pMac, tHalStopType stopType)
+QDF_STATUS csr_stop(tpAniSirGlobal pMac)
 {
 	uint32_t sessionId;
 
@@ -6620,6 +6620,7 @@ void csr_reinit_roam_cmd(tpAniSirGlobal pMac, tSmeCmd *pCommand)
 		csr_release_profile(pMac, &pCommand->u.roamCmd.roamProfile);
 		pCommand->u.roamCmd.fReleaseProfile = false;
 	}
+	pCommand->u.roamCmd.pLastRoamBss = NULL;
 	pCommand->u.roamCmd.pRoamBssEntry = NULL;
 	/* Because u.roamCmd is union and share with scanCmd and StatusChange */
 	qdf_mem_set(&pCommand->u.roamCmd, sizeof(struct roam_cmd), 0);
@@ -8662,7 +8663,6 @@ QDF_STATUS csr_roam_issue_connect(tpAniSirGlobal pMac, uint32_t sessionId,
 		status = csr_queue_sme_command(pMac, pCommand, fImediate);
 		if (!QDF_IS_STATUS_SUCCESS(status)) {
 			sme_err("fail to send message status: %d", status);
-			csr_release_command_roam(pMac, pCommand);
 		}
 	}
 
@@ -9922,6 +9922,7 @@ csr_roaming_state_config_cnf_processor(tpAniSirGlobal mac_ctx,
 	uint32_t session_id;
 	struct csr_roam_session *session;
 	tDot11fBeaconIEs *local_ies = NULL;
+	bool is_ies_malloced = false;
 	QDF_STATUS status = QDF_STATUS_E_FAILURE;
 
 	if (NULL == cmd) {
@@ -10031,6 +10032,7 @@ csr_roaming_state_config_cnf_processor(tpAniSirGlobal mac_ctx,
 							    &local_ies);
 		if (!QDF_IS_STATUS_SUCCESS(status))
 			return;
+		is_ies_malloced = true;
 	}
 
 	if (csr_is_conn_state_connected_infra(mac_ctx, session_id)) {
@@ -10100,7 +10102,7 @@ csr_roaming_state_config_cnf_processor(tpAniSirGlobal mac_ctx,
 			csr_roam(mac_ctx, cmd);
 		}
 	}
-	if (!scan_result->Result.pvIes) {
+	if (is_ies_malloced) {
 		/* Locally allocated */
 		qdf_mem_free(local_ies);
 	}
@@ -13327,6 +13329,41 @@ end:
 	}
 }
 
+QDF_STATUS csr_process_del_sta_session_command(tpAniSirGlobal mac_ctx,
+					       tSmeCmd *sme_command)
+{
+	struct del_sta_self_params *del_sta_self_req;
+	struct scheduler_msg msg = {0};
+	QDF_STATUS status;
+
+	del_sta_self_req = qdf_mem_malloc(sizeof(struct del_sta_self_params));
+	if (NULL == del_sta_self_req) {
+		sme_err(" mem alloc failed for tDelStaSelfParams");
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	qdf_mem_copy(del_sta_self_req->self_mac_addr,
+		     sme_command->u.delStaSessionCmd.selfMacAddr,
+		     sizeof(tSirMacAddr));
+
+	del_sta_self_req->session_id = sme_command->sessionId;
+	del_sta_self_req->sme_callback =
+		sme_command->u.delStaSessionCmd.session_close_cb;
+	del_sta_self_req->sme_ctx = sme_command->u.delStaSessionCmd.context;
+	msg.type = WMA_DEL_STA_SELF_REQ;
+	msg.reserved = 0;
+	msg.bodyptr = del_sta_self_req;
+	msg.bodyval = 0;
+
+	sme_debug("sending WMA_DEL_STA_SELF_REQ");
+	status = wma_post_ctrl_msg(mac_ctx, &msg);
+	if (status != QDF_STATUS_SUCCESS) {
+		sme_err("wma_post_ctrl_msg failed");
+		qdf_mem_free(del_sta_self_req);
+		return QDF_STATUS_E_FAILURE;
+	}
+	return QDF_STATUS_SUCCESS;
+}
 
 /**
  * csr_compute_mode_and_band() - computes dot11mode
@@ -17259,56 +17296,29 @@ QDF_STATUS csr_process_del_sta_session_rsp(tpAniSirGlobal pMac, uint8_t *pMsg)
 
 
 static QDF_STATUS
-csr_issue_del_sta_for_session_req(tpAniSirGlobal pMac, uint32_t sessionId,
-				  tSirMacAddr sessionMacAddr,
+csr_issue_del_sta_for_session_req(tpAniSirGlobal mac_ctx, uint32_t session_id,
+				  tSirMacAddr session_mac_addr,
 				  csr_session_close_cb callback,
-				  void *pContext)
+				  void *context)
 {
-	struct del_sta_self_params *del_sta_self_req;
-	struct scheduler_msg msg = {0};
-	tp_wma_handle wma_handle = cds_get_context(QDF_MODULE_ID_WMA);
-	QDF_STATUS status;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	tSmeCmd *sme_command;
 
-	if (!wma_handle) {
-		sme_err("wma handle is NULL");
-		return QDF_STATUS_E_INVAL;
+	sme_command = csr_get_command_buffer(mac_ctx);
+	if (NULL == sme_command) {
+		status = QDF_STATUS_E_RESOURCES;
+	} else {
+		sme_command->command = e_sme_command_del_sta_session;
+		sme_command->sessionId = (uint8_t)session_id;
+		sme_command->u.delStaSessionCmd.session_close_cb = callback;
+		sme_command->u.delStaSessionCmd.context = context;
+		qdf_mem_copy(sme_command->u.delStaSessionCmd.selfMacAddr,
+			     session_mac_addr, sizeof(tSirMacAddr));
+		status = csr_queue_sme_command(mac_ctx, sme_command, true);
+		if (!QDF_IS_STATUS_SUCCESS(status))
+			sme_err("fail to send message status = %d", status);
 	}
-
-	/* Need to wait for all peer delete command sent to FW
-	 * before sending VDEV delete command
-	 * otherwise it will cause FW assert
-	 * Need to do this before sending to scheduler queue
-	 * otherwise the scheduler thread will be blocked
-	 * and fail to handle the VDEV stop timeout callback
-	 * in which peer delete command will also be sent
-	 */
-	wma_vdev_wait_for_peer_delete_completion(wma_handle, sessionId);
-
-	del_sta_self_req = qdf_mem_malloc(sizeof(struct del_sta_self_params));
-	if (NULL == del_sta_self_req) {
-		sme_err(" mem alloc failed for tDelStaSelfParams");
-		return QDF_STATUS_E_NOMEM;
-	}
-
-	qdf_mem_copy(del_sta_self_req->self_mac_addr,
-			sessionMacAddr, sizeof(tSirMacAddr));
-
-	del_sta_self_req->session_id = sessionId;
-	del_sta_self_req->sme_callback = callback;
-	del_sta_self_req->sme_ctx = pContext;
-	msg.type = WMA_DEL_STA_SELF_REQ;
-	msg.reserved = 0;
-	msg.bodyptr = del_sta_self_req;
-	msg.bodyval = 0;
-
-	sme_debug("sending WMA_DEL_STA_SELF_REQ");
-	status = wma_post_ctrl_msg(pMac, &msg);
-	if (status != QDF_STATUS_SUCCESS) {
-		sme_err("wma_post_ctrl_msg failed");
-		qdf_mem_free(del_sta_self_req);
-		return QDF_STATUS_E_FAILURE;
-	}
-	return QDF_STATUS_SUCCESS;
+	return status;
 }
 
 void csr_cleanup_session(tpAniSirGlobal pMac, uint32_t sessionId)
@@ -20243,6 +20253,9 @@ enum wlan_serialization_cmd_type csr_get_cmd_type(tSmeCmd *sme_cmd)
 		break;
 	case eSmeCommandWmStatusChange:
 		cmd_type = WLAN_SER_CMD_WM_STATUS_CHANGE;
+		break;
+	case e_sme_command_del_sta_session:
+		cmd_type = WLAN_SER_CMD_DEL_STA_SESSION;
 		break;
 	case eSmeCommandAddTs:
 		cmd_type = WLAN_SER_CMD_ADDTS;

@@ -83,6 +83,9 @@ CONFIG_QCACLD_FEATURE_GREEN_AP := y
 #Flag to enable Android Packet Filtering
 CONFIG_QCACLD_FEATURE_APF := y
 
+#Flag to enable SARv1 -> SARv2 conversion
+CONFIG_WLAN_FEATURE_SARV1_TO_SARV2 := n
+
 ifeq ($(CONFIG_ARCH_MSM8998), y)
 CONFIG_QCACLD_FEATURE_METERING := y
 endif
@@ -109,6 +112,9 @@ endif
 
 #Flag to enable Fast Transition (11r) feature
 CONFIG_QCOM_VOWIFI_11R := y
+
+#Flag to enable disable ACTION OUI feature
+CONFIG_WLAN_FEATURE_ACTION_OUI := y
 
 #Flag to enable FILS Feature (11ai)
 CONFIG_WLAN_FEATURE_FILS := y
@@ -480,6 +486,9 @@ CONFIG_WLAN_DFS_MASTER_ENABLE := y
 
 #Flag to enable nud tracking feature
 CONFIG_WLAN_NUD_TRACKING := y
+
+#Flag to enable set and get disable channel list feature
+CONFIG_DISABLE_CHANNEL_LIST :=y
 
 CONFIG_WIFI_POS_CONVERGED := y
 ifneq ($(CONFIG_WIFI_POS_CONVERGED), y)

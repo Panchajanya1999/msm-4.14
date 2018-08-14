@@ -112,11 +112,6 @@
 #define MAX_NUM_HW_MODE    0xff
 #define MAX_NUM_PHY        0xff
 
-enum sar_version {
-	SAR_VERSION_1,
-	SAR_VERSION_2
-};
-
 /**
  * struct index_data_rate_type - non vht data rate type
  * @mcs_index: mcs rate index
@@ -359,10 +354,6 @@ int wma_extscan_wow_event_callback(void *handle, void *event, uint32_t len);
 
 void wma_register_extscan_event_handler(tp_wma_handle wma_handle);
 
-QDF_STATUS wma_get_buf_extscan_start_cmd(tp_wma_handle wma_handle,
-					 tSirWifiScanCmdReqParams *pstart,
-					 wmi_buf_t *buf, int *buf_len);
-
 QDF_STATUS wma_start_extscan(tp_wma_handle wma,
 			     tSirWifiScanCmdReqParams *pstart);
 
@@ -379,10 +370,6 @@ QDF_STATUS wma_extscan_start_hotlist_monitor(tp_wma_handle wma,
 
 QDF_STATUS wma_extscan_stop_hotlist_monitor(tp_wma_handle wma,
 			tSirExtScanResetBssidHotlistReqParams *photlist_reset);
-
-QDF_STATUS wma_get_buf_extscan_change_monitor_cmd(tp_wma_handle wma_handle,
-				tSirExtScanSetSigChangeReqParams *psigchange,
-				wmi_buf_t *buf, int *buf_len);
 
 QDF_STATUS wma_extscan_start_change_monitor(tp_wma_handle wma,
 					    tSirExtScanSetSigChangeReqParams *
@@ -1066,13 +1053,13 @@ QDF_STATUS wma_set_led_flashing(tp_wma_handle wma_handle,
 
 /**
  * wma_sar_rsp_evt_handler() -  process sar response event from FW.
- * @handle: wma handle
+ * @handle: ol scn handle
  * @event: event buffer
  * @len: buffer length
  *
  * Return: 0 for success or error code
  */
-int wma_sar_rsp_evt_handler(void *handle, uint8_t *event, uint32_t len);
+int wma_sar_rsp_evt_handler(ol_scn_t handle, uint8_t *event, uint32_t len);
 
 #ifdef FEATURE_WLAN_CH_AVOID
 QDF_STATUS wma_process_ch_avoid_update_req(tp_wma_handle wma_handle,

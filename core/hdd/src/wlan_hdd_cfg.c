@@ -714,6 +714,13 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_ACTIVE_MAX_CHANNEL_TIME_MIN,
 		     CFG_ACTIVE_MAX_CHANNEL_TIME_MAX),
 
+	REG_VARIABLE(CFG_ACTIVE_MAX_2G_CHANNEL_TIME_NAME, WLAN_PARAM_Integer,
+		     struct hdd_config, active_dwell_2g,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_ACTIVE_MAX_2G_CHANNEL_TIME_DEFAULT,
+		     CFG_ACTIVE_MAX_2G_CHANNEL_TIME_MIN,
+		     CFG_ACTIVE_MAX_2G_CHANNEL_TIME_MAX),
+
 	REG_VARIABLE(CFG_ACTIVE_MIN_CHANNEL_TIME_NAME, WLAN_PARAM_Integer,
 		     struct hdd_config, nActiveMinChnTime,
 		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -4836,6 +4843,40 @@ struct reg_table_entry g_registry_table[] = {
 		CFG_LOWER_BRSSI_THRESH_MIN,
 		CFG_LOWER_BRSSI_THRESH_MAX),
 
+	REG_VARIABLE(CFG_ENABLE_ACTION_OUI, WLAN_PARAM_Integer,
+		     struct hdd_config, action_oui_enable,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_ENABLE_ACTION_OUI_DEFAULT,
+		     CFG_ENABLE_ACTION_OUI_MIN,
+		     CFG_ENABLE_ACTION_OUI_MAX),
+
+	REG_VARIABLE_STRING(CFG_ACTION_OUI_CONNECT_1X1_NAME, WLAN_PARAM_String,
+			    struct hdd_config, action_oui_str[0],
+			    VAR_FLAGS_OPTIONAL,
+			    (void *)CFG_ACTION_OUI_CONNECT_1X1_DEFAULT),
+
+	REG_VARIABLE_STRING(CFG_ACTION_OUI_ITO_EXTENSION_NAME,
+			    WLAN_PARAM_String,
+			    struct hdd_config, action_oui_str[1],
+			    VAR_FLAGS_OPTIONAL,
+			    (void *)CFG_ACTION_OUI_ITO_EXTENSION_DEFAULT),
+
+	REG_VARIABLE_STRING(CFG_ACTION_OUI_CCKM_1X1_NAME, WLAN_PARAM_String,
+			    struct hdd_config, action_oui_str[2],
+			    VAR_FLAGS_OPTIONAL,
+			    (void *)CFG_ACTION_OUI_CCKM_1X1_DEFAULT),
+
+	REG_VARIABLE_STRING(CFG_ACTION_OUI_ITO_ALTERNATE_NAME,
+			    WLAN_PARAM_String,
+			    struct hdd_config, action_oui_str[3],
+			    VAR_FLAGS_OPTIONAL,
+			    (void *)CFG_ACTION_OUI_ITO_ALTERNATE_DEFAULT),
+	REG_VARIABLE_STRING(CFG_ACTION_OUI_SWITCH_TO_11N_MODE_NAME,
+			    WLAN_PARAM_String,
+			    struct hdd_config, action_oui_str[4],
+			    VAR_FLAGS_OPTIONAL,
+			    (void *)CFG_ACTION_OUI_SWITCH_TO_11N_MODE_DEFAULT),
+
 	REG_VARIABLE(CFG_DTIM_1CHRX_ENABLE_NAME, WLAN_PARAM_Integer,
 		struct hdd_config, enable_dtim_1chrx,
 		VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -5470,7 +5511,21 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_ROAM_FORCE_RSSI_TRIGGER_DEFAULT,
 		     CFG_ROAM_FORCE_RSSI_TRIGGER_MIN,
 		     CFG_ROAM_FORCE_RSSI_TRIGGER_MAX),
+#ifdef MWS_COEX
+	REG_VARIABLE(CFG_MWS_COEX_4G_QUICK_FTDM_NAME, WLAN_PARAM_HexInteger,
+		     struct hdd_config, mws_coex_4g_quick_tdm,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_MWS_COEX_4G_QUICK_FTDM_DEFAULT,
+		     CFG_MWS_COEX_4G_QUICK_FTDM_MIN,
+		     CFG_MWS_COEX_4G_QUICK_FTDM_MAX),
 
+	REG_VARIABLE(CFG_MWS_COEX_5G_NR_PWR_LIMIT_NAME, WLAN_PARAM_HexInteger,
+		     struct hdd_config, mws_coex_5g_nr_pwr_limit,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_MWS_COEX_5G_NR_PWR_LIMIT_DEFAULT,
+		     CFG_MWS_COEX_5G_NR_PWR_LIMIT_MIN,
+		     CFG_MWS_COEX_5G_NR_PWR_LIMIT_MAX),
+#endif
 };
 
 
@@ -7404,12 +7459,15 @@ QDF_STATUS hdd_update_mac_config(struct hdd_context *hdd_ctx)
 
 	memset(macTable, 0, sizeof(macTable));
 	status = request_firmware(&fw, WLAN_MAC_FILE, hdd_ctx->parent_dev);
-
 	if (status) {
-		hdd_err("request_firmware failed %d", status);
-		qdf_status = QDF_STATUS_E_FAILURE;
-		return qdf_status;
+		/*
+		 * request_firmware "fails" if the file is not found, which is a
+		 * valid setup for us, so log using debug instead of error
+		 */
+		hdd_debug("request_firmware failed; status:%d", status);
+		return QDF_STATUS_E_FAILURE;
 	}
+
 	if (!fw || !fw->data || !fw->size) {
 		hdd_alert("invalid firmware");
 		qdf_status = QDF_STATUS_E_INVAL;
@@ -7463,6 +7521,7 @@ QDF_STATUS hdd_update_mac_config(struct hdd_context *hdd_ctx)
 		}
 		buffer = line;
 	}
+
 	if (i <= QDF_MAX_CONCURRENCY_PERSONA) {
 		hdd_debug("%d Mac addresses provided", i);
 	} else {

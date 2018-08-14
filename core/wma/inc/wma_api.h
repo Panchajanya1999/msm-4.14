@@ -102,7 +102,14 @@ QDF_STATUS wma_mc_process_handler(struct scheduler_msg *msg);
 
 QDF_STATUS wma_start(void);
 
-QDF_STATUS wma_stop(uint8_t reason);
+/**
+ * wma_stop() - wma stop function.
+ *
+ * Performs all of the operations required to stop the WMA layer
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF Error on failure
+ */
+QDF_STATUS wma_stop(void);
 
 QDF_STATUS wma_close(void);
 
@@ -303,8 +310,6 @@ QDF_STATUS wma_set_sar_limit(WMA_HANDLE handle,
  * Return: QDF_STATUS_SUCCESS on success, error number otherwise
  */
 QDF_STATUS wma_set_qpower_config(uint8_t vdev_id, uint8_t qpower);
-
-bool wma_is_service_enabled(uint32_t service_type);
 
 #ifdef FEATURE_WLAN_D0WOW
 static inline bool wma_d0_wow_is_supported(void)
