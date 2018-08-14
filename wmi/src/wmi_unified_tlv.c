@@ -27,6 +27,9 @@
 #ifdef FEATURE_WLAN_APF
 #include "wmi_unified_apf_tlv.h"
 #endif
+#ifdef WLAN_FEATURE_ACTION_OUI
+#include "wmi_unified_action_oui_tlv.h"
+#endif
 #ifdef CONVERGED_P2P_ENABLE
 #include "wlan_p2p_public_struct.h"
 #endif
@@ -2694,6 +2697,7 @@ static QDF_STATUS send_scan_start_cmd_tlv(wmi_unified_t wmi_handle,
 	copy_scan_event_cntrl_flags(cmd, params);
 
 	cmd->dwell_time_active = params->dwell_time_active;
+	cmd->dwell_time_active_2g = params->dwell_time_active_2g;
 	cmd->dwell_time_passive = params->dwell_time_passive;
 	cmd->min_rest_time = params->min_rest_time;
 	cmd->max_rest_time = params->max_rest_time;
@@ -16716,10 +16720,19 @@ static QDF_STATUS extract_ndp_ind_tlv(wmi_unified_t wmi_handle,
 	rsp->ndp_info.ndp_app_info_len = fixed_params->ndp_app_info_len;
 	rsp->ncs_sk_type = fixed_params->nan_csid;
 	rsp->scid.scid_len = fixed_params->nan_scid_len;
+
+	if (rsp->ndp_config.ndp_cfg_len > NDP_QOS_INFO_LEN)
+		rsp->ndp_config.ndp_cfg_len = NDP_QOS_INFO_LEN;
 	qdf_mem_copy(rsp->ndp_config.ndp_cfg, event->ndp_cfg,
 		     rsp->ndp_config.ndp_cfg_len);
+
+	if (rsp->ndp_info.ndp_app_info_len > NDP_APP_INFO_LEN)
+		rsp->ndp_info.ndp_app_info_len = NDP_APP_INFO_LEN;
 	qdf_mem_copy(rsp->ndp_info.ndp_app_info, event->ndp_app_info,
 		     rsp->ndp_info.ndp_app_info_len);
+
+	if (rsp->scid.scid_len > NDP_SCID_BUF_LEN)
+		rsp->scid.scid_len = NDP_SCID_BUF_LEN;
 	qdf_mem_copy(rsp->scid.scid, event->ndp_scid, rsp->scid.scid_len);
 
 	if (event->ndp_transport_ip_param &&
@@ -19232,11 +19245,14 @@ static QDF_STATUS extract_sar_cap_service_ready_ext_tlv(
 
 	param_buf = (WMI_SERVICE_READY_EXT_EVENTID_param_tlvs *) event;
 
-	sar_caps = param_buf->sar_caps;
-	if (!sar_caps)
+	if (!param_buf)
 		return QDF_STATUS_E_INVAL;
 
-	ext_param->sar_version = sar_caps->active_version;
+	sar_caps = param_buf->sar_caps;
+	if (sar_caps)
+		ext_param->sar_version = sar_caps->active_version;
+	else
+		ext_param->sar_version = 0;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -22121,6 +22137,9 @@ struct wmi_ops tlv_ops =  {
 		extract_peer_sta_ps_statechange_ev_tlv,
 	.extract_inst_rssi_stats_event = extract_inst_rssi_stats_event_tlv,
 	.send_per_roam_config_cmd = send_per_roam_config_cmd_tlv,
+#ifdef WLAN_FEATURE_ACTION_OUI
+	.send_action_oui_cmd = send_action_oui_cmd_tlv,
+#endif
 	.send_dfs_phyerr_offload_en_cmd = send_dfs_phyerr_offload_en_cmd_tlv,
 	.send_dfs_phyerr_offload_dis_cmd = send_dfs_phyerr_offload_dis_cmd_tlv,
 	.extract_reg_chan_list_update_event =
