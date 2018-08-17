@@ -346,7 +346,6 @@ static struct firmware_cal *wcd937x_get_hwdep_fw_cal(struct wcd_mbhc *mbhc,
 static int wcd937x_mbhc_micb_ctrl_threshold_mic(struct snd_soc_codec *codec,
 					      int micb_num, bool req_en)
 {
-	struct wcd937x_pdata *pdata = dev_get_platdata(codec->dev);
 	int rc, micb_mv;
 
 	if (micb_num != MIC_BIAS_2)
@@ -356,10 +355,8 @@ static int wcd937x_mbhc_micb_ctrl_threshold_mic(struct snd_soc_codec *codec,
 	 * voltage needed to detect threshold microphone, then do
 	 * not change the micbias, just return.
 	 */
-	if (pdata->micbias.micb2_mv >= WCD_MBHC_THR_HS_MICB_MV)
-		return 0;
 
-	micb_mv = req_en ? WCD_MBHC_THR_HS_MICB_MV : pdata->micbias.micb2_mv;
+	micb_mv = WCD_MBHC_THR_HS_MICB_MV;
 
 	rc = wcd937x_mbhc_micb_adjust_voltage(codec, micb_mv, MIC_BIAS_2);
 
