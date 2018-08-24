@@ -68,6 +68,18 @@ static inline void dfs_host_wait_timer_init(struct wlan_dfs *dfs)
 #endif
 
 /**
+ * dfs_host_wait_timer_free() - Free dfs host status wait timer.
+ * @dfs: Pointer to wlan_dfs structure.
+ */
+#if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)
+void dfs_host_wait_timer_free(struct wlan_dfs *dfs);
+#else
+static inline void dfs_host_wait_timer_free(struct wlan_dfs *dfs)
+{
+}
+#endif
+
+/**
  * dfs_set_override_status_timeout() - Change the dfs host status timeout.
  * @dfs: Pointer to wlan_dfs structure.
  * @status_timeout: timeout value.
@@ -109,17 +121,14 @@ QDF_STATUS dfs_get_override_status_timeout(struct wlan_dfs *dfs,
  * FCC domain.
  * @dfs: Pointer to wlan_dfs structure.
  * @seg_id: segment id.
- * @false_radar_found: Indicates if false radar is found.
  *
  * Return: None
  */
 #if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)
-void dfs_radarfound_action_fcc(struct wlan_dfs *dfs, uint8_t seg_id,
-			       int false_radar_found);
+void dfs_radarfound_action_fcc(struct wlan_dfs *dfs, uint8_t seg_id);
 #else
 static inline void dfs_radarfound_action_fcc(struct wlan_dfs *dfs,
-					     uint8_t seg_id,
-					     int false_radar_found)
+					     uint8_t seg_id)
 {
 }
 #endif

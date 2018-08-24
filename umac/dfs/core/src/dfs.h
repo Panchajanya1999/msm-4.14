@@ -964,7 +964,6 @@ struct dfs_event_log {
  * @dfs_spoof_check_failed:          Indicates if the spoof check has failed.
  * @dfs_spoof_test_done:             Indicates if the sppof test is done.
  * @dfs_seg_id:                      Segment ID of the radar hit channel.
- * @dfs_false_radar_found:           Indicates if false radar is found.
  * @dfs_status_timeout_override:     Used to change the timeout value of
  *                                   dfs_host_wait_timer.
  */
@@ -1077,7 +1076,6 @@ struct wlan_dfs {
 				   dfs_spoof_check_failed:1,
 				   dfs_spoof_test_done:1;
 	uint8_t        dfs_seg_id;
-	int            dfs_false_radar_found;
 	struct dfs_channel dfs_radar_found_chan;
 	int            dfs_status_timeout_override;
 #endif
@@ -1370,6 +1368,12 @@ void dfs_nol_update(struct wlan_dfs *dfs);
  * Cancels the NOL timer and frees the NOL elements.
  */
 void dfs_nol_timer_cleanup(struct wlan_dfs *dfs);
+
+/**
+ * dfs_nol_timer_free() - Free NOL timer.
+ * @dfs: Pointer to wlan_dfs structure.
+ */
+void dfs_nol_timer_free(struct wlan_dfs *dfs);
 
 /**
  * dfs_nol_workqueue_cleanup() - Flushes NOL workqueue.
@@ -2002,6 +2006,12 @@ void dfs_cac_attach(struct wlan_dfs *dfs);
 void dfs_cac_timer_reset(struct wlan_dfs *dfs);
 
 /**
+ * dfs_cac_timer_free() - Free dfs cac timers.
+ * @dfs: Pointer to wlan_dfs structure.
+ */
+void dfs_cac_timer_free(struct wlan_dfs *dfs);
+
+/**
  * dfs_nol_timer_init() - Initialize NOL timers.
  * @dfs: Pointer to wlan_dfs structure.
  */
@@ -2206,12 +2216,10 @@ void __dfs_process_radarevent(struct wlan_dfs *dfs,
  * @dfs: Pointer to wlan_dfs structure.
  * @bangradar: true if radar is due to bangradar command.
  * @seg_id: Segment id.
- * @false_radar_found: value is 1 if false radar is found.
  */
 void dfs_radar_found_action(struct wlan_dfs *dfs,
 			    bool bangradar,
-			    uint8_t seg_id,
-			    int false_radar_found);
+			    uint8_t seg_id);
 
 /**
  * bin5_rules_check_internal() - This is a extension of dfs_bin5_check().
@@ -2297,4 +2305,15 @@ int dfs_second_segment_radar_disable(struct wlan_dfs *dfs);
  */
 void dfs_task_testtimer_reset(struct wlan_dfs *dfs);
 
+/**
+ * dfs_task_testtimer_free() - Free dfs test timer.
+ * @dfs: Pointer to wlan_dfs structure.
+ */
+void dfs_task_testtimer_free(struct wlan_dfs *dfs);
+
+/**
+ * dfs_timer_free() - Free dfs timers.
+ * @dfs: Pointer to wlan_dfs structure.
+ */
+void dfs_timer_free(struct wlan_dfs *dfs);
 #endif  /* _DFS_H_ */
