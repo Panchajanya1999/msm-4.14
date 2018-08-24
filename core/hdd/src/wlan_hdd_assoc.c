@@ -3236,9 +3236,12 @@ hdd_association_completion_handler(struct hdd_adapter *adapter,
 		hdd_debug("check for SAP restart");
 		policy_mgr_check_concurrent_intf_and_restart_sap(
 			hdd_ctx->hdd_psoc);
+		policy_mgr_checkn_update_hw_mode_single_mac_mode
+			(hdd_ctx->hdd_psoc, roam_info->pBssDesc->channelId);
 	} else {
 		bool connect_timeout = false;
-
+		/* do we need to change the HW mode */
+		policy_mgr_check_n_start_opportunistic_timer(hdd_ctx->hdd_psoc);
 		if (roam_info && roam_info->is_fils_connection &&
 		    eCSR_ROAM_RESULT_SCAN_FOR_SSID_FAILURE == roamResult)
 			qdf_copy_macaddr(&roam_info->bssid,
@@ -4463,9 +4466,15 @@ static void hdd_roam_channel_switch_handler(struct hdd_adapter *adapter,
 	struct wiphy *wiphy = wdev->wiphy;
 	QDF_STATUS status;
 	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
+	mac_handle_t mac_handle = hdd_adapter_get_mac_handle(adapter);
 
 	hdd_debug("channel switch for session:%d to channel:%d",
 		adapter->session_id, roam_info->chan_info.chan_id);
+
+	/* Enable Roaming on STA interface which was disabled before CSA */
+	if (adapter->device_mode == QDF_STA_MODE)
+		sme_start_roaming(mac_handle, adapter->session_id,
+				  REASON_DRIVER_ENABLED);
 
 	chan_change.chan = roam_info->chan_info.chan_id;
 	chan_change.chan_params.ch_width =

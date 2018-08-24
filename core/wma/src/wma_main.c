@@ -1955,6 +1955,7 @@ static void wma_shutdown_notifier_cb(void *priv)
 
 	qdf_event_set(&wma_handle->wma_resume_event);
 	pmo_ucfg_psoc_wakeup_host_event_received(wma_handle->psoc);
+	wmi_stop(wma_handle->wmi_handle);
 
 	msg.bodyptr = priv;
 	msg.callback = wma_cleanup_vdev_resp_and_hold_req;
@@ -8125,8 +8126,7 @@ static QDF_STATUS wma_mc_process_msg(struct scheduler_msg *msg)
 		qdf_mem_free(msg->bodyptr);
 		break;
 	case WMA_EXTSCAN_SET_BSSID_HOTLIST_REQ:
-		wma_extscan_start_hotlist_monitor(wma_handle,
-			(tSirExtScanSetBssidHotListReqParams *) msg->bodyptr);
+		wma_extscan_start_hotlist_monitor(wma_handle, msg->bodyptr);
 		qdf_mem_free(msg->bodyptr);
 		break;
 	case WMA_EXTSCAN_RESET_BSSID_HOTLIST_REQ:

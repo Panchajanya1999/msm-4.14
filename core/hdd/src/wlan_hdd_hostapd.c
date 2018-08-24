@@ -5271,7 +5271,7 @@ __iw_get_peer_rssi(struct net_device *dev, struct iw_request_info *info,
 {
 	int ret, i;
 	struct hdd_context *hddctx;
-	struct stats_event rssi_info;
+	struct stats_event *rssi_info;
 	char macaddrarray[MAC_ADDRESS_STR_LEN];
 	struct hdd_adapter *adapter = netdev_priv(dev);
 	struct qdf_mac_addr macaddress = QDF_MAC_ADDR_BCAST_INIT;
@@ -5304,27 +5304,26 @@ __iw_get_peer_rssi(struct net_device *dev, struct iw_request_info *info,
 			hdd_err("String to Hex conversion Failed");
 	}
 
-	ret = wlan_cfg80211_mc_cp_stats_get_peer_rssi(adapter->hdd_vdev,
-						      macaddress.bytes,
-						      &rssi_info);
-	if (ret) {
-		hdd_err("Unable to retrieve peer rssi: %d", ret);
-		wlan_cfg80211_mc_cp_stats_put_peer_rssi(&rssi_info);
+	rssi_info = wlan_cfg80211_mc_cp_stats_get_peer_rssi(adapter->hdd_vdev,
+							    macaddress.bytes,
+							    &ret);
+	if (ret || !rssi_info) {
+		wlan_cfg80211_mc_cp_stats_free_stats_event(rssi_info);
 		return ret;
 	}
 
 	wrqu->data.length = scnprintf(extra, IW_PRIV_SIZE_MASK, "\n");
-	for (i = 0; i < rssi_info.num_peer_stats; i++) {
+	for (i = 0; i < rssi_info->num_peer_stats; i++)
 		wrqu->data.length += scnprintf(extra + wrqu->data.length,
 					IW_PRIV_SIZE_MASK - wrqu->data.length,
 					"[%pM] [%d]\n",
-					rssi_info.peer_stats[i].peer_macaddr,
-					rssi_info.peer_stats[i].peer_rssi);
-	}
-	wrqu->data.length++;
-	wlan_cfg80211_mc_cp_stats_put_peer_rssi(&rssi_info);
+					rssi_info->peer_stats[i].peer_macaddr,
+					rssi_info->peer_stats[i].peer_rssi);
 
+	wrqu->data.length++;
+	wlan_cfg80211_mc_cp_stats_free_stats_event(rssi_info);
 	hdd_exit();
+
 	return 0;
 }
 #else
@@ -7655,6 +7654,13 @@ int wlan_hdd_cfg80211_start_bss(struct hdd_adapter *adapter,
 	clear_bit(ACS_PENDING, &adapter->event_flags);
 	clear_bit(ACS_IN_PROGRESS, &hdd_ctx->g_event_flags);
 
+	pConfig = &adapter->session.ap.sap_config;
+	if (!pConfig->channel) {
+		hdd_err("Invalid channel");
+		ret = -EINVAL;
+		goto free;
+	}
+
 	/* Mark the indoor channel (passive) to disable */
 	if (iniConfig->force_ssc_disable_indoor_channel) {
 		hdd_update_indoor_channel(hdd_ctx, true);
@@ -7678,10 +7684,8 @@ int wlan_hdd_cfg80211_start_bss(struct hdd_adapter *adapter,
 			hdd_check_and_disconnect_sta_on_invalid_channel(
 								hdd_ctx);
 	}
-	pConfig = &adapter->session.ap.sap_config;
 
 	pBeacon = adapter->session.ap.beacon;
-
 	pMgmt_frame = (struct ieee80211_mgmt *)pBeacon->head;
 
 	pConfig->beacon_int = pMgmt_frame->u.beacon.beacon_int;
@@ -7770,28 +7774,22 @@ int wlan_hdd_cfg80211_start_bss(struct hdd_adapter *adapter,
 			}
 		}
 
-		/*
-		 * If auto channel is configured i.e. channel is 0,
-		 * so skip channel validation.
-		 */
-		if (AUTO_CHANNEL_SELECT != pConfig->channel) {
-			if (QDF_STATUS_SUCCESS !=
-			    wlan_hdd_validate_operation_channel(adapter,
+		if (QDF_STATUS_SUCCESS !=
+		    wlan_hdd_validate_operation_channel(adapter,
 							pConfig->channel)) {
-				hdd_err("Invalid Channel: %d", pConfig->channel);
-				ret = -EINVAL;
-				goto error;
-			}
+			hdd_err("Invalid Channel: %d", pConfig->channel);
+			ret = -EINVAL;
+			goto error;
+		}
 
-			/* reject SAP if DFS channel scan is not allowed */
-			if (!(hdd_ctx->config->enableDFSChnlScan) &&
-				(CHANNEL_STATE_DFS ==
-				 wlan_reg_get_channel_state(hdd_ctx->hdd_pdev,
-					 pConfig->channel))) {
-				hdd_err("No SAP start on DFS channel");
-				ret = -EOPNOTSUPP;
-				goto error;
-			}
+		/* reject SAP if DFS channel scan is not allowed */
+		if (!(hdd_ctx->config->enableDFSChnlScan) &&
+		    (CHANNEL_STATE_DFS ==
+		     wlan_reg_get_channel_state(hdd_ctx->hdd_pdev,
+						pConfig->channel))) {
+			hdd_err("No SAP start on DFS channel");
+			ret = -EOPNOTSUPP;
+			goto error;
 		}
 
 		if (iniConfig->ignoreCAC ||
@@ -8326,10 +8324,8 @@ static int __wlan_hdd_cfg80211_stop_ap(struct wiphy *wiphy,
 		return -EINVAL;
 	}
 
-	if (wlan_hdd_validate_session_id(adapter->session_id)) {
-		hdd_err("Invalid session id: %d", adapter->session_id);
+	if (wlan_hdd_validate_session_id(adapter->session_id))
 		return -EINVAL;
-	}
 
 	MTRACE(qdf_trace(QDF_MODULE_ID_HDD,
 			 TRACE_CODE_HDD_CFG80211_STOP_AP,
@@ -8636,10 +8632,8 @@ static int __wlan_hdd_cfg80211_start_ap(struct wiphy *wiphy,
 		return -EINVAL;
 	}
 
-	if (wlan_hdd_validate_session_id(adapter->session_id)) {
-		hdd_err("Invalid session id: %d", adapter->session_id);
+	if (wlan_hdd_validate_session_id(adapter->session_id))
 		return -EINVAL;
-	}
 
 	MTRACE(qdf_trace(QDF_MODULE_ID_HDD,
 			 TRACE_CODE_HDD_CFG80211_START_AP, adapter->session_id,
@@ -8670,6 +8664,11 @@ static int __wlan_hdd_cfg80211_start_ap(struct wiphy *wiphy,
 	channel_width = wlan_hdd_get_channel_bw(params->chandef.width);
 	channel = ieee80211_frequency_to_channel(
 				params->chandef.chan->center_freq);
+	if (!channel) {
+		hdd_err("Invalid channel");
+		return -EINVAL;
+	}
+
 	adapter->session.ap.sap_config.ch_params.center_freq_seg0 =
 				cds_freq_to_chan(params->chandef.center_freq1);
 	adapter->session.ap.sap_config.ch_params.center_freq_seg1 =
@@ -8688,8 +8687,8 @@ static int __wlan_hdd_cfg80211_start_ap(struct wiphy *wiphy,
 	/* if sta_sap_scc_on_dfs_chan ini is set, DFS master capability is
 	 * assumed disabled in the driver.
 	 */
-	if (channel && (reg_get_channel_state(hdd_ctx->hdd_pdev, channel) ==
-		CHANNEL_STATE_DFS) && sta_sap_scc_on_dfs_chan && !sta_cnt) {
+	if ((reg_get_channel_state(hdd_ctx->hdd_pdev, channel) ==
+	     CHANNEL_STATE_DFS) && sta_sap_scc_on_dfs_chan && !sta_cnt) {
 		hdd_err("SAP not allowed on DFS channel!!");
 		return -EINVAL;
 	}
@@ -8699,11 +8698,6 @@ static int __wlan_hdd_cfg80211_start_ap(struct wiphy *wiphy,
 		enum phy_ch_width sub_20_ch_width = CH_WIDTH_INVALID;
 		tsap_config_t *sap_cfg = &adapter->session.ap.sap_config;
 
-		/* Avoid ACS/DFS, and overwrite ch wd to 20 */
-		if (channel == 0) {
-			hdd_err("Can't start SAP-ACS (channel=0) with sub 20 MHz ch width");
-			return -EINVAL;
-		}
 		if (CHANNEL_STATE_DFS == wlan_reg_get_channel_state(
 					hdd_ctx->hdd_pdev, channel)) {
 			hdd_err("Can't start SAP-DFS (channel=%d)with sub 20 MHz ch wd",
@@ -8941,10 +8935,8 @@ static int __wlan_hdd_cfg80211_change_beacon(struct wiphy *wiphy,
 		return -EINVAL;
 	}
 
-	if (wlan_hdd_validate_session_id(adapter->session_id)) {
-		hdd_err("invalid session id: %d", adapter->session_id);
+	if (wlan_hdd_validate_session_id(adapter->session_id))
 		return -EINVAL;
-	}
 
 	MTRACE(qdf_trace(QDF_MODULE_ID_HDD,
 			 TRACE_CODE_HDD_CFG80211_CHANGE_BEACON,

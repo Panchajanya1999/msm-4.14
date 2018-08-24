@@ -779,8 +779,8 @@ QDF_STATUS wma_vdev_detach(tp_wma_handle wma_handle,
 	struct wma_txrx_node *iface = &wma_handle->interfaces[vdev_id];
 	struct wma_target_req *req_msg;
 
-	if (!iface->handle) {
-		WMA_LOGE("handle of vdev_id %d is NULL vdev is already freed",
+	if (!iface->handle || !cds_is_target_ready()) {
+		WMA_LOGE("handle of vdev_id %d is NULL vdev is already freed or target is not ready",
 			 vdev_id);
 		goto send_rsp;
 	}
@@ -1646,6 +1646,11 @@ QDF_STATUS wma_create_peer(tp_wma_handle wma, struct cdp_pdev *pdev,
 	struct wlan_objmgr_psoc *psoc = wma->psoc;
 	target_resource_config *wlan_res_cfg;
 	struct wlan_objmgr_peer *obj_peer = NULL;
+
+	if (!cds_is_target_ready()) {
+		WMA_LOGE(FL("target not ready, drop the request"));
+		return QDF_STATUS_E_BUSY;
+	}
 
 	if (!psoc) {
 		WMA_LOGE("%s: psoc is NULL", __func__);
@@ -3387,6 +3392,11 @@ struct wma_target_req *wma_fill_hold_req(tp_wma_handle wma,
 	struct wma_target_req *req;
 	QDF_STATUS status;
 
+	if (!cds_is_target_ready()) {
+		WMA_LOGE("target not ready, drop the request");
+		return NULL;
+	}
+
 	req = qdf_mem_malloc(sizeof(*req));
 	if (!req) {
 		WMA_LOGE(FL("Failed to allocate memory for msg %d vdev %d"),
@@ -3652,6 +3662,14 @@ void wma_vdev_resp_timer(void *data)
 			wma_trigger_recovery_assert_on_fw_timeout(
 				WMA_ADD_BSS_REQ);
 		} else {
+			peer = cdp_peer_find_by_addr(soc, pdev, params->bssId,
+						     &peer_id);
+			if (peer)
+				wma_remove_peer(wma, params->bssId,
+						tgt_req->vdev_id, peer, false);
+			else
+				WMA_LOGE("%s: Failed to find peer", __func__);
+
 			wma_send_msg_high_priority(wma, WMA_ADD_BSS_RSP,
 						   (void *)params, 0);
 			QDF_ASSERT(0);
@@ -3712,6 +3730,11 @@ struct wma_target_req *wma_fill_vdev_req(tp_wma_handle wma,
 {
 	struct wma_target_req *req;
 	QDF_STATUS status;
+
+	if (!cds_is_target_ready()) {
+		WMA_LOGE("target not ready, drop the request");
+		return NULL;
+	}
 
 	req = qdf_mem_malloc(sizeof(*req));
 	if (!req) {

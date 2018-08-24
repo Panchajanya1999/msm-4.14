@@ -759,6 +759,8 @@ typedef struct sAniSirLim {
 	uint8_t gLimDfsTargetChanNum;
 	QDF_STATUS(*sme_msg_callback)
 		(tpAniSirGlobal mac, struct scheduler_msg *msg);
+	QDF_STATUS(*stop_roaming_callback)
+		(tpAniSirGlobal mac, uint8_t session_id, uint8_t reason);
 	uint8_t retry_packet_cnt;
 	uint8_t beacon_probe_rsp_cnt_per_scan;
 	wlan_scan_requester req_id;
@@ -778,12 +780,6 @@ typedef struct sRrmContext {
 	tRrmSMEContext rrmSmeContext;
 	tRrmPEContext rrmPEContext;
 } tRrmContext, *tpRrmContext;
-
-typedef struct sHalMacStartParameters {
-	/* parameters for the Firmware */
-	enum qdf_driver_type driverType;
-
-} tHalMacStartParameters;
 
 /**
  * enum auth_tx_ack_status - Indicate TX status of AUTH

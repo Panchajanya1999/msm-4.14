@@ -864,35 +864,41 @@ int __wlan_hdd_validate_context(struct hdd_context *hdd_ctx, const char *func)
 	return 0;
 }
 
-int hdd_validate_adapter(struct hdd_adapter *adapter)
+int __hdd_validate_adapter(struct hdd_adapter *adapter, const char *func)
 {
 	if (!adapter) {
-		hdd_err("adapter is null");
+		hdd_err("adapter is null (via %s)", func);
 		return -EINVAL;
 	}
 
 	if (adapter->magic != WLAN_HDD_ADAPTER_MAGIC) {
-		hdd_err("bad adapter magic");
+		hdd_err("bad adapter magic (via %s)", func);
 		return -EINVAL;
 	}
 
 	if (!adapter->dev) {
-		hdd_err("adapter net_device is null");
+		hdd_err("adapter net_device is null (via %s)", func);
 		return -EINVAL;
 	}
 
 	if (!(adapter->dev->flags & IFF_UP)) {
-		hdd_info("adapter net_device is not up");
+		hdd_debug_rl("adapter '%s' is not up (via %s)",
+			     adapter->dev->name, func);
 		return -EAGAIN;
 	}
 
-	if (wlan_hdd_validate_session_id(adapter->session_id)) {
-		hdd_info("adapter session is not open");
-		return -EAGAIN;
+	return __wlan_hdd_validate_session_id(adapter->session_id, func);
+}
+
+int __wlan_hdd_validate_session_id(uint8_t session_id, const char *func)
+{
+	if (session_id == CSR_SESSION_ID_INVALID) {
+		hdd_debug_rl("adapter is not up (via %s)", func);
+		return -EINVAL;
 	}
 
-	if (adapter->session_id >= CSR_ROAM_SESSION_MAX) {
-		hdd_err("bad adapter session Id: %u", adapter->session_id);
+	if (session_id >= CSR_ROAM_SESSION_MAX) {
+		hdd_err("bad session Id:%u (via %s)", session_id, func);
 		return -EINVAL;
 	}
 
@@ -1301,7 +1307,9 @@ static void hdd_update_hw_dbs_capable(struct hdd_context *hdd_ctx)
 		((cfg_ini->dual_mac_feature_disable ==
 			ENABLE_DBS_CXN_AND_SCAN) ||
 		(cfg_ini->dual_mac_feature_disable ==
-			ENABLE_DBS_CXN_AND_ENABLE_SCAN_WITH_ASYNC_SCAN_OFF)))
+			ENABLE_DBS_CXN_AND_ENABLE_SCAN_WITH_ASYNC_SCAN_OFF) ||
+		(cfg_ini->dual_mac_feature_disable ==
+			ENABLE_DBS_CXN_AND_DISABLE_SIMULTANEOUS_SCAN)))
 		hw_dbs_capable = 1;
 
 	sme_update_hw_dbs_capable(hdd_ctx->mac_handle, hw_dbs_capable);
@@ -2548,6 +2556,34 @@ static void hdd_update_ipa_component_config(struct hdd_context *hdd_ctx)
 }
 #endif
 
+#ifdef FEATURE_WLAN_WAPI
+/**
+ * hdd_wapi_security_sta_exist() - return wapi security sta exist or not
+ *
+ * This API returns the wapi security station exist or not
+ *
+ * Return: true - wapi security station exist
+ */
+static bool hdd_wapi_security_sta_exist(void)
+{
+	struct hdd_adapter *adapter = NULL;
+	struct hdd_context *hdd_ctx = cds_get_context(QDF_MODULE_ID_HDD);
+
+	hdd_for_each_adapter(hdd_ctx, adapter) {
+		if ((adapter->device_mode == QDF_STA_MODE) &&
+		    adapter->wapi_info.wapi_mode &&
+		    (adapter->wapi_info.wapi_auth_mode != WAPI_AUTH_MODE_OPEN))
+			return true;
+	}
+	return false;
+}
+#else
+static bool hdd_wapi_security_sta_exist(void)
+{
+	return false;
+}
+#endif
+
 #ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
 static enum policy_mgr_con_mode wlan_hdd_get_mode_for_non_connected_vdev(
 			struct wlan_objmgr_psoc *psoc, uint8_t vdev_id)
@@ -2570,6 +2606,7 @@ static void hdd_register_policy_manager_callback(
 {
 	struct policy_mgr_hdd_cbacks hdd_cbacks;
 
+	qdf_mem_zero(&hdd_cbacks, sizeof(hdd_cbacks));
 	hdd_cbacks.sap_restart_chan_switch_cb =
 		hdd_sap_restart_chan_switch_cb;
 	hdd_cbacks.wlan_hdd_get_channel_for_sap_restart =
@@ -2577,7 +2614,8 @@ static void hdd_register_policy_manager_callback(
 	hdd_cbacks.get_mode_for_non_connected_vdev =
 		wlan_hdd_get_mode_for_non_connected_vdev;
 	hdd_cbacks.hdd_get_device_mode = hdd_get_device_mode;
-
+	hdd_cbacks.hdd_wapi_security_sta_exist =
+		hdd_wapi_security_sta_exist;
 	if (QDF_STATUS_SUCCESS !=
 	    policy_mgr_register_hdd_cb(psoc, &hdd_cbacks)) {
 		hdd_err("HDD callback registration with policy manager failed");
@@ -2685,8 +2723,6 @@ int hdd_wlan_start_modules(struct hdd_context *hdd_ctx, bool reinit)
 	void *hif_ctx;
 	struct target_psoc_info *tgt_hdl;
 
-	hdd_debug("state:%d reinit:%d", hdd_ctx->driver_status, reinit);
-
 	qdf_dev = cds_get_context(QDF_MODULE_ID_QDF_DEVICE);
 	if (!qdf_dev) {
 		hdd_err("QDF Device Context is Invalid return");
@@ -2698,7 +2734,7 @@ int hdd_wlan_start_modules(struct hdd_context *hdd_ctx, bool reinit)
 	mutex_lock(&hdd_ctx->iface_change_lock);
 	if (hdd_ctx->driver_status == DRIVER_MODULES_ENABLED) {
 		mutex_unlock(&hdd_ctx->iface_change_lock);
-		hdd_info("Driver modules already Enabled");
+		hdd_debug("Driver modules already Enabled");
 		hdd_exit();
 		return 0;
 	}
@@ -2718,7 +2754,7 @@ int hdd_wlan_start_modules(struct hdd_context *hdd_ctx, bool reinit)
 		if (!reinit && !unint) {
 			ret = pld_power_on(qdf_dev->dev);
 			if (ret) {
-				hdd_err("Failed to Powerup the device; errno: %d",
+				hdd_err("Failed to power up device; errno:%d",
 					ret);
 				goto release_lock;
 			}
@@ -2840,7 +2876,7 @@ int hdd_wlan_start_modules(struct hdd_context *hdd_ctx, bool reinit)
 		break;
 
 	default:
-		hdd_err("WLAN start invoked in wrong state! :%d\n",
+		QDF_DEBUG_PANIC("Unknown driver state:%d",
 				hdd_ctx->driver_status);
 		ret = -EINVAL;
 		goto release_lock;
@@ -10660,8 +10696,6 @@ int hdd_wlan_stop_modules(struct hdd_context *hdd_ctx, bool ftm_mode)
 	struct target_psoc_info *tgt_hdl;
 
 	hdd_enter();
-	hdd_alert("stop WLAN module: entering driver status=%d",
-		  hdd_ctx->driver_status);
 
 	hdd_deregister_policy_manager_callback(hdd_ctx->hdd_psoc);
 
@@ -10691,21 +10725,20 @@ int hdd_wlan_stop_modules(struct hdd_context *hdd_ctx, bool ftm_mode)
 				WIFI_POWER_EVENT_WAKELOCK_IFACE_CHANGE_TIMER);
 			hdd_ctx->stop_modules_in_progress = false;
 			cds_set_module_stop_in_progress(false);
+
 			return 0;
 		}
 	}
-
-	hdd_info("Present Driver Status: %d", hdd_ctx->driver_status);
 
 	/* free user wowl patterns */
 	hdd_free_user_wowl_ptrns();
 
 	switch (hdd_ctx->driver_status) {
 	case DRIVER_MODULES_UNINITIALIZED:
-		hdd_info("Modules not initialized just return");
+		hdd_debug("Modules not initialized just return");
 		goto done;
 	case DRIVER_MODULES_CLOSED:
-		hdd_info("Modules already closed");
+		hdd_debug("Modules already closed");
 		goto done;
 	case DRIVER_MODULES_ENABLED:
 		hdd_info("Wlan transitioning (OPENED <- ENABLED)");
@@ -10726,9 +10759,8 @@ int hdd_wlan_stop_modules(struct hdd_context *hdd_ctx, bool ftm_mode)
 		hdd_info("Wlan transitioning (CLOSED <- OPENED)");
 		break;
 	default:
-		hdd_err("Trying to stop wlan in a wrong state: %d",
+		QDF_DEBUG_PANIC("Unknown driver state:%d",
 				hdd_ctx->driver_status);
-		QDF_ASSERT(0);
 		ret = -EINVAL;
 		goto done;
 	}
@@ -10795,9 +10827,9 @@ int hdd_wlan_stop_modules(struct hdd_context *hdd_ctx, bool ftm_mode)
 	if (IS_IDLE_STOP && cds_is_target_ready()) {
 		ret = pld_power_off(qdf_ctx->dev);
 		if (ret)
-			hdd_err("CNSS power down failed put device into Low power mode:%d",
-				ret);
+			hdd_err("Failed to power down device; errno:%d", ret);
 	}
+
 	/* Free the cache channels of the command SET_DISABLE_CHANNEL_LIST */
 	wlan_hdd_free_cache_channels(hdd_ctx);
 
@@ -10813,8 +10845,6 @@ done:
 	hdd_ctx->stop_modules_in_progress = false;
 	cds_set_module_stop_in_progress(false);
 	mutex_unlock(&hdd_ctx->iface_change_lock);
-	hdd_alert("stop WLAN module: exit driver status=%d",
-		  hdd_ctx->driver_status);
 
 	hdd_exit();
 
