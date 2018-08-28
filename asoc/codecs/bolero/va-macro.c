@@ -173,7 +173,6 @@ static int va_macro_mclk_enable(struct va_macro_priv *va_priv,
 				0x02, 0x02);
 		}
 	} else {
-/*
 		va_priv->va_mclk_users--;
 		if (va_priv->va_mclk_users == 0) {
 			regmap_update_bits(regmap,
@@ -188,7 +187,6 @@ static int va_macro_mclk_enable(struct va_macro_priv *va_priv,
 			bolero_request_clock(va_priv->dev,
 					VA_MACRO, MCLK_MUX0, false);
 		}
-*/
 	}
 exit:
 	mutex_unlock(&va_priv->mclk_lock);
