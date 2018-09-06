@@ -1720,7 +1720,8 @@ bool policy_mgr_is_concurrency_allowed(struct wlan_objmgr_psoc *psoc,
 		}
 	}
 
-	if (!policy_mgr_allow_sap_go_concurrency(psoc, mode, channel)) {
+	if (!policy_mgr_allow_sap_go_concurrency(psoc, mode, channel,
+						 WLAN_INVALID_VDEV_ID)) {
 		policy_mgr_err("This concurrency combination is not allowed");
 		goto done;
 	}
@@ -1771,6 +1772,37 @@ bool policy_mgr_allow_concurrency(struct wlan_objmgr_psoc *psoc,
 	}
 
 	return policy_mgr_is_concurrency_allowed(psoc, mode, channel, bw);
+}
+
+bool  policy_mgr_allow_concurrency_csa(struct wlan_objmgr_psoc *psoc,
+				       enum policy_mgr_con_mode mode,
+				       uint8_t channel,
+				       uint32_t vdev_id)
+{
+	bool allow = false;
+	struct policy_mgr_conc_connection_info info;
+	uint8_t num_cxn_del = 0;
+
+	/*
+	 * Store the connection's parameter and temporarily delete it
+	 * from the concurrency table. This way the allow concurrency
+	 * check can be used as though a new connection is coming up,
+	 * after check, restore the connection to concurrency table.
+	 */
+	policy_mgr_store_and_del_conn_info_by_vdev_id(psoc, vdev_id,
+						      &info, &num_cxn_del);
+	allow = policy_mgr_allow_concurrency(
+				psoc,
+				mode,
+				channel,
+				HW_MODE_20_MHZ);
+	if (!allow)
+		policy_mgr_err("CSA concurrency check failed");
+	/* Restore the connection entry */
+	if (num_cxn_del > 0)
+		policy_mgr_restore_deleted_conn_info(psoc, &info, num_cxn_del);
+
+	return allow;
 }
 
 /**
@@ -3029,63 +3061,42 @@ uint32_t policy_mgr_get_connection_info(struct wlan_objmgr_psoc *psoc,
 
 bool policy_mgr_allow_sap_go_concurrency(struct wlan_objmgr_psoc *psoc,
 					 enum policy_mgr_con_mode mode,
-					 uint8_t channel)
+					 uint8_t channel,
+					 uint32_t vdev_id)
 {
-	uint32_t sap_cnt;
-	uint32_t go_cnt;
 	enum policy_mgr_con_mode con_mode;
 	uint8_t con_chan;
 	int id;
+	uint32_t vdev;
+	bool dbs;
 
-	sap_cnt = policy_mgr_mode_specific_connection_count(psoc,
-							    PM_SAP_MODE,
-							    NULL);
-	go_cnt = policy_mgr_mode_specific_connection_count(psoc,
-							   PM_P2P_GO_MODE,
-							   NULL);
-
-	if ((mode == PM_SAP_MODE || mode == PM_P2P_GO_MODE) &&
-	    (sap_cnt || go_cnt)) {
-		if (policy_mgr_dual_beacon_on_single_mac_mcc_capable(psoc))
-			return true;
-		if (policy_mgr_dual_beacon_on_single_mac_scc_capable(psoc)) {
-			for (id = 0; id < MAX_NUMBER_OF_CONC_CONNECTIONS;
-				id++) {
-				if (pm_conc_connection_list[id].in_use) {
-					con_mode =
-					    pm_conc_connection_list[id].mode;
-					con_chan =
-					    pm_conc_connection_list[id].chan;
-					if (((con_mode == PM_SAP_MODE) ||
-					     (con_mode == PM_P2P_GO_MODE)) &&
-					    (channel != con_chan)) {
-						policy_mgr_debug("Scc is supported, but first SAP and second SAP are not in same channel, So don't allow second SAP interface");
-						return false;
-					}
-				}
-			}
+	if (mode != PM_SAP_MODE && mode != PM_P2P_GO_MODE)
+		return true;
+	if (policy_mgr_dual_beacon_on_single_mac_mcc_capable(psoc))
+		return true;
+	dbs = policy_mgr_is_hw_dbs_capable(psoc);
+	for (id = 0; id < MAX_NUMBER_OF_CONC_CONNECTIONS; id++) {
+		if (!pm_conc_connection_list[id].in_use)
+			continue;
+		vdev = pm_conc_connection_list[id].vdev_id;
+		if (vdev_id == vdev)
+			continue;
+		con_mode = pm_conc_connection_list[id].mode;
+		if (con_mode != PM_SAP_MODE && con_mode != PM_P2P_GO_MODE)
+			continue;
+		con_chan = pm_conc_connection_list[id].chan;
+		if (policy_mgr_dual_beacon_on_single_mac_scc_capable(psoc) &&
+		    (channel == con_chan)) {
+			policy_mgr_debug("SCC enabled, 2 AP on same channel, allow 2nd AP");
 			return true;
 		}
-		if (!policy_mgr_is_hw_dbs_capable(psoc)) {
-			policy_mgr_debug("DBS is not supported, mcc and scc are not supported too, don't allow second SAP interface");
+		if (!dbs) {
+			policy_mgr_debug("DBS unsupported, mcc and scc unsupported too, don't allow 2nd AP");
 			return false;
 		}
-		/* If DBS is supported then allow second SAP/GO session only if
-		 * the freq band of the second SAP/GO interface is different
-		 * than the first SAP/GO interface.
-		 */
-		for (id = 0; id < MAX_NUMBER_OF_CONC_CONNECTIONS; id++) {
-			if (pm_conc_connection_list[id].in_use) {
-				con_mode = pm_conc_connection_list[id].mode;
-				con_chan = pm_conc_connection_list[id].chan;
-				if (((con_mode == PM_SAP_MODE) ||
-				     (con_mode == PM_P2P_GO_MODE)) &&
-				    (WLAN_REG_IS_SAME_BAND_CHANNELS(channel,
-					con_chan))) {
-					policy_mgr_debug("DBS is supported, but first SAP and second SAP are on same band, So don't allow second SAP interface");
-					return false;
-				}
-			}
+		if (WLAN_REG_IS_SAME_BAND_CHANNELS(channel, con_chan)) {
+			policy_mgr_debug("DBS supported, 2 SAP on same band, reject 2nd AP");
+			return false;
 		}
 	}
 
