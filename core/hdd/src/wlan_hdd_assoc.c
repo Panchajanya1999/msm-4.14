@@ -3236,8 +3236,10 @@ hdd_association_completion_handler(struct hdd_adapter *adapter,
 		hdd_debug("check for SAP restart");
 		policy_mgr_check_concurrent_intf_and_restart_sap(
 			hdd_ctx->hdd_psoc);
-		policy_mgr_checkn_update_hw_mode_single_mac_mode
-			(hdd_ctx->hdd_psoc, roam_info->pBssDesc->channelId);
+		if (roam_info->pBssDesc)
+			policy_mgr_checkn_update_hw_mode_single_mac_mode
+				(hdd_ctx->hdd_psoc,
+				 roam_info->pBssDesc->channelId);
 	} else {
 		bool connect_timeout = false;
 		/* do we need to change the HW mode */
@@ -4599,7 +4601,7 @@ hdd_sme_roam_callback(void *pContext, struct csr_roam_info *roam_info,
 		break;
 	case eCSR_ROAM_SHOULD_ROAM:
 		/* notify apps that we can't pass traffic anymore */
-		hdd_info("Disabling queues");
+		hdd_debug("Disabling queues");
 		wlan_hdd_netif_queue_control(adapter,
 					   WLAN_STOP_ALL_NETIF_QUEUE,
 					   WLAN_CONTROL_PATH);

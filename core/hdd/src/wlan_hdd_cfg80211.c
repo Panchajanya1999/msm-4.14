@@ -2772,8 +2772,8 @@ static void wlan_hdd_cfg80211_start_pending_acs(struct work_struct *work)
 	struct hdd_adapter *adapter = container_of(work, struct hdd_adapter,
 						   acs_pending_work.work);
 
-	clear_bit(ACS_PENDING, &adapter->event_flags);
 	wlan_hdd_cfg80211_start_acs(adapter);
+	clear_bit(ACS_PENDING, &adapter->event_flags);
 }
 
 /**
@@ -2958,7 +2958,7 @@ __wlan_hdd_cfg80211_get_supported_features(struct wiphy *wiphy,
 		fset |= WIFI_FEATURE_EXTSCAN | WIFI_FEATURE_HAL_EPNO;
 	}
 #endif
-	if (wlan_hdd_nan_is_supported()) {
+	if (wlan_hdd_nan_is_supported(hdd_ctx)) {
 		hdd_debug("NAN is supported by firmware");
 		fset |= WIFI_FEATURE_NAN;
 	}
@@ -3083,8 +3083,8 @@ __wlan_hdd_cfg80211_set_scanning_mac_oui(struct wiphy *wiphy,
 	if (ret)
 		return ret;
 
-	if (false == hdd_ctx->config->enable_mac_spoofing) {
-		hdd_warn("MAC address spoofing is not enabled");
+	if (!hdd_ctx->config->enable_mac_spoofing) {
+		hdd_debug("MAC address spoofing is not enabled");
 		return -ENOTSUPP;
 	}
 
@@ -4154,8 +4154,8 @@ int wlan_hdd_enable_dfs_chan_scan(struct hdd_context *hdd_ctx,
 	mac_handle_t mac_handle;
 
 	if (enable_dfs_channels == hdd_ctx->config->enableDFSChnlScan) {
-		hdd_info("DFS channels are already %s",
-			 enable_dfs_channels ? "enabled" : "disabled");
+		hdd_debug("DFS channels are already %s",
+			  enable_dfs_channels ? "enabled" : "disabled");
 		return 0;
 	}
 
@@ -19234,6 +19234,60 @@ static int wlan_hdd_cfg80211_set_privacy(struct hdd_adapter *adapter,
 	return status;
 }
 
+/**
+ * wlan_hdd_clear_wapi_privacy() - reset WAPI settings in HDD layer
+ * @adapter: pointer to HDD adapter object
+ *
+ * This function resets all WAPI related parameters imposed before STA
+ * connection starts. It's invoked when privacy checking against concurrency
+ * fails, to make sure no improper WAPI settings are still populated before
+ * returning an error to the upper layer requester.
+ *
+ * Return: none
+ */
+#ifdef FEATURE_WLAN_WAPI
+static inline void wlan_hdd_clear_wapi_privacy(struct hdd_adapter *adapter)
+{
+	adapter->wapi_info.wapi_mode = 0;
+	adapter->wapi_info.wapi_auth_mode = WAPI_AUTH_MODE_OPEN;
+}
+#else
+static inline void wlan_hdd_clear_wapi_privacy(struct hdd_adapter *adapter)
+{
+}
+#endif
+
+/**
+ * wlan_hdd_cfg80211_clear_privacy() - reset STA security parameters
+ * @adapter: pointer to HDD adapter object
+ *
+ * This function resets all privacy related parameters imposed
+ * before STA connection starts. It's invoked when privacy checking
+ * against concurrency fails, to make sure no improper settings are
+ * still populated before returning an error to the upper layer requester.
+ *
+ * Return: none
+ */
+static void wlan_hdd_cfg80211_clear_privacy(struct hdd_adapter *adapter)
+{
+	struct hdd_station_ctx *hdd_sta_ctx =
+		WLAN_HDD_GET_STATION_CTX_PTR(adapter);
+
+	hdd_debug("resetting all privacy configurations");
+
+	hdd_sta_ctx->wpa_versions = 0;
+
+	hdd_sta_ctx->conn_info.authType = eCSR_AUTH_TYPE_NONE;
+	hdd_sta_ctx->roam_profile.AuthType.authType[0] = eCSR_AUTH_TYPE_NONE;
+
+	hdd_sta_ctx->conn_info.ucEncryptionType = eCSR_ENCRYPT_TYPE_NONE;
+	hdd_sta_ctx->roam_profile.EncryptionType.numEntries = 0;
+	hdd_sta_ctx->conn_info.mcEncryptionType = eCSR_ENCRYPT_TYPE_NONE;
+	hdd_sta_ctx->roam_profile.mcEncryptionType.numEntries = 0;
+
+	wlan_hdd_clear_wapi_privacy(adapter);
+}
+
 int wlan_hdd_try_disconnect(struct hdd_adapter *adapter)
 {
 	unsigned long rc;
@@ -19586,14 +19640,16 @@ static int __wlan_hdd_cfg80211_connect(struct wiphy *wiphy,
 				adapter->device_mode),
 				req->channel->hw_value, HW_MODE_20_MHZ)) {
 			hdd_warn("This concurrency combination is not allowed");
-			return -ECONNREFUSED;
+			status = -ECONNREFUSED;
+			goto con_chk_failed;
 		}
 	} else {
 		if (!policy_mgr_allow_concurrency(hdd_ctx->hdd_psoc,
 				policy_mgr_convert_device_mode_to_qdf_type(
 				adapter->device_mode), 0, HW_MODE_20_MHZ)) {
 			hdd_warn("This concurrency combination is not allowed");
-			return -ECONNREFUSED;
+			status = -ECONNREFUSED;
+			goto con_chk_failed;
 		}
 	}
 
@@ -19609,8 +19665,11 @@ static int __wlan_hdd_cfg80211_connect(struct wiphy *wiphy,
 						 bssid_hint, channel, 0);
 	if (0 > status) {
 		hdd_err("connect failed");
-		return status;
 	}
+	return status;
+
+con_chk_failed:
+	wlan_hdd_cfg80211_clear_privacy(adapter);
 	hdd_exit();
 	return status;
 }
@@ -19930,8 +19989,8 @@ static int __wlan_hdd_cfg80211_disconnect(struct wiphy *wiphy,
 		hdd_notify_sta_disconnect(adapter->session_id,
 			  false, true, adapter->hdd_vdev);
 
-		hdd_info("Disconnect request from user space with reason: %d (%s) internal reason code: %d",
-			reason, hdd_ieee80211_reason_code_to_str(reason), reasonCode);
+		hdd_info("Disconnect from userspace; reason:%d (%s)",
+			 reason, hdd_ieee80211_reason_code_to_str(reason));
 		status = wlan_hdd_disconnect(adapter, reasonCode);
 		if (0 != status) {
 			hdd_err("wlan_hdd_disconnect failed, status: %d", status);
@@ -22502,7 +22561,7 @@ void wlan_hdd_init_chan_info(struct hdd_context *hdd_ctx)
 
 	hdd_ctx->chan_info = NULL;
 	if (!hdd_ctx->config->fEnableSNRMonitoring) {
-		hdd_info("SNR monitoring is disabled");
+		hdd_debug("SNR monitoring is disabled");
 		return;
 	}
 

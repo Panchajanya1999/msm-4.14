@@ -274,6 +274,7 @@ typedef enum eSirResultCodes {
 	eSIR_SME_DEAUTH_STATUS,
 	eSIR_PNO_SCAN_SUCCESS,
 	eSIR_SME_INVALID_SESSION,
+	eSIR_SME_PEER_CREATE_FAILED,
 	eSIR_DONOT_USE_RESULT_CODE = SIR_MAX_ENUM_SIZE
 } tSirResultCodes;
 
@@ -1787,28 +1788,6 @@ typedef struct sAniGetSnrReq {
 } tAniGetSnrReq, *tpAniGetSnrReq;
 
 /**
- * struct ani_scan_req - Scan request
- * @msg_type: Message type
- * @msg_len: Message Length
- * @session_id: SME session Id
- * @scan_param: scan request parameter
- * @callback: call back function for scan result
- * @ctx: Global context
- *
- * Scan request message structure
- */
-struct ani_scan_req {
-	/* message type is same as the request type */
-	uint16_t msg_type;
-	/* length of the entire request */
-	uint16_t msg_len;
-	uint16_t session_id;
-	void *scan_param;
-	void *callback;
-	void *ctx;
-};
-
-/**
  * struct ani_roc_req - Remain on channel request
  * @msg_type: Message type
  * @msg_len: Message Length
@@ -3011,9 +2990,9 @@ struct sir_wifi_start_log {
  * @pcl_len: Number of channels in the PCL
  */
 struct sir_pcl_list {
+	uint32_t pcl_len;
 	uint8_t pcl_list[128];
 	uint8_t weight_list[128];
-	uint32_t pcl_len;
 };
 
 /**
@@ -4317,12 +4296,6 @@ typedef struct {
 	uint32_t requestId;
 	uint8_t sessionId;
 } tSirExtScanStopReqParams, *tpSirExtScanStopReqParams;
-
-typedef struct {
-	uint32_t requestId;
-	uint8_t sessionId;
-} tSirExtScanResetBssidHotlistReqParams,
-*tpSirExtScanResetBssidHotlistReqParams;
 
 typedef struct {
 	uint32_t requestId;

@@ -1841,8 +1841,6 @@ struct hdd_context {
 	uint32_t rx_high_ind_cnt;
 	/* For Rx thread non GRO/LRO packet accounting */
 	uint64_t no_rx_offload_pkt_cnt;
-	/* completion variable to indicate set antenna mode complete*/
-	struct completion set_antenna_mode_cmpl;
 	/* Current number of TX X RX chains being used */
 	enum antenna_mode current_antenna_mode;
 	bool apf_enabled;
@@ -2236,16 +2234,6 @@ int hdd_bus_bandwidth_init(struct hdd_context *hdd_ctx);
  */
 void hdd_bus_bandwidth_deinit(struct hdd_context *hdd_ctx);
 
-/**
- * hdd_bus_bw_cancel_work() - Cancel the bus_bw_work worker
- * @hdd_ctx: HDD context
- *
- * Cancel the bus_bw_work to stop monitor link state.
- *
- * Return: None.
- */
-void hdd_bus_bw_cancel_work(struct hdd_context *hdd_ctx);
-
 #define GET_CUR_RX_LVL(config) ((config)->cur_rx_level)
 #define GET_BW_COMPUTE_INTV(config) ((config)->busBandwidthComputeInterval)
 
@@ -2279,11 +2267,6 @@ int hdd_bus_bandwidth_init(struct hdd_context *hdd_ctx)
 
 static inline
 void hdd_bus_bandwidth_deinit(struct hdd_context *hdd_ctx)
-{
-}
-
-static inline
-void hdd_bus_bw_cancel_work(struct hdd_context *hdd_ctx)
 {
 }
 
@@ -2499,9 +2482,6 @@ wlan_hdd_check_custom_con_channel_rules(struct hdd_adapter *sta_adapter,
 
 void wlan_hdd_stop_sap(struct hdd_adapter *ap_adapter);
 void wlan_hdd_start_sap(struct hdd_adapter *ap_adapter, bool reinit);
-
-void wlan_hdd_soc_set_antenna_mode_cb(enum set_antenna_mode_status status,
-				      void *context);
 
 #ifdef QCA_CONFIG_SMP
 int wlan_hdd_get_cpu(void);

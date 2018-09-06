@@ -778,7 +778,6 @@ static int hdd_stop_bss_link(struct hdd_adapter *adapter)
 		return errno;
 
 	if (test_bit(SOFTAP_BSS_STARTED, &adapter->event_flags)) {
-		hdd_ipa_ap_disconnect(adapter);
 		status = wlansap_stop_bss(
 			WLAN_HDD_GET_SAP_CTX_PTR(adapter));
 		if (QDF_IS_STATUS_SUCCESS(status))
@@ -2733,9 +2732,33 @@ int hdd_softap_set_channel_change(struct net_device *dev, int target_channel,
 		return -EBUSY;
 	}
 
+	/*
+	 * Do SAP concurrency check to cover channel switch case as following:
+	 * There is already existing SAP+GO combination but due to upper layer
+	 * notifying LTE-COEX event or sending command to move one connection
+	 * to different channel. Before moving existing connection to new
+	 * channel, check if new channel can co-exist with the other existing
+	 * connection. For example, SAP1 is on channel-6 and SAP2 is on
+	 * channel-36 and lets say they are doing DBS, and upper layer sends
+	 * LTE-COEX to move SAP1 from channel-6 to channel-149. SAP1 and
+	 * SAP2 will end up doing MCC which may not be desirable result. It
+	 * should will be prevented.
+	 */
+	if (!policy_mgr_allow_concurrency_csa(
+				hdd_ctx->hdd_psoc,
+				policy_mgr_convert_device_mode_to_qdf_type(
+					adapter->device_mode),
+				target_channel,
+				adapter->session_id)) {
+		hdd_err("Channel switch failed due to concurrency check failure");
+		qdf_atomic_set(&adapter->dfs_radar_found, 0);
+		return -EINVAL;
+	}
+
 	status = policy_mgr_reset_chan_switch_complete_evt(hdd_ctx->hdd_psoc);
 	if (!QDF_IS_STATUS_SUCCESS(status)) {
 		hdd_err("clear event failed");
+		qdf_atomic_set(&adapter->dfs_radar_found, 0);
 		return -EINVAL;
 	}
 	/*
@@ -4973,7 +4996,6 @@ __iw_softap_stopbss(struct net_device *dev,
 			WLAN_HDD_GET_HOSTAP_STATE_PTR(adapter);
 
 		qdf_event_reset(&hostapd_state->qdf_stop_bss_event);
-		hdd_ipa_ap_disconnect(adapter);
 		status = wlansap_stop_bss(
 			WLAN_HDD_GET_SAP_CTX_PTR(adapter));
 		if (QDF_IS_STATUS_SUCCESS(status)) {
@@ -6287,17 +6309,6 @@ struct hdd_adapter *hdd_wlan_create_ap_dev(struct hdd_context *hdd_ctx,
 		free_netdev(adapter->dev);
 		return NULL;
 	}
-
-	init_completion(&adapter->disconnect_comp_var);
-	init_completion(&adapter->roaming_comp_var);
-	init_completion(&adapter->linkup_event_var);
-	init_completion(&adapter->cancel_rem_on_chan_var);
-	init_completion(&adapter->rem_on_chan_ready_event);
-	init_completion(&adapter->sta_authorized_event);
-	init_completion(&adapter->offchannel_tx_event);
-	init_completion(&adapter->tx_action_cnf_event);
-	init_completion(&adapter->ibss_peer_info_comp);
-	init_completion(&adapter->lfr_fw_status.disable_lfr_event);
 
 	SET_NETDEV_DEV(dev, hdd_ctx->parent_dev);
 	spin_lock_init(&adapter->pause_map_lock);
@@ -8407,7 +8418,6 @@ static int __wlan_hdd_cfg80211_stop_ap(struct wiphy *wiphy,
 			WLAN_HDD_GET_SAP_CTX_PTR(adapter), true);
 
 		qdf_event_reset(&hostapd_state->qdf_stop_bss_event);
-		hdd_ipa_ap_disconnect(adapter);
 		status = wlansap_stop_bss(WLAN_HDD_GET_SAP_CTX_PTR(adapter));
 		if (QDF_IS_STATUS_SUCCESS(status)) {
 			qdf_status =
@@ -8667,6 +8677,23 @@ static int __wlan_hdd_cfg80211_start_ap(struct wiphy *wiphy,
 	if (!channel) {
 		hdd_err("Invalid channel");
 		return -EINVAL;
+	}
+
+	if (policy_mgr_is_sap_mandatory_chan_list_enabled(hdd_ctx->hdd_psoc)) {
+		if (WLAN_REG_IS_5GHZ_CH(channel)) {
+			hdd_debug("channel %hu, sap mandatory chan list enabled",
+			          channel);
+			if (!policy_mgr_get_sap_mandatory_chan_list_len(
+							hdd_ctx->hdd_psoc))
+				policy_mgr_init_sap_mandatory_2g_chan(
+							hdd_ctx->hdd_psoc);
+
+			policy_mgr_add_sap_mandatory_chan(hdd_ctx->hdd_psoc,
+							  channel);
+		} else {
+			policy_mgr_init_sap_mandatory_2g_chan(
+							hdd_ctx->hdd_psoc);
+		}
 	}
 
 	adapter->session.ap.sap_config.ch_params.center_freq_seg0 =
@@ -9077,23 +9104,3 @@ bool hdd_is_peer_associated(struct hdd_adapter *adapter,
 
 	return false;
 }
-
-void hdd_ipa_ap_disconnect(struct hdd_adapter *adapter)
-{
-	struct hdd_context *hdd_ctx;
-	struct hdd_ap_ctx *ap_ctx;
-
-	hdd_ctx = WLAN_HDD_GET_CTX(adapter);
-	ap_ctx = WLAN_HDD_GET_AP_CTX_PTR(adapter);
-
-	if (ucfg_ipa_is_enabled()) {
-		if (ucfg_ipa_wlan_evt(hdd_ctx->hdd_pdev,
-				adapter->dev, adapter->device_mode,
-				ap_ctx->broadcast_sta_id,
-				adapter->session_id,
-				WLAN_IPA_AP_DISCONNECT,
-				adapter->dev->dev_addr) != QDF_STATUS_SUCCESS)
-		hdd_err("WLAN_AP_DISCONNECT event failed");
-	}
-}
-
