@@ -796,14 +796,14 @@ struct swr_device *get_matching_swr_slave_device(struct device_node *np)
 {
 	struct swr_device *swr = NULL;
 	struct swr_master *master;
-	int found = 0;
+	bool found = false;
 
 	mutex_lock(&board_lock);
 	list_for_each_entry(master, &swr_master_list, list) {
 		mutex_lock(&master->mlock);
 		list_for_each_entry(swr, &master->devices, dev_list) {
 			if (swr->dev.of_node == np) {
-				found = 1;
+				found = true;
 				mutex_unlock(&master->mlock);
 				goto exit;
 			}
@@ -812,7 +812,7 @@ struct swr_device *get_matching_swr_slave_device(struct device_node *np)
 	}
 exit:
 	mutex_unlock(&board_lock);
-	if (found == 0)
+	if (!found)
 		return NULL;
 	return swr;
 }
@@ -872,7 +872,6 @@ void swr_unregister_master(struct swr_master *master)
 	device_unregister(&master->dev);
 }
 EXPORT_SYMBOL(swr_unregister_master);
-int count = 0x0;
 /**
  * swr_register_master - register soundwire master controller
  * @master: master to be registered
@@ -894,11 +893,8 @@ int swr_register_master(struct swr_master *master)
 	id = idr_alloc(&master_idr, master, master->bus_num,
 				master->bus_num + 1, GFP_KERNEL);
 	mutex_unlock(&swr_lock);
-	count++;
-	id = count;
-	if (id < 0) {
+	if (id < 0)
 		return id;
-	}
 
 	master->bus_num = id;
 	/* Can't register until driver model init */

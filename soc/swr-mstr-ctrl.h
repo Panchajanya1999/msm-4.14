@@ -139,11 +139,15 @@ struct swr_mstr_ctrl {
 	u8 num_cfg_devs;
 	struct mutex force_down_lock;
 	int force_down_state;
+	struct notifier_block event_notifier;
+	struct work_struct dc_presence_work;
 	u8 num_ports;
 	struct swrm_port_type
 			port_mapping[SWR_MSTR_PORT_LEN][SWR_MAX_CH_PER_PORT];
 	int swr_irq;
 	u32 clk_stop_mode0_supp;
+	struct work_struct wakeup_work;
+	u32 wakeup_req;
 };
 
 #endif /* _SWR_WCD_CTRL_H */

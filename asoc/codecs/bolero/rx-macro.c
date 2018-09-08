@@ -2407,9 +2407,6 @@ static int rx_swrm_clock(void *handle, bool enable)
 			regmap_update_bits(regmap,
 				BOLERO_CDC_RX_CLK_RST_CTRL_SWR_CONTROL,
 				0x02, 0x00);
-			/*regmap_update_bits(regmap,
-				BOLERO_CDC_RX_CLK_RST_CTRL_SWR_CONTROL,
-				0x1C, 0x0C);*/
 			msm_cdc_pinctrl_select_active_state(
 						rx_priv->rx_swr_gpio_p);
 		}

@@ -187,7 +187,8 @@
 							0x40*m)
 
 #define SWRM_DP_BLOCK_CTRL_1(n)		(SWRM_BASE_ADDRESS + \
-							0x0000112C + 0x100*(n-1))
+							0x0000112C + \
+							0x100*(n-1))
 
 #define SWRM_DP_BLOCK_CTRL2_BANK(n, m)	(SWRM_BASE_ADDRESS + \
 							0x00001130 + \

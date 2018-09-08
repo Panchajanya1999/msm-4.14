@@ -36,6 +36,9 @@
 
 #define NUM_SWRS_DT_PARAMS 5
 
+#define WCD937X_VERSION_1_0 1
+#define WCD937X_VERSION_ENTRY_SIZE 32
+
 enum {
 	CODEC_TX = 0,
 	CODEC_RX,
@@ -321,10 +324,6 @@ static int wcd937x_rx_clk_enable(struct snd_soc_codec *codec)
 				    0x40, 0x00);
 		snd_soc_update_bits(codec, WCD937X_DIGITAL_CDC_RX2_CTL,
 				    0x40, 0x00);
-		snd_soc_update_bits(codec, WCD937X_DIGITAL_CDC_RX1_CTL,
-				    0x40, 0x00);
-		snd_soc_update_bits(codec, WCD937X_DIGITAL_CDC_RX2_CTL,
-				    0x40, 0x00);
 		snd_soc_update_bits(codec, WCD937X_DIGITAL_CDC_ANA_CLK_CTL,
 				    0x02, 0x02);
 	}
@@ -548,8 +547,16 @@ static int wcd937x_codec_enable_hphr_pa(struct snd_soc_dapm_widget *w,
 					    wcd937x->rx_swr_dev->dev_num,
 					    true);
 		break;
+	case SND_SOC_DAPM_PRE_PMD:
+		blocking_notifier_call_chain(&wcd937x->mbhc->notifier,
+					     WCD_EVENT_PRE_HPHR_PA_OFF,
+					     &wcd937x->mbhc->wcd_mbhc);
+		break;
 	case SND_SOC_DAPM_POST_PMD:
 		usleep_range(7000, 7010);
+		blocking_notifier_call_chain(&wcd937x->mbhc->notifier,
+					     WCD_EVENT_POST_HPHR_PA_OFF,
+					     &wcd937x->mbhc->wcd_mbhc);
 		snd_soc_update_bits(codec, WCD937X_ANA_HPH, 0x10, 0x00);
 		break;
 	};
@@ -580,8 +587,16 @@ static int wcd937x_codec_enable_hphl_pa(struct snd_soc_dapm_widget *w,
 				    wcd937x->rx_swr_dev->dev_num,
 				    true);
 		break;
+	case SND_SOC_DAPM_PRE_PMD:
+		blocking_notifier_call_chain(&wcd937x->mbhc->notifier,
+					     WCD_EVENT_PRE_HPHL_PA_OFF,
+					     &wcd937x->mbhc->wcd_mbhc);
+		break;
 	case SND_SOC_DAPM_POST_PMD:
 		usleep_range(7000, 7010);
+		blocking_notifier_call_chain(&wcd937x->mbhc->notifier,
+					     WCD_EVENT_POST_HPHL_PA_OFF,
+					     &wcd937x->mbhc->wcd_mbhc);
 		snd_soc_update_bits(codec, WCD937X_ANA_HPH, 0x20, 0x00);
 		break;
 	};
@@ -1093,15 +1108,15 @@ int wcd937x_micbias_control(struct snd_soc_codec *codec,
 			snd_soc_update_bits(codec, WCD937X_MICB2_TEST_CTL_2, 0x01, 0x01);
 			snd_soc_update_bits(codec, WCD937X_MICB3_TEST_CTL_2, 0x01, 0x01);
 			snd_soc_update_bits(codec, micb_reg, 0xC0, 0x40);
-			if (post_on_event)
-				blocking_notifier_call_chain(&wcd937x->notifier,
-							     post_on_event,
-							     &wcd937x->mbhc);
+			if (post_on_event && wcd937x->mbhc)
+				blocking_notifier_call_chain(
+					&wcd937x->mbhc->notifier, post_on_event,
+					&wcd937x->mbhc->wcd_mbhc);
 		}
-		if (is_dapm && post_dapm_on)
-			blocking_notifier_call_chain(&wcd937x->notifier,
-						     post_dapm_on,
-						     &wcd937x->mbhc);
+		if (is_dapm && post_dapm_on && wcd937x->mbhc)
+			blocking_notifier_call_chain(
+				&wcd937x->mbhc->notifier, post_dapm_on,
+				&wcd937x->mbhc->wcd_mbhc);
 		break;
 	case MICB_DISABLE:
 		if (wcd937x->micb_ref[micb_index] > 0)
@@ -1111,20 +1126,21 @@ int wcd937x_micbias_control(struct snd_soc_codec *codec,
 			snd_soc_update_bits(codec, micb_reg, 0xC0, 0x80);
 		else if ((wcd937x->micb_ref[micb_index] == 0) &&
 			 (wcd937x->pullup_ref[micb_index] == 0)) {
-			if (pre_off_event)
-				blocking_notifier_call_chain(&wcd937x->notifier,
-							     pre_off_event,
-							     &wcd937x->mbhc);
+			if (pre_off_event && wcd937x->mbhc)
+				blocking_notifier_call_chain(
+					&wcd937x->mbhc->notifier, pre_off_event,
+					&wcd937x->mbhc->wcd_mbhc);
 			snd_soc_update_bits(codec, micb_reg, 0xC0, 0x00);
-			if (post_off_event)
-				blocking_notifier_call_chain(&wcd937x->notifier,
-							     post_off_event,
-							     &wcd937x->mbhc);
+			if (post_off_event && wcd937x->mbhc)
+				blocking_notifier_call_chain(
+					&wcd937x->mbhc->notifier,
+					post_off_event,
+					&wcd937x->mbhc->wcd_mbhc);
 		}
-		if (is_dapm && post_dapm_off)
-			blocking_notifier_call_chain(&wcd937x->notifier,
-							post_dapm_off,
-							&wcd937x->mbhc);
+		if (is_dapm && post_dapm_off && wcd937x->mbhc)
+			blocking_notifier_call_chain(
+				&wcd937x->mbhc->notifier, post_dapm_off,
+				&wcd937x->mbhc->wcd_mbhc);
 		break;
 	};
 
@@ -1368,11 +1384,11 @@ static const struct snd_soc_dapm_widget wcd937x_dapm_widgets[] = {
 	SND_SOC_DAPM_PGA_E("HPHL PGA", WCD937X_ANA_HPH, 7, 0, NULL, 0,
 				wcd937x_codec_enable_hphl_pa,
 				SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
-				SND_SOC_DAPM_POST_PMD),
+				SND_SOC_DAPM_PRE_PMD | SND_SOC_DAPM_POST_PMD),
 	SND_SOC_DAPM_PGA_E("HPHR PGA", WCD937X_ANA_HPH, 6, 0, NULL, 0,
 				wcd937x_codec_enable_hphr_pa,
 				SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
-				SND_SOC_DAPM_POST_PMD),
+				SND_SOC_DAPM_PRE_PMD | SND_SOC_DAPM_POST_PMD),
 
 	SND_SOC_DAPM_DAC_E("RDAC1", NULL, SND_SOC_NOPM, 0, 0,
 				wcd937x_codec_hphl_dac_event,
@@ -1568,6 +1584,95 @@ static const struct snd_soc_dapm_route wcd9375_audio_map[] = {
 
 };
 
+static ssize_t wcd937x_version_read(struct snd_info_entry *entry,
+				   void *file_private_data,
+				   struct file *file,
+				   char __user *buf, size_t count,
+				   loff_t pos)
+{
+	struct wcd937x_priv *priv;
+	char buffer[WCD937X_VERSION_ENTRY_SIZE];
+	int len = 0;
+
+	priv = (struct wcd937x_priv *) entry->private_data;
+	if (!priv) {
+		pr_err("%s: wcd937x priv is null\n", __func__);
+		return -EINVAL;
+	}
+
+	switch (priv->version) {
+	case WCD937X_VERSION_1_0:
+		len = snprintf(buffer, sizeof(buffer), "WCD937X_1_0\n");
+		break;
+	default:
+		len = snprintf(buffer, sizeof(buffer), "VER_UNDEFINED\n");
+	}
+
+	return simple_read_from_buffer(buf, count, &pos, buffer, len);
+}
+
+static struct snd_info_entry_ops wcd937x_info_ops = {
+	.read = wcd937x_version_read,
+};
+
+/*
+ * wcd937x_info_create_codec_entry - creates wcd937x module
+ * @codec_root: The parent directory
+ * @codec: Codec instance
+ *
+ * Creates wcd937x module and version entry under the given
+ * parent directory.
+ *
+ * Return: 0 on success or negative error code on failure.
+ */
+int wcd937x_info_create_codec_entry(struct snd_info_entry *codec_root,
+				   struct snd_soc_codec *codec)
+{
+	struct snd_info_entry *version_entry;
+	struct wcd937x_priv *priv;
+	struct snd_soc_card *card;
+
+	if (!codec_root || !codec)
+		return -EINVAL;
+
+	priv = snd_soc_codec_get_drvdata(codec);
+	if (priv->entry) {
+		dev_dbg(priv->dev,
+			"%s:wcd937x module already created\n", __func__);
+		return 0;
+	}
+	card = codec->component.card;
+	priv->entry = snd_info_create_subdir(codec_root->module,
+					     "wcd937x", codec_root);
+	if (!priv->entry) {
+		dev_dbg(codec->dev, "%s: failed to create wcd937x entry\n",
+			__func__);
+		return -ENOMEM;
+	}
+	version_entry = snd_info_create_card_entry(card->snd_card,
+						   "version",
+						   priv->entry);
+	if (!version_entry) {
+		dev_dbg(codec->dev, "%s: failed to create wcd937x version entry\n",
+			__func__);
+		return -ENOMEM;
+	}
+
+	version_entry->private_data = priv;
+	version_entry->size = WCD937X_VERSION_ENTRY_SIZE;
+	version_entry->content = SNDRV_INFO_CONTENT_DATA;
+	version_entry->c.ops = &wcd937x_info_ops;
+
+	if (snd_info_register(version_entry) < 0) {
+		snd_info_free_entry(version_entry);
+		return -ENOMEM;
+	}
+	priv->version_entry = version_entry;
+
+	return 0;
+}
+EXPORT_SYMBOL(wcd937x_info_create_codec_entry);
+
 static int wcd937x_soc_codec_probe(struct snd_soc_codec *codec)
 {
 	struct wcd937x_priv *wcd937x = snd_soc_codec_get_drvdata(codec);
@@ -1627,13 +1732,9 @@ static int wcd937x_soc_codec_probe(struct snd_soc_codec *codec)
 				__func__);
 			goto err_hwdep;
 		}
-		ret = snd_soc_dapm_new_widgets(dapm->card);
-		if (ret < 0) {
-			dev_err(codec->dev, "%s: Failed to add widgets\n",
-				__func__);
-			goto err_hwdep;
-		}
+		snd_soc_dapm_sync(dapm);
 	}
+	wcd937x->version = WCD937X_VERSION_1_0;
 	return ret;
 
 err_hwdep:
@@ -1718,6 +1819,65 @@ int wcd937x_reset(struct device *dev)
 	return rc;
 }
 
+static int wcd937x_read_of_property_u32(struct device *dev, const char *name,
+					u32 *val)
+{
+	int rc = 0;
+
+	rc = of_property_read_u32(dev->of_node, name, val);
+	if (rc)
+		dev_err(dev, "%s: Looking up %s property in node %s failed\n",
+			__func__, name, dev->of_node->full_name);
+
+	return rc;
+}
+
+static void wcd937x_dt_parse_micbias_info(struct device *dev,
+					  struct wcd937x_micbias_setting *mb)
+{
+	u32 prop_val = 0;
+	int rc = 0;
+
+	/* MB1 */
+	if (of_find_property(dev->of_node, "qcom,cdc-micbias1-mv",
+				    NULL)) {
+		rc = wcd937x_read_of_property_u32(dev,
+						  "qcom,cdc-micbias1-mv",
+						  &prop_val);
+		if (!rc)
+			mb->micb1_mv = prop_val;
+	} else {
+		dev_info(dev, "%s: Micbias1 DT property not found\n",
+			__func__);
+	}
+
+	/* MB2 */
+	if (of_find_property(dev->of_node, "qcom,cdc-micbias2-mv",
+				    NULL)) {
+		rc = wcd937x_read_of_property_u32(dev,
+						  "qcom,cdc-micbias2-mv",
+						  &prop_val);
+		if (!rc)
+			mb->micb2_mv = prop_val;
+	} else {
+		dev_info(dev, "%s: Micbias2 DT property not found\n",
+			__func__);
+	}
+
+	/* MB3 */
+	if (of_find_property(dev->of_node, "qcom,cdc-micbias3-mv",
+				    NULL)) {
+		rc = wcd937x_read_of_property_u32(dev,
+						  "qcom,cdc-micbias3-mv",
+						  &prop_val);
+		if (!rc)
+			mb->micb3_mv = prop_val;
+	} else {
+		dev_info(dev, "%s: Micbias3 DT property not found\n",
+			__func__);
+	}
+}
+
 struct wcd937x_pdata *wcd937x_populate_dt_data(struct device *dev)
 {
 	struct wcd937x_pdata *pdata = NULL;
@@ -1748,6 +1908,7 @@ struct wcd937x_pdata *wcd937x_populate_dt_data(struct device *dev)
 
 	pdata->rx_slave = of_parse_phandle(dev->of_node, "qcom,rx-slave", 0);
 	pdata->tx_slave = of_parse_phandle(dev->of_node, "qcom,tx-slave", 0);
+	wcd937x_dt_parse_micbias_info(dev, &pdata->micbias);
 
 	return pdata;
 }
@@ -1769,7 +1930,8 @@ static int wcd937x_bind(struct device *dev)
 		dev_err(dev, "%s: Fail to obtain platform data\n", __func__);
 		return -EINVAL;
 	}
-
+	wcd937x->dev = dev;
+	wcd937x->dev->platform_data = pdata;
 	wcd937x->rst_np = pdata->rst_np;
 	ret = msm_cdc_init_supplies(dev, &wcd937x->supplies,
 				    pdata->regulator, pdata->num_supplies);
@@ -1847,7 +2009,7 @@ static int wcd937x_bind(struct device *dev)
 	ret = wcd_irq_init(&wcd937x->irq_info, &wcd937x->virq);
 
 	if (ret) {
-		dev_err(wcd937x->dev, "%s: IRQ init failed: %d\n",
+		dev_err(dev, "%s: IRQ init failed: %d\n",
 			__func__, ret);
 		goto err;
 	}
