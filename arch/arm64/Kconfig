@@ -1535,3 +1535,54 @@ source "arch/arm64/crypto/Kconfig"
 endif
 
 source "lib/Kconfig"
+
+menu "Xiaomi configuration options"
+
+config MACH_XIAOMI
+        bool "Xiaomi device"
+        depends on ARCH_QCOM
+        help
+          Support for Xiaomi products
+
+config MACH_XIAOMI_SDMMAGPIE
+        bool "Xiaomi SDMMAGPIE"
+        depends on ARCH_SDMMAGPIE
+        select MACH_XIAOMI
+        help
+          Support for Sdmmagpie-based Xiaomi variants
+
+config MACH_XIAOMI_SM6150
+        bool "Xiaomi SM6150"
+        depends on ARCH_SM6150
+        select MACH_XIAOMI
+        help
+          Support for Sm6150-based Xiaomi variants
+
+menu "Xiaomi board selection"
+
+config MACH_XIAOMI_F4
+        bool "tucana board"
+        select MACH_XIAOMI_SDMMAGPIE
+        help
+          Support for Xiaomi CC9 Pro
+
+config MACH_XIAOMI_F7B
+        bool "violet board"
+        select MACH_XIAOMI_SM6150
+        help
+          Support for Redmi Note 7 Pro
+
+config MACH_XIAOMI_F10
+        bool "davinci board"
+        select MACH_XIAOMI_SDMMAGPIE
+        help
+          Support for Redmi K20
+
+config MACH_XIAOMI_G7B
+        bool "phoenix board"
+        select MACH_XIAOMI_SDMMAGPIE
+        help
+          Support for Redmi K30
+endmenu
+
+endmenu
