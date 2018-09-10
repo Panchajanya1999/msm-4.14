@@ -1716,7 +1716,7 @@ static int wcd937x_soc_codec_probe(struct snd_soc_codec *codec)
 
 	wcd937x_init_reg(codec);
 
-	if (wcd937x->variant != WCD9375_VARIANT) {
+	if (wcd937x->variant == WCD9375_VARIANT) {
 		ret = snd_soc_dapm_new_controls(dapm, wcd9375_dapm_widgets,
 					ARRAY_SIZE(wcd9375_dapm_widgets));
 		if (ret < 0) {
@@ -1987,6 +1987,7 @@ static int wcd937x_bind(struct device *dev)
 		ret = -ENODEV;
 		goto err;
 	}
+
 	wcd937x->regmap = devm_regmap_init_swr(wcd937x->tx_swr_dev,
 					       &wcd937x_regmap_config);
 	if (!wcd937x->regmap) {

@@ -872,6 +872,7 @@ void swr_unregister_master(struct swr_master *master)
 	device_unregister(&master->dev);
 }
 EXPORT_SYMBOL(swr_unregister_master);
+
 /**
  * swr_register_master - register soundwire master controller
  * @master: master to be registered

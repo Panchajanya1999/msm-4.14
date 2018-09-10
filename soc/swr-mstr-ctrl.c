@@ -302,13 +302,13 @@ static int swr_master_bulk_write(struct swr_mstr_ctrl *swrm, u32 *reg_addr,
 				u32 *val, unsigned int length)
 {
 	int i = 0;
+
 	if (swrm->bulk_write)
 		swrm->bulk_write(swrm->handle, reg_addr, val, length);
 	else {
 		mutex_lock(&swrm->iolock);
 		for (i = 0; i < length; i++) {
 		/* wait for FIFO WR command to complete to avoid overflow */
-
 			usleep_range(100, 105);
 			swr_master_write(swrm, reg_addr[i], val[i]);
 		}
@@ -1851,8 +1851,6 @@ static int swrm_runtime_suspend(struct device *dev)
 	struct swr_device *swr_dev;
 	int current_state = 0;
 
-	if (1)
-		return 0;
 	dev_dbg(dev, "%s: pm_runtime: suspend state: %d\n",
 		__func__, swrm->state);
 	mutex_lock(&swrm->reslock);
