@@ -465,6 +465,14 @@ static void wma_vdev_detach_callback(void *ctx)
 		}
 	}
 
+	if (iface->roam_scan_stats_req) {
+		struct sir_roam_scan_stats *roam_scan_stats_req =
+						iface->roam_scan_stats_req;
+
+		iface->roam_scan_stats_req = NULL;
+		qdf_mem_free(roam_scan_stats_req);
+	}
+
 	wma_vdev_deinit(iface);
 	qdf_mem_zero(iface, sizeof(*iface));
 	wma_vdev_init(iface);
@@ -1800,7 +1808,7 @@ static int wma_remove_bss_peer(tp_wma_handle wma, void *pdev,
 
 	peer = cdp_peer_get_ref_by_addr(soc, pdev, mac_addr,
 					&peer_id,
-					PEER_DEBUG_ID_OL_INTERNAL);
+					PEER_DEBUG_ID_WMA_DEL_BSS);
 	if (!peer) {
 		WMA_LOGE(FL("peer NULL for vdev_id = %d"), vdev_id);
 		wma_cleanup_target_req_param(req_msg);
@@ -1828,7 +1836,7 @@ static int wma_remove_bss_peer(tp_wma_handle wma, void *pdev,
 	}
 	if (peer)
 		cdp_peer_release_ref(soc, peer,
-				     PEER_DEBUG_ID_OL_INTERNAL);
+				     PEER_DEBUG_ID_WMA_DEL_BSS);
 	return ret_value;
 }
 
@@ -2110,8 +2118,8 @@ int wma_vdev_stop_resp_handler(void *handle, uint8_t *cmd_param_info,
 			(tpLinkStateParams) req_msg->user_data;
 
 		peer = cdp_peer_get_ref_by_addr(soc, pdev, params->bssid,
-						&peer_id,
-						PEER_DEBUG_ID_OL_INTERNAL);
+					&peer_id,
+					PEER_DEBUG_ID_WMA_VDEV_STOP_RESP);
 		if (peer) {
 			WMA_LOGP(FL("Deleting peer %pM vdev id %d"),
 				 params->bssid, req_msg->vdev_id);
@@ -2147,7 +2155,7 @@ int wma_vdev_stop_resp_handler(void *handle, uint8_t *cmd_param_info,
 free_req_msg:
 	if (peer)
 		cdp_peer_release_ref(soc, peer,
-				     PEER_DEBUG_ID_OL_INTERNAL);
+				     PEER_DEBUG_ID_WMA_VDEV_STOP_RESP);
 	qdf_mc_timer_destroy(&req_msg->event_timeout);
 	qdf_mem_free(req_msg);
 	return status;
@@ -3276,11 +3284,6 @@ struct wma_target_req *wma_fill_hold_req(tp_wma_handle wma,
 	struct wma_target_req *req;
 	QDF_STATUS status;
 
-	if (!cds_is_target_ready()) {
-		WMA_LOGE("target not ready, drop the request");
-		return NULL;
-	}
-
 	req = qdf_mem_malloc(sizeof(*req));
 	if (!req) {
 		WMA_LOGE(FL("Failed to allocate memory for msg %d vdev %d"),
@@ -3615,11 +3618,6 @@ struct wma_target_req *wma_fill_vdev_req(tp_wma_handle wma,
 {
 	struct wma_target_req *req;
 	QDF_STATUS status;
-
-	if (!cds_is_target_ready()) {
-		WMA_LOGE("target not ready, drop the request");
-		return NULL;
-	}
 
 	req = qdf_mem_malloc(sizeof(*req));
 	if (!req) {
@@ -5050,9 +5048,8 @@ static void wma_add_sta_req_sta_mode(tp_wma_handle wma, tpAddStaParams params)
 	if (params->enableAmpduPs && (params->htCapable || params->vhtCapable))
 		wma_set_ppsconfig(params->smesessionId,
 				  WMA_VHT_PPS_DELIM_CRC_FAIL, 1);
-	if (WMI_SERVICE_EXT_IS_ENABLED(wma->wmi_service_bitmap,
-			wma->wmi_service_ext_bitmap,
-			WMI_SERVICE_LISTEN_INTERVAL_OFFLOAD_SUPPORT)) {
+	if (wmi_service_enabled(wma->wmi_handle,
+				wmi_service_listen_interval_offload_support)) {
 		WMA_LOGD("%s: listen interval offload enabled, setting params",
 			 __func__);
 		status = wma_vdev_set_param(wma->wmi_handle,
@@ -5497,6 +5494,14 @@ void wma_delete_bss_ho_fail(tp_wma_handle wma, tpDeleteBssParams params)
 		qdf_mem_free(rcpi_req);
 	}
 
+	if (iface->roam_scan_stats_req) {
+		struct sir_roam_scan_stats *roam_scan_stats_req =
+						iface->roam_scan_stats_req;
+
+		iface->roam_scan_stats_req = NULL;
+		qdf_mem_free(roam_scan_stats_req);
+	}
+
 	qdf_mem_zero(&iface->ns_offload_req,
 			sizeof(iface->ns_offload_req));
 	qdf_mem_zero(&iface->arp_offload_req,
@@ -5663,6 +5668,14 @@ void wma_delete_bss(tp_wma_handle wma, tpDeleteBssParams params)
 
 		iface->rcpi_req = NULL;
 		qdf_mem_free(rcpi_req);
+	}
+
+	if (iface->roam_scan_stats_req) {
+		struct sir_roam_scan_stats *roam_scan_stats_req =
+						iface->roam_scan_stats_req;
+
+		iface->roam_scan_stats_req = NULL;
+		qdf_mem_free(roam_scan_stats_req);
 	}
 
 	if (wlan_op_mode_ibss == cdp_get_opmode(soc, txrx_vdev))
