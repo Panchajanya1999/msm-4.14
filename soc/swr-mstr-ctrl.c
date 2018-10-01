@@ -1257,7 +1257,7 @@ static irqreturn_t swr_mstr_interrupt(int irq, void *dev)
 			if (ret) {
 				dev_err(swrm->dev, "no slave alert found.\
 						spurious interrupt\n");
-				return ret;
+				break;
 			}
 			swrm_cmd_fifo_rd_cmd(swrm, &temp, devnum, 0x0,
 						SWRS_SCP_INT_STATUS_CLEAR_1, 1);
@@ -1382,10 +1382,6 @@ static void swrm_wakeup_work(struct work_struct *work)
 		return;
 	}
 	pm_runtime_get_sync(swrm->dev);
-
-	swrm_cmd_fifo_wr_cmd(swrm, 0x4, 0xF, 0xF,
-			     SWRS_SCP_INT_STATUS_MASK_1);
-
 	pm_runtime_mark_last_busy(swrm->dev);
 	pm_runtime_put_autosuspend(swrm->dev);
 }
@@ -1902,14 +1898,14 @@ static int swrm_runtime_resume(struct device *dev)
 					goto exit;
 				}
 			}
+			swr_master_write(swrm, SWRM_COMP_SW_RESET, 0x01);
+			swr_master_write(swrm, SWRM_COMP_SW_RESET, 0x01);
+			swrm_master_init(swrm);
 		} else {
 			/*wake up from clock stop*/
 			swr_master_write(swrm, SWRM_MCP_BUS_CTRL_ADDR, 0x2);
 			usleep_range(100, 105);
 		}
-		swr_master_write(swrm, SWRM_COMP_SW_RESET, 0x01);
-		swr_master_write(swrm, SWRM_COMP_SW_RESET, 0x01);
-		swrm_master_init(swrm);
 	}
 exit:
 	pm_runtime_set_autosuspend_delay(&pdev->dev, auto_suspend_timer);
