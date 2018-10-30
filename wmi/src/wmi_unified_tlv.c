@@ -9942,10 +9942,48 @@ static uint8_t tdls_get_wmi_offchannel_mode(uint8_t tdls_sw_mode)
 	}
 	return off_chan_mode;
 }
+
+/**
+ * tdls_get_wmi_offchannel_bw - Get WMI tdls off channel Bandwidth
+ * @tdls_sw_mode: tdls_sw_mode
+ *
+ * This function returns wmi tdls offchannel bandwidth
+ *
+ * Return: TDLS offchannel bandwidth
+ */
+static uint8_t tdls_get_wmi_offchannel_bw(uint16_t tdls_off_ch_bw_offset)
+{
+	uint8_t off_chan_bw;
+
+	switch (tdls_off_ch_bw_offset) {
+	case BW20:
+		off_chan_bw = WMI_TDLS_OFFCHAN_20MHZ;
+		break;
+	case BW40_LOW_PRIMARY:
+	case BW40_HIGH_PRIMARY:
+		off_chan_bw = WMI_TDLS_OFFCHAN_40MHZ;
+		break;
+	case BW80:
+		off_chan_bw = WMI_TDLS_OFFCHAN_80MHZ;
+	case BWALL:
+		off_chan_bw = WMI_TDLS_OFFCHAN_160MHZ;
+	default:
+		WMI_LOGD(FL("unknown tdls_offchannel bw offset %d"),
+			 off_chan_bw);
+		off_chan_bw = WMI_TDLS_OFFCHAN_20MHZ;
+	}
+	return off_chan_bw;
+}
+
 #else
 static uint8_t tdls_get_wmi_offchannel_mode(uint8_t tdls_sw_mode)
 {
 	return WMI_TDLS_DISABLE_OFFCHANNEL;
+}
+
+static uint8_t tdls_get_wmi_offchannel_bw(uint16_t tdls_off_ch_bw_offset)
+{
+	return WMI_TDLS_OFFCHAN_20MHZ;
 }
 #endif
 
@@ -9984,7 +10022,9 @@ static QDF_STATUS send_set_tdls_offchan_mode_cmd_tlv(wmi_unified_t wmi_handle,
 		tdls_get_wmi_offchannel_mode(chan_switch_params->tdls_sw_mode);
 	cmd->is_peer_responder = chan_switch_params->is_responder;
 	cmd->offchan_num = chan_switch_params->tdls_off_ch;
-	cmd->offchan_bw_bitmap = chan_switch_params->tdls_off_ch_bw_offset;
+	cmd->offchan_bw_bitmap =
+		tdls_get_wmi_offchannel_bw(
+			chan_switch_params->tdls_off_ch_bw_offset);
 	cmd->offchan_oper_class = chan_switch_params->oper_class;
 
 	WMI_LOGD(FL("Peer MAC Addr mac_addr31to0: 0x%x, mac_addr47to32: 0x%x"),
@@ -16859,6 +16899,14 @@ static QDF_STATUS extract_ndp_confirm_tlv(wmi_unified_t wmi_handle,
 			 __func__, fixed_params->ndp_app_info_len);
 		return QDF_STATUS_E_INVAL;
 	}
+	if (fixed_params->num_ndp_channels > event->num_ndp_channel_list ||
+	    fixed_params->num_ndp_channels > event->num_nss_list) {
+		WMI_LOGE(FL("NDP Ch count %d greater than NDP Ch TLV len (%d) or NSS TLV len (%d)"),
+			 fixed_params->num_ndp_channels,
+			 event->num_ndp_channel_list,
+			 event->num_nss_list);
+		return QDF_STATUS_E_INVAL;
+	}
 
 	rsp->vdev =
 		wlan_objmgr_get_vdev_by_id_from_psoc(wmi_handle->soc->wmi_psoc,
@@ -17015,15 +17063,6 @@ static QDF_STATUS extract_ndp_end_ind_tlv(wmi_unified_t wmi_handle,
 	if (!(*rsp)) {
 		WMI_LOGE("Failed to allocate memory");
 		return QDF_STATUS_E_NOMEM;
-	}
-
-	(*rsp)->vdev = wlan_objmgr_get_vdev_by_opmode_from_psoc(
-			wmi_handle->soc->wmi_psoc, QDF_NDI_MODE, WLAN_NAN_ID);
-	if (!(*rsp)->vdev) {
-		WMI_LOGE("vdev is null");
-		qdf_mem_free(*rsp);
-		*rsp = NULL;
-		return QDF_STATUS_E_INVAL;
 	}
 
 	(*rsp)->num_ndp_ids = event->num_ndp_end_indication_list;
@@ -18631,6 +18670,12 @@ static QDF_STATUS extract_all_stats_counts_tlv(wmi_unified_t wmi_handle,
 	    WMITLV_GET_TLVLEN(rssi_event->tlv_header))
 		return QDF_STATUS_SUCCESS;
 
+	if (rssi_event->num_per_chain_rssi_stats >=
+	    WMITLV_GET_TLVLEN(rssi_event->tlv_header)) {
+		WMI_LOGE("num_per_chain_rssi_stats:%u is out of bounds",
+			 rssi_event->num_per_chain_rssi_stats);
+		return QDF_STATUS_E_INVAL;
+	}
 	stats_param->num_rssi_stats = rssi_event->num_per_chain_rssi_stats;
 
 	return QDF_STATUS_SUCCESS;
@@ -20444,6 +20489,10 @@ static QDF_STATUS extract_reg_ch_avoid_event_tlv(
 
 	if (!ch_avoid_ind) {
 		WMI_LOGE("Invalid channel avoid indication buffer");
+		return QDF_STATUS_E_INVAL;
+	}
+	if (param_buf->num_avd_freq_range < afr_fixed_param->num_freq_ranges) {
+		WMI_LOGE(FL("no.of freq ranges exceeded the limit"));
 		return QDF_STATUS_E_INVAL;
 	}
 	num_freq_ranges = (afr_fixed_param->num_freq_ranges >
