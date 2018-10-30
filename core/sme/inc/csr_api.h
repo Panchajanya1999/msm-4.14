@@ -1200,6 +1200,8 @@ typedef struct tagCsrConfigParam {
 #endif
 	uint8_t allowDFSChannelRoam;
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
+	uint32_t roam_preauth_retry_count;
+	uint32_t roam_preauth_no_ack_timeout;
 	bool isRoamOffloadEnabled;
 #endif
 	bool obssEnabled;
@@ -1655,7 +1657,8 @@ typedef QDF_STATUS (*csr_roam_complete_cb)(void *context,
 					   uint32_t roam_id,
 					   eRoamCmdStatus roam_status,
 					   eCsrRoamResult roam_result);
-typedef QDF_STATUS (*csr_session_open_cb)(uint8_t session_id);
+typedef QDF_STATUS (*csr_session_open_cb)(uint8_t session_id,
+					  QDF_STATUS qdf_status);
 typedef QDF_STATUS (*csr_session_close_cb)(uint8_t session_id);
 
 #define CSR_IS_START_IBSS(pProfile) (eCSR_BSS_TYPE_START_IBSS == \

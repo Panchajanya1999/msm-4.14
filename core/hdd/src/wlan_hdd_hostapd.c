@@ -499,8 +499,10 @@ static int __hdd_hostapd_stop(struct net_device *dev)
 
 	hdd_enter_dev(dev);
 	ret = wlan_hdd_validate_context(hdd_ctx);
-	if (ret)
+	if (ret) {
+		set_bit(DOWN_DURING_SSR, &adapter->event_flags);
 		return ret;
+	}
 
 	/*
 	 * Some tests requires to do "ifconfig down" only to bring
@@ -1874,6 +1876,7 @@ QDF_STATUS hdd_hostapd_sap_event_cb(tpSap_Event pSapEvent,
 		 * in another place
 		 */
 		ap_ctx->bss_stop_reason = BSS_STOP_REASON_INVALID;
+		ap_ctx->ap_active = false;
 		goto stopbss;
 
 	case eSAP_DFS_CAC_START:
@@ -2560,8 +2563,10 @@ stopbss:
 		 * not be touched since they are now subject to being deleted
 		 * by another thread
 		 */
-		if (eSAP_STOP_BSS_EVENT == sapEvent)
+		if (eSAP_STOP_BSS_EVENT == sapEvent) {
 			qdf_event_set(&hostapd_state->qdf_stop_bss_event);
+			hdd_bus_bw_compute_timer_try_stop(hdd_ctx);
+		}
 
 		hdd_ipa_set_tx_flow_info();
 	}

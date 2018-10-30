@@ -1147,7 +1147,7 @@ enum hdd_dot11_mode {
  * gEnableEarlyStopScan - Set early stop scan
  * @Min: 0
  * @Max: 1
- * @Default: 1
+ * @Default: 0
  *
  * This ini is used to set early stop scan. Early stop
  * scan is a feature for roaming to stop the scans at
@@ -1165,7 +1165,7 @@ enum hdd_dot11_mode {
 #define CFG_EARLY_STOP_SCAN_ENABLE           "gEnableEarlyStopScan"
 #define CFG_EARLY_STOP_SCAN_ENABLE_MIN       (0)
 #define CFG_EARLY_STOP_SCAN_ENABLE_MAX       (1)
-#define CFG_EARLY_STOP_SCAN_ENABLE_DEFAULT   (1)
+#define CFG_EARLY_STOP_SCAN_ENABLE_DEFAULT   (0)
 
 /*
  * <ini>
@@ -5444,7 +5444,7 @@ enum hdd_link_speed_rpt_type {
 #define CFG_REPORT_MAX_LINK_SPEED                  "gReportMaxLinkSpeed"
 #define CFG_REPORT_MAX_LINK_SPEED_MIN              (eHDD_LINK_SPEED_REPORT_ACTUAL)
 #define CFG_REPORT_MAX_LINK_SPEED_MAX              (eHDD_LINK_SPEED_REPORT_MAX_SCALED)
-#define CFG_REPORT_MAX_LINK_SPEED_DEFAULT          (eHDD_LINK_SPEED_REPORT_MAX_SCALED)
+#define CFG_REPORT_MAX_LINK_SPEED_DEFAULT          (eHDD_LINK_SPEED_REPORT_ACTUAL)
 
 /*
  * <ini>
@@ -10719,7 +10719,7 @@ enum hdd_wext_control {
  * gAutoBmpsTimerValue - Set Auto BMPS Timer value
  * @Min: 0
  * @Max: 120
- * @Default: 30
+ * @Default: 90
  *
  * This ini is used to set Auto BMPS Timer value in seconds
  *
@@ -10734,7 +10734,7 @@ enum hdd_wext_control {
 #define CFG_AUTO_PS_ENABLE_TIMER_NAME          "gAutoBmpsTimerValue"
 #define CFG_AUTO_PS_ENABLE_TIMER_MIN           (0)
 #define CFG_AUTO_PS_ENABLE_TIMER_MAX           (120)
-#define CFG_AUTO_PS_ENABLE_TIMER_DEFAULT       (30)
+#define CFG_AUTO_PS_ENABLE_TIMER_DEFAULT       (90)
 
 #ifdef WLAN_ICMP_DISABLE_PS
 /*
@@ -14769,6 +14769,57 @@ enum hdd_external_acs_policy {
 #define CFG_MWS_COEX_5G_NR_PWR_LIMIT_DEFAULT   (0x00000000)
 #endif
 
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+/*
+ * <ini>
+ * roam_preauth_retry_count
+ *
+ * @Min: 1
+ * @Max: 10
+ * @Default: 5
+ *
+ * The maximum number of software retries for preauth or
+ * reassoc made before picking up the next candidate for
+ * connection during roaming.
+ *
+ * Related: N/A
+ *
+ * Supported Features: Roaming
+ *
+ * Usage: Internal/External
+ *
+ * </ini>
+ */
+#define CFG_ROAM_PREAUTH_RETRY_COUNT_NAME    "roam_preauth_retry_count"
+#define CFG_ROAM_PREAUTH_RETRY_COUNT_MIN     (1)
+#define CFG_ROAM_PREAUTH_RETRY_COUNT_MAX     (10)
+#define CFG_ROAM_PREAUTH_RETRY_COUNT_DEFAULT (5)
+
+/*
+ * <ini>
+ * roam_preauth_no_ack_timeout
+ *
+ * @Min: 5
+ * @Max: 50
+ * @Default: 5
+ *
+ * Time to wait (in ms) after sending an preauth or reassoc
+ * request which didn’t have an ack, before considering
+ * it as a failure and making another software retry.
+ *
+ * Related: N/A
+ *
+ * Supported Features: Roaming
+ *
+ * Usage: Internal/External
+ *
+ * </ini>
+ */
+#define CFG_ROAM_PREAUTH_NO_ACK_TIMEOUT_NAME    "roam_preauth_no_ack_timeout"
+#define CFG_ROAM_PREAUTH_NO_ACK_TIMEOUT_MIN     (5)
+#define CFG_ROAM_PREAUTH_NO_ACK_TIMEOUT_MAX     (50)
+#define CFG_ROAM_PREAUTH_NO_ACK_TIMEOUT_DEFAULT (5)
+#endif
 /*
  * <ini>
  * gSetBTCMode - Config BTC mode
@@ -15869,6 +15920,10 @@ struct hdd_config {
 	int16_t set_bt_interference_medium_ul;
 	int16_t set_bt_interference_high_ll;
 	int16_t set_bt_interference_high_ul;
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+	uint32_t roam_preauth_retry_count;
+	uint32_t roam_preauth_no_ack_timeout;
+#endif
 };
 
 #define VAR_OFFSET(_Struct, _Var) (offsetof(_Struct, _Var))

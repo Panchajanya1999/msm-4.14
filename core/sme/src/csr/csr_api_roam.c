@@ -2698,6 +2698,53 @@ void csr_set_11k_offload_config_param(struct csr_config *csr_config,
 		max_neighbor_report_req_cap;
 }
 
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+
+/**
+ * csr_get_roam_preauth_config_param() - Get the roam preauth params
+ *
+ * @csr_config: pointer to csr_config in MAC context
+ * @pParam: pointer to config params from HDD
+ *
+ * Return: none
+ */
+
+static void csr_get_roam_preauth_config_param(tCsrConfigParam *pparam,
+					      struct csr_config *cfg_params)
+{
+	pparam->roam_preauth_no_ack_timeout =
+		cfg_params->roam_preauth_no_ack_timeout;
+	pparam->roam_preauth_retry_count = cfg_params->roam_preauth_retry_count;
+}
+
+/**
+ * csr_change_default_roam_preauth_params() - Update roam preauth params
+ *
+ * @pmac: pointer to MAC context
+ * @pParam: pointer to config params from HDD
+ *
+ * Return: none
+ */
+static void csr_change_default_roam_preauth_params(tpAniSirGlobal pmac,
+						   tCsrConfigParam *pparam)
+{
+		pmac->roam.configParam.roam_preauth_retry_count =
+			pparam->roam_preauth_retry_count;
+		pmac->roam.configParam.roam_preauth_no_ack_timeout =
+			pparam->roam_preauth_no_ack_timeout;
+}
+#else
+static void csr_change_default_roam_preauth_params(tpAniSirGlobal pmac,
+						   tCsrConfigParam *pparam)
+{
+}
+
+static void csr_get_roam_preauth_config_param(tCsrConfigParam *pparam,
+					      struct csr_config *cfg_params)
+{
+}
+#endif
+
 QDF_STATUS csr_change_default_config_param(tpAniSirGlobal pMac,
 					   tCsrConfigParam *pParam)
 {
@@ -3025,6 +3072,7 @@ QDF_STATUS csr_change_default_config_param(tpAniSirGlobal pMac,
 			pParam->nSelect5GHzMargin;
 		pMac->roam.configParam.ho_delay_for_rx =
 			pParam->ho_delay_for_rx;
+		csr_change_default_roam_preauth_params(pMac, pParam);
 		pMac->roam.configParam.min_delay_btw_roam_scans =
 			pParam->min_delay_btw_roam_scans;
 		pMac->roam.configParam.roam_trigger_reason_bitmask =
@@ -3391,6 +3439,9 @@ QDF_STATUS csr_get_config_param(tpAniSirGlobal pMac, tCsrConfigParam *pParam)
 	pParam->max_amsdu_num = cfg_params->max_amsdu_num;
 	pParam->nSelect5GHzMargin = cfg_params->nSelect5GHzMargin;
 	pParam->ho_delay_for_rx = cfg_params->ho_delay_for_rx;
+
+	csr_get_roam_preauth_config_param(pParam, cfg_params);
+
 	pParam->min_delay_btw_roam_scans = cfg_params->min_delay_btw_roam_scans;
 	pParam->roam_trigger_reason_bitmask =
 			cfg_params->roam_trigger_reason_bitmask;
@@ -4272,7 +4323,7 @@ QDF_STATUS csr_roam_call_callback(tpAniSirGlobal pMac, uint32_t sessionId,
 				  uint32_t roamId,
 				  eRoamCmdStatus u1, eCsrRoamResult u2)
 {
-	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	QDF_STATUS ret, status = QDF_STATUS_SUCCESS;
 #ifdef FEATURE_WLAN_DIAG_SUPPORT_CSR
 	uint32_t rssi = 0;
 
@@ -4349,10 +4400,12 @@ QDF_STATUS csr_roam_call_callback(tpAniSirGlobal pMac, uint32_t sessionId,
 		   && (u2 == eCSR_ROAM_RESULT_CHANNEL_CHANGE_SUCCESS)) {
 		pSession->connectedProfile.operationChannel =
 			roam_info->channelChangeRespEvent->newChannelNumber;
-	} else if ((u1 == eCSR_ROAM_SESSION_OPENED) &&
-			(u2 == eCSR_ROAM_RESULT_NONE)) {
+	} else if (u1 == eCSR_ROAM_SESSION_OPENED) {
+		ret = (u2 == eCSR_ROAM_RESULT_SUCCESS) ?
+		      QDF_STATUS_SUCCESS : QDF_STATUS_E_FAILURE;
+
 		if (pSession->session_open_cb)
-			pSession->session_open_cb(sessionId);
+			pSession->session_open_cb(sessionId, ret);
 		else
 			sme_err("session_open_cb is not registered");
 	}
@@ -17162,16 +17215,23 @@ QDF_STATUS csr_reassoc(tpAniSirGlobal pMac, uint32_t sessionId,
 }
 
 static QDF_STATUS csr_roam_session_opened(tpAniSirGlobal pMac,
+					  QDF_STATUS qdf_status,
 					  uint32_t sessionId)
 {
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
-	struct csr_roam_info roamInfo;
+	struct csr_roam_info roam_info;
 
-	qdf_mem_set(&roamInfo, sizeof(struct csr_roam_info), 0);
-	status = csr_roam_call_callback(pMac, sessionId, &roamInfo, 0,
-					eCSR_ROAM_SESSION_OPENED,
-					eCSR_ROAM_RESULT_NONE);
+	qdf_mem_set(&roam_info, sizeof(struct csr_roam_info), 0);
 
+	if (QDF_IS_STATUS_ERROR(qdf_status)) {
+		status = csr_roam_call_callback(pMac, sessionId, &roam_info, 0,
+						eCSR_ROAM_SESSION_OPENED,
+						eCSR_ROAM_RESULT_FAILURE);
+	} else {
+		status = csr_roam_call_callback(pMac, sessionId, &roam_info, 0,
+						eCSR_ROAM_SESSION_OPENED,
+						eCSR_ROAM_RESULT_SUCCESS);
+	}
 	return status;
 }
 
@@ -17188,26 +17248,31 @@ QDF_STATUS csr_process_add_sta_session_rsp(tpAniSirGlobal pMac, uint8_t *pMsg)
 	rsp = (struct add_sta_self_params *) pMsg;
 	sme_debug("Add Sta self rsp status = %d", rsp->status);
 
-	if (QDF_STATUS_SUCCESS == rsp->status &&
-		(WMI_VDEV_TYPE_STA == rsp->type ||
-		(WMI_VDEV_TYPE_AP == rsp->type &&
-		 WMI_UNIFIED_VDEV_SUBTYPE_P2P_DEVICE == rsp->sub_type))) {
-		sme_debug("send SET IE msg to PE");
-		msg = qdf_mem_malloc(sizeof(*msg));
-		if (NULL == msg) {
-			sme_err("Memory allocation failed");
-			return QDF_STATUS_E_NOMEM;
-		}
+	if (QDF_IS_STATUS_SUCCESS(rsp->status)) {
+		if ((WMI_VDEV_TYPE_STA == rsp->type ||
+		    (WMI_VDEV_TYPE_AP == rsp->type &&
+		     WMI_UNIFIED_VDEV_SUBTYPE_P2P_DEVICE == rsp->sub_type))) {
+			sme_debug("send SET IE msg to PE");
+			msg = qdf_mem_malloc(sizeof(*msg));
+			if (NULL == msg) {
+				sme_err("Memory allocation failed");
+				return QDF_STATUS_E_NOMEM;
+			}
 
-		msg->msg_type = eWNI_SME_SET_IE_REQ;
-		msg->session_id = rsp->session_id;
-		msg->length = sizeof(*msg);
-		status = umac_send_mb_message_to_mac(msg);
-		if (!QDF_IS_STATUS_SUCCESS(status))
-			sme_err("Failed to send down the set IE req ");
+			msg->msg_type = eWNI_SME_SET_IE_REQ;
+			msg->session_id = rsp->session_id;
+			msg->length = sizeof(*msg);
+			status = umac_send_mb_message_to_mac(msg);
+			if (!QDF_IS_STATUS_SUCCESS(status))
+				sme_err("Failed to send down the set IE req ");
+		}
 	}
 
-	csr_roam_session_opened(pMac, rsp->session_id);
+	csr_roam_session_opened(pMac, rsp->status, rsp->session_id);
+
+	if (QDF_IS_STATUS_ERROR(rsp->status))
+		csr_cleanup_session(pMac, rsp->session_id);
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -17591,7 +17656,7 @@ csr_issue_del_sta_for_session_req(tpAniSirGlobal mac_ctx, uint32_t session_id,
 		sme_command->u.delStaSessionCmd.context = context;
 		qdf_mem_copy(sme_command->u.delStaSessionCmd.selfMacAddr,
 			     session_mac_addr, sizeof(tSirMacAddr));
-		status = csr_queue_sme_command(mac_ctx, sme_command, true);
+		status = csr_queue_sme_command(mac_ctx, sme_command, false);
 		if (!QDF_IS_STATUS_SUCCESS(status))
 			sme_err("fail to send message status = %d", status);
 	}
@@ -18433,6 +18498,10 @@ csr_update_roam_scan_offload_request(tpAniSirGlobal mac_ctx,
 	req_buf->RoamRssiCatGap = mac_ctx->roam.configParam.bCatRssiOffset;
 	req_buf->Select5GHzMargin = mac_ctx->roam.configParam.nSelect5GHzMargin;
 	req_buf->ho_delay_for_rx = mac_ctx->roam.configParam.ho_delay_for_rx;
+	req_buf->roam_preauth_retry_count =
+		mac_ctx->roam.configParam.roam_preauth_retry_count;
+	req_buf->roam_preauth_no_ack_timeout =
+		mac_ctx->roam.configParam.roam_preauth_no_ack_timeout;
 	req_buf->min_delay_btw_roam_scans =
 			mac_ctx->roam.configParam.min_delay_btw_roam_scans;
 	req_buf->roam_trigger_reason_bitmask =

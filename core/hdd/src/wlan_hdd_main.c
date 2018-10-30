@@ -907,6 +907,32 @@ int __wlan_hdd_validate_session_id(uint8_t session_id, const char *func)
 	return 0;
 }
 
+QDF_STATUS __wlan_hdd_validate_mac_address(struct qdf_mac_addr *mac_addr,
+					   const char *func)
+{
+	if (!mac_addr) {
+		hdd_err("Received NULL mac address (via %s)", func);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (qdf_is_macaddr_zero(mac_addr)) {
+		hdd_err("MAC is all zero (via %s)", func);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (qdf_is_macaddr_broadcast(mac_addr)) {
+		hdd_err("MAC is Broadcast (via %s)", func);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (QDF_NET_IS_MAC_MULTICAST(mac_addr->bytes)) {
+		hdd_err("MAC is Multicast (via %s)", func);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
 /**
  * wlan_hdd_validate_modules_state() - Check modules status
  * @hdd_ctx: HDD context pointer
@@ -3147,8 +3173,10 @@ static int __hdd_stop(struct net_device *dev)
 			 adapter->session_id, adapter->device_mode));
 
 	ret = wlan_hdd_validate_context(hdd_ctx);
-	if (0 != ret)
+	if (0 != ret) {
+		set_bit(DOWN_DURING_SSR, &adapter->event_flags);
 		return ret;
+	}
 
 	/* Nothing to be done if the interface is not opened */
 	if (false == test_bit(DEVICE_IFACE_OPENED, &adapter->event_flags)) {
@@ -3390,20 +3418,10 @@ static int __hdd_set_mac_address(struct net_device *dev, void *addr)
 		return -EINVAL;
 	}
 
-	if (qdf_is_macaddr_zero(&mac_addr)) {
-		hdd_err("MAC is all zero");
+	qdf_ret_status = wlan_hdd_validate_mac_address(&mac_addr);
+	if (QDF_IS_STATUS_ERROR(qdf_ret_status))
 		return -EINVAL;
-	}
 
-	if (qdf_is_macaddr_broadcast(&mac_addr)) {
-		hdd_err("MAC is Broadcast");
-		return -EINVAL;
-	}
-
-	if (ETHER_IS_MULTICAST(psta_mac_addr->sa_data)) {
-		hdd_err("MAC is Multicast");
-		return -EINVAL;
-	}
 	hdd_info("Changing MAC to " MAC_ADDRESS_STR " of the interface %s ",
 		 MAC_ADDR_ARRAY(mac_addr.bytes), dev->name);
 
@@ -3777,7 +3795,8 @@ static QDF_STATUS hdd_register_interface(struct hdd_adapter *adapter, bool rtnl_
 	return QDF_STATUS_SUCCESS;
 }
 
-QDF_STATUS hdd_sme_open_session_callback(uint8_t session_id)
+QDF_STATUS hdd_sme_open_session_callback(uint8_t session_id,
+					 QDF_STATUS qdf_status)
 {
 	struct hdd_adapter *adapter;
 	struct hdd_context *hdd_ctx;
@@ -3793,7 +3812,10 @@ QDF_STATUS hdd_sme_open_session_callback(uint8_t session_id)
 		hdd_err("NULL adapter for %d", session_id);
 		return QDF_STATUS_E_INVAL;
 	}
-	set_bit(SME_SESSION_OPENED, &adapter->event_flags);
+
+	if (qdf_status == QDF_STATUS_SUCCESS)
+		set_bit(SME_SESSION_OPENED, &adapter->event_flags);
+
 	qdf_event_set(&adapter->qdf_session_open_event);
 	hdd_debug("session %d opened", adapter->session_id);
 
@@ -4014,6 +4036,12 @@ int hdd_vdev_create(struct hdd_adapter *adapter,
 		errno = -ETIMEDOUT;
 		set_bit(SME_SESSION_OPENED, &adapter->event_flags);
 		goto hdd_vdev_destroy_procedure;
+	}
+
+	if (!test_bit(SME_SESSION_OPENED, &adapter->event_flags)) {
+		hdd_err("Session failed to open due to vdev create failure");
+		errno = -EINVAL;
+		goto objmgr_vdev_destroy_procedure;
 	}
 
 	/* firmware ready for component communication, raise vdev_ready event */
@@ -4811,11 +4839,13 @@ struct hdd_adapter *hdd_open_adapter(struct hdd_context *hdd_ctx, uint8_t sessio
 		return NULL;
 	}
 
-	if (macAddr == NULL) {
+	status = wlan_hdd_validate_mac_address((struct qdf_mac_addr *)macAddr);
+	if (QDF_IS_STATUS_ERROR(status)) {
 		/* Not received valid macAddr */
 		hdd_err("Unable to add virtual intf: Not able to get valid mac address");
 		return NULL;
 	}
+
 	status = hdd_check_for_existing_macaddr(hdd_ctx, macAddr);
 	if (QDF_STATUS_E_FAILURE == status) {
 		hdd_err("Duplicate MAC addr: " MAC_ADDRESS_STR
@@ -7582,8 +7612,6 @@ static void __hdd_bus_bw_work_handler(struct work_struct *work)
 	bool connected = false;
 	uint32_t ipa_tx_packets = 0, ipa_rx_packets = 0;
 
-	hdd_enter();
-
 	if (wlan_hdd_validate_context(hdd_ctx))
 		return;
 
@@ -7684,8 +7712,6 @@ restart_timer:
 		qdf_timer_mod(&hdd_ctx->bus_bw_timer,
 				hdd_ctx->config->busBandwidthComputeInterval);
 	qdf_spinlock_release(&hdd_ctx->bus_bw_timer_lock);
-
-	hdd_exit();
 }
 
 static void hdd_bus_bw_work_handler(struct work_struct *work)

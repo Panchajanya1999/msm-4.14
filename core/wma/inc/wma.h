@@ -90,6 +90,7 @@
 #define wma_warn(params...) QDF_TRACE_WARN(QDF_MODULE_ID_WMA, params)
 #define wma_info(params...) QDF_TRACE_INFO(QDF_MODULE_ID_WMA, params)
 #define wma_debug(params...) QDF_TRACE_DEBUG(QDF_MODULE_ID_WMA, params)
+#define wma_err_rl(params...) QDF_TRACE_ERROR_RL(QDF_MODULE_ID_WMA, params)
 
 #define WMA_DEBUG_ALWAYS
 
@@ -902,7 +903,6 @@ struct wma_txrx_node {
 	uint8_t wep_default_key_idx;
 	tSirHostOffloadReq arp_offload_req;
 	tSirHostOffloadReq ns_offload_req;
-	bool is_vdev_valid;
 #ifndef QCA_SUPPORT_CP_STATS
 	struct sir_vdev_wow_stats wow_stats;
 #endif
