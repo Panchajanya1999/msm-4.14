@@ -40,6 +40,7 @@
 #define CHANNEL_STATUS_MASK_INIT 0x0
 #define CHANNEL_STATUS_MASK 0x4
 #define AFE_API_VERSION_CLOCK_SET 1
+#define MSM_DAI_SYSFS_ENTRY_MAX_LEN 64
 
 #define DAI_FORMATS_S16_S24_S32_LE (SNDRV_PCM_FMTBIT_S16_LE | \
 				    SNDRV_PCM_FMTBIT_S24_LE | \
@@ -218,6 +219,7 @@ struct msm_dai_q6_spdif_dai_data {
 	u16 port_id;
 	struct afe_spdif_port_config spdif_port;
 	struct afe_event_fmt_update fmt_event;
+	struct kobject *kobj;
 };
 
 struct msm_dai_q6_spdif_event_msg {
@@ -365,6 +367,33 @@ static struct afe_clk_set tdm_clk_set = {
 	Q6AFE_LPASS_CLK_ROOT_DEFAULT,
 	0,
 };
+
+static int msm_dai_q6_get_tdm_clk_ref(u16 id)
+{
+	switch (id) {
+	case IDX_GROUP_PRIMARY_TDM_RX:
+	case IDX_GROUP_PRIMARY_TDM_TX:
+		return atomic_read(&tdm_group_ref[IDX_GROUP_PRIMARY_TDM_RX]) +
+			atomic_read(&tdm_group_ref[IDX_GROUP_PRIMARY_TDM_TX]);
+	case IDX_GROUP_SECONDARY_TDM_RX:
+	case IDX_GROUP_SECONDARY_TDM_TX:
+		return atomic_read(&tdm_group_ref[IDX_GROUP_SECONDARY_TDM_RX]) +
+			atomic_read(&tdm_group_ref[IDX_GROUP_SECONDARY_TDM_TX]);
+	case IDX_GROUP_TERTIARY_TDM_RX:
+	case IDX_GROUP_TERTIARY_TDM_TX:
+		return atomic_read(&tdm_group_ref[IDX_GROUP_TERTIARY_TDM_RX]) +
+			atomic_read(&tdm_group_ref[IDX_GROUP_TERTIARY_TDM_TX]);
+	case IDX_GROUP_QUATERNARY_TDM_RX:
+	case IDX_GROUP_QUATERNARY_TDM_TX:
+		return atomic_read(&tdm_group_ref[IDX_GROUP_QUATERNARY_TDM_RX]) +
+			atomic_read(&tdm_group_ref[IDX_GROUP_QUATERNARY_TDM_TX]);
+	case IDX_GROUP_QUINARY_TDM_RX:
+	case IDX_GROUP_QUINARY_TDM_TX:
+		return atomic_read(&tdm_group_ref[IDX_GROUP_QUINARY_TDM_RX]) +
+			atomic_read(&tdm_group_ref[IDX_GROUP_QUINARY_TDM_TX]);
+	default: return -EINVAL;
+	}
+}
 
 int msm_dai_q6_get_group_idx(u16 id)
 {
@@ -1459,39 +1488,6 @@ static int msm_dai_q6_spdif_source_get(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
-static int msm_dai_q6_spdif_ext_state_get(struct snd_kcontrol *kcontrol,
-		struct snd_ctl_elem_value *ucontrol)
-{
-
-	struct msm_dai_q6_spdif_dai_data *dai_data = kcontrol->private_data;
-
-	ucontrol->value.integer.value[0] =
-		dai_data->fmt_event.status & 0x3;
-	return 0;
-}
-
-static int msm_dai_q6_spdif_ext_format_get(struct snd_kcontrol *kcontrol,
-		struct snd_ctl_elem_value *ucontrol)
-{
-
-	struct msm_dai_q6_spdif_dai_data *dai_data = kcontrol->private_data;
-
-	ucontrol->value.integer.value[0] =
-		dai_data->fmt_event.data_format & 0x1;
-	return 0;
-}
-
-static int msm_dai_q6_spdif_ext_rate_get(struct snd_kcontrol *kcontrol,
-		struct snd_ctl_elem_value *ucontrol)
-{
-
-	struct msm_dai_q6_spdif_dai_data *dai_data = kcontrol->private_data;
-
-	ucontrol->value.integer.value[0] =
-		dai_data->fmt_event.sample_rate;
-	return 0;
-}
-
 static const char * const spdif_format[] = {
 	"LPCM",
 	"Compr"
@@ -1499,10 +1495,6 @@ static const char * const spdif_format[] = {
 
 static const char * const spdif_source[] = {
 	"Optical", "EXT-ARC", "Coaxial", "VT-ARC"
-};
-
-static const char * const spdif_state[] = {
-	"Inactive", "Active", "EOS"
 };
 
 static const struct soc_enum spdif_rx_config_enum[] = {
@@ -1513,11 +1505,6 @@ static const struct soc_enum spdif_tx_config_enum[] = {
 	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(spdif_source), spdif_source),
 	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(spdif_format), spdif_format),
 };
-
-static const struct soc_enum spdif_tx_status_enum[] = {
-	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(spdif_state), spdif_state),
-	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(spdif_format), spdif_format),
- };
 
 static int msm_dai_q6_spdif_chstatus_put(struct snd_kcontrol *kcontrol,
 		struct snd_ctl_elem_value *ucontrol)
@@ -1607,21 +1594,6 @@ static const struct snd_kcontrol_new spdif_tx_config_controls[] = {
 	SOC_ENUM_EXT("SEC SPDIF TX Format", spdif_tx_config_enum[1],
 			msm_dai_q6_spdif_format_get,
 			msm_dai_q6_spdif_format_put)
-};
-
-static const struct snd_kcontrol_new spdif_tx_status_controls[] = {
-	SOC_ENUM_EXT("PRI SPDIF TX EXT State", spdif_tx_status_enum[0],
-			msm_dai_q6_spdif_ext_state_get, NULL),
-	SOC_ENUM_EXT("PRI SPDIF TX EXT Format", spdif_tx_status_enum[1],
-			msm_dai_q6_spdif_ext_format_get, NULL),
-	SOC_SINGLE_EXT("PRI SPDIF TX EXT Rate", 0, 0, 192000, 0,
-			msm_dai_q6_spdif_ext_rate_get, NULL),
-	SOC_ENUM_EXT("SEC SPDIF TX EXT State", spdif_tx_status_enum[0],
-			msm_dai_q6_spdif_ext_state_get, NULL),
-	SOC_ENUM_EXT("SEC SPDIF TX EXT Format", spdif_tx_status_enum[1],
-			msm_dai_q6_spdif_ext_format_get, NULL),
-	SOC_SINGLE_EXT("SEC SPDIF TX EXT Rate", 0, 0, 192000, 0,
-			msm_dai_q6_spdif_ext_rate_get, NULL)
 };
 
 static void msm_dai_q6_spdif_process_event(uint32_t opcode, uint32_t token,
@@ -1734,6 +1706,102 @@ static int msm_dai_q6_spdif_prepare(struct snd_pcm_substream *substream,
 	return rc;
 }
 
+static ssize_t msm_dai_q6_spdif_sysfs_rda_audio_state(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	ssize_t ret;
+	struct msm_dai_q6_spdif_dai_data *dai_data = dev_get_drvdata(dev);
+
+	if (!dai_data) {
+		pr_err("%s: invalid input\n", __func__);
+		return -EINVAL;
+	}
+
+	ret = snprintf(buf, MSM_DAI_SYSFS_ENTRY_MAX_LEN, "%d\n",
+		dai_data->fmt_event.status);
+	pr_debug("%s: '%d'\n", __func__, dai_data->fmt_event.status);
+
+	return ret;
+}
+
+static ssize_t msm_dai_q6_spdif_sysfs_rda_audio_format(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	ssize_t ret;
+	struct msm_dai_q6_spdif_dai_data *dai_data = dev_get_drvdata(dev);
+
+	if (!dai_data) {
+		pr_err("%s: invalid input\n", __func__);
+		return -EINVAL;
+	}
+
+	ret = snprintf(buf, MSM_DAI_SYSFS_ENTRY_MAX_LEN, "%d\n",
+		dai_data->fmt_event.data_format);
+	pr_debug("%s: '%d'\n", __func__, dai_data->fmt_event.data_format);
+
+	return ret;
+}
+
+static ssize_t msm_dai_q6_spdif_sysfs_rda_audio_rate(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	ssize_t ret;
+	struct msm_dai_q6_spdif_dai_data *dai_data = dev_get_drvdata(dev);
+
+	if (!dai_data) {
+		pr_err("%s: invalid input\n", __func__);
+		return -EINVAL;
+	}
+
+	ret = snprintf(buf, MSM_DAI_SYSFS_ENTRY_MAX_LEN, "%d\n",
+		dai_data->fmt_event.sample_rate);
+	pr_debug("%s: '%d'\n", __func__, dai_data->fmt_event.sample_rate);
+
+	return ret;
+}
+
+static DEVICE_ATTR(audio_state, 0444, msm_dai_q6_spdif_sysfs_rda_audio_state,
+	NULL);
+static DEVICE_ATTR(audio_format, 0444, msm_dai_q6_spdif_sysfs_rda_audio_format,
+	NULL);
+static DEVICE_ATTR(audio_rate, 0444, msm_dai_q6_spdif_sysfs_rda_audio_rate,
+	NULL);
+
+static struct attribute *msm_dai_q6_spdif_fs_attrs[] = {
+	&dev_attr_audio_state.attr,
+	&dev_attr_audio_format.attr,
+	&dev_attr_audio_rate.attr,
+	NULL,
+};
+static struct attribute_group msm_dai_q6_spdif_fs_attrs_group = {
+	.attrs = msm_dai_q6_spdif_fs_attrs,
+};
+
+static int msm_dai_q6_spdif_sysfs_create(struct snd_soc_dai *dai,
+	struct msm_dai_q6_spdif_dai_data *dai_data)
+{
+	int rc;
+
+	rc = sysfs_create_group(&dai->dev->kobj,
+		&msm_dai_q6_spdif_fs_attrs_group);
+	if (rc) {
+		pr_err("%s: failed, rc=%d\n", __func__, rc);
+		return rc;
+	}
+	dai_data->kobj = &dai->dev->kobj;
+
+	return 0;
+}
+
+static void msm_dai_q6_spdif_sysfs_remove(struct snd_soc_dai *dai,
+	struct msm_dai_q6_spdif_dai_data *dai_data)
+{
+	if (dai_data->kobj)
+		sysfs_remove_group(dai_data->kobj,
+			&msm_dai_q6_spdif_fs_attrs_group);
+	dai_data->kobj = NULL;
+}
+
 static int msm_dai_q6_spdif_dai_probe(struct snd_soc_dai *dai)
 {
 	struct msm_dai_q6_spdif_dai_data *dai_data;
@@ -1773,39 +1841,23 @@ static int msm_dai_q6_spdif_dai_probe(struct snd_soc_dai *dai)
 				 dai_data));
 		break;
 	case AFE_PORT_ID_PRIMARY_SPDIF_TX:
+		rc = msm_dai_q6_spdif_sysfs_create(dai, dai_data);
+
 		rc = snd_ctl_add(dai->component->card->snd_card,
 				snd_ctl_new1(&spdif_tx_config_controls[0],
 				dai_data));
 		rc = snd_ctl_add(dai->component->card->snd_card,
 				snd_ctl_new1(&spdif_tx_config_controls[1],
 				dai_data));
-
-		rc = snd_ctl_add(dai->component->card->snd_card,
-				snd_ctl_new1(&spdif_tx_status_controls[0],
-				dai_data));
-		rc = snd_ctl_add(dai->component->card->snd_card,
-				snd_ctl_new1(&spdif_tx_status_controls[1],
-				dai_data));
-		rc = snd_ctl_add(dai->component->card->snd_card,
-				snd_ctl_new1(&spdif_tx_status_controls[2],
-				dai_data));
 		break;
 	case AFE_PORT_ID_SECONDARY_SPDIF_TX:
+		rc = msm_dai_q6_spdif_sysfs_create(dai, dai_data);
+
 		rc = snd_ctl_add(dai->component->card->snd_card,
 				snd_ctl_new1(&spdif_tx_config_controls[2],
 				dai_data));
 		rc = snd_ctl_add(dai->component->card->snd_card,
 				snd_ctl_new1(&spdif_tx_config_controls[3],
-				dai_data));
-
-		rc = snd_ctl_add(dai->component->card->snd_card,
-				snd_ctl_new1(&spdif_tx_status_controls[3],
-				dai_data));
-		rc = snd_ctl_add(dai->component->card->snd_card,
-				snd_ctl_new1(&spdif_tx_status_controls[4],
-				dai_data));
-		rc = snd_ctl_add(dai->component->card->snd_card,
-				snd_ctl_new1(&spdif_tx_status_controls[5],
 				dai_data));
 		break;
 	}
@@ -1866,6 +1918,9 @@ static int msm_dai_q6_spdif_dai_remove(struct snd_soc_dai *dai)
 
 		clear_bit(STATUS_PORT_STARTED, dai_data->status_mask);
 	}
+
+	msm_dai_q6_spdif_sysfs_remove(dai, dai_data);
+
 	kfree(dai_data);
 
 	return 0;
@@ -2095,7 +2150,7 @@ static int msm_dai_q6_cdc_hw_params(struct snd_pcm_hw_params *params,
 	return 0;
 }
 
-static u8 num_of_bits_set(u8 sd_line_mask)
+static u16 num_of_bits_set(u16 sd_line_mask)
 {
 	u8 num_bits_set = 0;
 
@@ -2176,6 +2231,8 @@ static int msm_dai_q6_slim_bus_hw_params(struct snd_pcm_hw_params *params,
 	case SLIMBUS_7_TX:
 	case SLIMBUS_8_RX:
 	case SLIMBUS_8_TX:
+	case SLIMBUS_9_RX:
+	case SLIMBUS_9_TX:
 		dai_data->port_config.slim_sch.slimbus_dev_id =
 			AFE_SLIMBUS_DEVICE_2;
 		break;
@@ -2350,6 +2407,7 @@ static int msm_dai_q6_hw_params(struct snd_pcm_substream *substream,
 	case SLIMBUS_6_RX:
 	case SLIMBUS_7_RX:
 	case SLIMBUS_8_RX:
+	case SLIMBUS_9_RX:
 	case SLIMBUS_0_TX:
 	case SLIMBUS_1_TX:
 	case SLIMBUS_2_TX:
@@ -2359,6 +2417,7 @@ static int msm_dai_q6_hw_params(struct snd_pcm_substream *substream,
 	case SLIMBUS_6_TX:
 	case SLIMBUS_7_TX:
 	case SLIMBUS_8_TX:
+	case SLIMBUS_9_TX:
 		rc = msm_dai_q6_slim_bus_hw_params(params, dai,
 				substream->stream);
 		break;
@@ -2475,6 +2534,7 @@ static int msm_dai_q6_set_channel_map(struct snd_soc_dai *dai,
 	case SLIMBUS_6_RX:
 	case SLIMBUS_7_RX:
 	case SLIMBUS_8_RX:
+	case SLIMBUS_9_RX:
 		/*
 		 * channel number to be between 128 and 255.
 		 * For RX port use channel numbers
@@ -2512,6 +2572,7 @@ static int msm_dai_q6_set_channel_map(struct snd_soc_dai *dai,
 	case SLIMBUS_6_TX:
 	case SLIMBUS_7_TX:
 	case SLIMBUS_8_TX:
+	case SLIMBUS_9_TX:
 		/*
 		 * channel number to be between 128 and 255.
 		 * For TX port use channel numbers
@@ -3077,7 +3138,7 @@ static int msm_dai_q6_slim_rx_drift_get(struct snd_kcontrol *kcontrol,
 	struct msm_dai_q6_dai_data *dai_data = dev_get_drvdata(dai->dev);
 
 	if (!test_bit(STATUS_PORT_STARTED, dai_data->status_mask)) {
-		pr_err("%s: afe port not started. dai_data->status_mask = %ld\n",
+		pr_debug("%s: afe port not started. dai_data->status_mask = %ld\n",
 			__func__, *dai_data->status_mask);
 		goto done;
 	}
@@ -4023,6 +4084,22 @@ static struct snd_soc_dai_driver msm_dai_q6_slimbus_rx_dai[] = {
 		.probe = msm_dai_q6_dai_probe,
 		.remove = msm_dai_q6_dai_remove,
 	},
+	{
+		.playback = {
+			.stream_name = "Slimbus9 Playback",
+			.aif_name = "SLIMBUS_9_RX",
+			.rates = SNDRV_PCM_RATE_8000_384000,
+			.formats = DAI_FORMATS_S16_S24_S32_LE,
+			.channels_min = 1,
+			.channels_max = 8,
+			.rate_min = 8000,
+			.rate_max = 384000,
+		},
+		.ops = &msm_dai_q6_ops,
+		.id = SLIMBUS_9_RX,
+		.probe = msm_dai_q6_dai_probe,
+		.remove = msm_dai_q6_dai_remove,
+	},
 };
 
 static struct snd_soc_dai_driver msm_dai_q6_slimbus_tx_dai[] = {
@@ -4199,6 +4276,26 @@ static struct snd_soc_dai_driver msm_dai_q6_slimbus_tx_dai[] = {
 		},
 		.ops = &msm_dai_q6_ops,
 		.id = SLIMBUS_8_TX,
+		.probe = msm_dai_q6_dai_probe,
+		.remove = msm_dai_q6_dai_remove,
+	},
+	{
+		.capture = {
+			.stream_name = "Slimbus9 Capture",
+			.aif_name = "SLIMBUS_9_TX",
+			.rates = SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_16000 |
+			SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_96000 |
+			SNDRV_PCM_RATE_192000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE |
+				   SNDRV_PCM_FMTBIT_S24_LE |
+				   SNDRV_PCM_FMTBIT_S32_LE,
+			.channels_min = 1,
+			.channels_max = 8,
+			.rate_min = 8000,
+			.rate_max = 192000,
+		},
+		.ops = &msm_dai_q6_ops,
+		.id = SLIMBUS_9_TX,
 		.probe = msm_dai_q6_dai_probe,
 		.remove = msm_dai_q6_dai_remove,
 	},
@@ -4602,11 +4699,68 @@ static int msm_dai_q6_mi2s_hw_params(struct snd_pcm_substream *substream,
 
 	dai_data->channels = params_channels(params);
 	switch (dai_data->channels) {
+	case 15:
+	case 16:
+		switch (mi2s_dai_config->pdata_mi2s_lines) {
+		case AFE_PORT_I2S_16CHS:
+			dai_data->port_config.i2s.channel_mode
+				= AFE_PORT_I2S_16CHS;
+			break;
+		default:
+			goto error_invalid_data;
+		};
+		break;
+	case 13:
+	case 14:
+		switch (mi2s_dai_config->pdata_mi2s_lines) {
+		case AFE_PORT_I2S_14CHS:
+		case AFE_PORT_I2S_16CHS:
+			dai_data->port_config.i2s.channel_mode
+				= AFE_PORT_I2S_14CHS;
+			break;
+		default:
+			goto error_invalid_data;
+		};
+		break;
+	case 11:
+	case 12:
+		switch (mi2s_dai_config->pdata_mi2s_lines) {
+		case AFE_PORT_I2S_12CHS:
+		case AFE_PORT_I2S_14CHS:
+		case AFE_PORT_I2S_16CHS:
+			dai_data->port_config.i2s.channel_mode
+				= AFE_PORT_I2S_12CHS;
+			break;
+		default:
+			goto error_invalid_data;
+		};
+		break;
+	case 9:
+	case 10:
+		switch (mi2s_dai_config->pdata_mi2s_lines) {
+		case AFE_PORT_I2S_10CHS:
+		case AFE_PORT_I2S_12CHS:
+		case AFE_PORT_I2S_14CHS:
+		case AFE_PORT_I2S_16CHS:
+			dai_data->port_config.i2s.channel_mode
+				= AFE_PORT_I2S_10CHS;
+			break;
+		default:
+			goto error_invalid_data;
+		};
+		break;
 	case 8:
 	case 7:
 		if (mi2s_dai_config->pdata_mi2s_lines < AFE_PORT_I2S_8CHS)
 			goto error_invalid_data;
-		dai_data->port_config.i2s.channel_mode = AFE_PORT_I2S_8CHS;
+		else
+			if (mi2s_dai_config->pdata_mi2s_lines
+					== AFE_PORT_I2S_8CHS_2)
+				dai_data->port_config.i2s.channel_mode =
+						AFE_PORT_I2S_8CHS_2;
+			else
+				dai_data->port_config.i2s.channel_mode =
+						AFE_PORT_I2S_8CHS;
 		break;
 	case 6:
 	case 5:
@@ -4616,14 +4770,33 @@ static int msm_dai_q6_mi2s_hw_params(struct snd_pcm_substream *substream,
 		break;
 	case 4:
 	case 3:
-		if (mi2s_dai_config->pdata_mi2s_lines < AFE_PORT_I2S_QUAD01)
+		switch (mi2s_dai_config->pdata_mi2s_lines) {
+		case AFE_PORT_I2S_SD0:
+		case AFE_PORT_I2S_SD1:
+		case AFE_PORT_I2S_SD2:
+		case AFE_PORT_I2S_SD3:
+		case AFE_PORT_I2S_SD4:
+		case AFE_PORT_I2S_SD5:
+		case AFE_PORT_I2S_SD6:
+		case AFE_PORT_I2S_SD7:
 			goto error_invalid_data;
-		if (mi2s_dai_config->pdata_mi2s_lines == AFE_PORT_I2S_QUAD23)
+			break;
+		case AFE_PORT_I2S_QUAD01:
+		case AFE_PORT_I2S_QUAD23:
+		case AFE_PORT_I2S_QUAD45:
+		case AFE_PORT_I2S_QUAD67:
 			dai_data->port_config.i2s.channel_mode =
 				mi2s_dai_config->pdata_mi2s_lines;
-		else
+			break;
+		case AFE_PORT_I2S_8CHS_2:
+			dai_data->port_config.i2s.channel_mode =
+					AFE_PORT_I2S_QUAD45;
+			break;
+		default:
 			dai_data->port_config.i2s.channel_mode =
 					AFE_PORT_I2S_QUAD01;
+			break;
+		};
 		break;
 	case 2:
 	case 1:
@@ -4634,12 +4807,20 @@ static int msm_dai_q6_mi2s_hw_params(struct snd_pcm_substream *substream,
 		case AFE_PORT_I2S_SD1:
 		case AFE_PORT_I2S_SD2:
 		case AFE_PORT_I2S_SD3:
+		case AFE_PORT_I2S_SD4:
+		case AFE_PORT_I2S_SD5:
+		case AFE_PORT_I2S_SD6:
+		case AFE_PORT_I2S_SD7:
 			dai_data->port_config.i2s.channel_mode =
 				mi2s_dai_config->pdata_mi2s_lines;
 			break;
 		case AFE_PORT_I2S_QUAD01:
 		case AFE_PORT_I2S_6CHS:
 		case AFE_PORT_I2S_8CHS:
+		case AFE_PORT_I2S_10CHS:
+		case AFE_PORT_I2S_12CHS:
+		case AFE_PORT_I2S_14CHS:
+		case AFE_PORT_I2S_16CHS:
 			if (dai_data->vi_feed_mono == SPKR_1)
 				dai_data->port_config.i2s.channel_mode =
 							AFE_PORT_I2S_SD0;
@@ -4650,6 +4831,14 @@ static int msm_dai_q6_mi2s_hw_params(struct snd_pcm_substream *substream,
 		case AFE_PORT_I2S_QUAD23:
 			dai_data->port_config.i2s.channel_mode =
 						AFE_PORT_I2S_SD2;
+			break;
+		case AFE_PORT_I2S_QUAD45:
+			dai_data->port_config.i2s.channel_mode =
+						AFE_PORT_I2S_SD4;
+			break;
+		case AFE_PORT_I2S_QUAD67:
+			dai_data->port_config.i2s.channel_mode =
+						AFE_PORT_I2S_SD6;
 			break;
 		}
 		if (dai_data->channels == 2)
@@ -4822,15 +5011,17 @@ static struct snd_soc_dai_driver msm_dai_q6_mi2s_dai[] = {
 			.stream_name = "Primary MI2S Playback",
 			.aif_name = "PRI_MI2S_RX",
 			.rates = SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_11025 |
-				 SNDRV_PCM_RATE_16000 | SNDRV_PCM_RATE_22050 |
-				 SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_44100 |
-				 SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_96000 |
-				 SNDRV_PCM_RATE_192000,
+				SNDRV_PCM_RATE_16000 | SNDRV_PCM_RATE_22050 |
+				SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_44100 |
+				SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_88200 |
+				SNDRV_PCM_RATE_96000 | SNDRV_PCM_RATE_176400 |
+				SNDRV_PCM_RATE_192000 | SNDRV_PCM_RATE_352800 |
+				SNDRV_PCM_RATE_384000,
 			.formats = SNDRV_PCM_FMTBIT_S16_LE |
 				SNDRV_PCM_FMTBIT_S24_LE |
 				SNDRV_PCM_FMTBIT_S24_3LE,
 			.rate_min =     8000,
-			.rate_max =     192000,
+			.rate_max =     384000,
 		},
 		.capture = {
 			.stream_name = "Primary MI2S Capture",
@@ -5215,6 +5406,18 @@ static int msm_dai_q6_mi2s_get_lineconfig(u16 sd_lines, u16 *config_ptr,
 		case MSM_MI2S_SD3:
 			*config_ptr = AFE_PORT_I2S_SD3;
 			break;
+		case MSM_MI2S_SD4:
+			*config_ptr = AFE_PORT_I2S_SD4;
+			break;
+		case MSM_MI2S_SD5:
+			*config_ptr = AFE_PORT_I2S_SD5;
+			break;
+		case MSM_MI2S_SD6:
+			*config_ptr = AFE_PORT_I2S_SD6;
+			break;
+		case MSM_MI2S_SD7:
+			*config_ptr = AFE_PORT_I2S_SD7;
+			break;
 		default:
 			pr_err("%s: invalid SD lines %d\n",
 				   __func__, sd_lines);
@@ -5228,6 +5431,12 @@ static int msm_dai_q6_mi2s_get_lineconfig(u16 sd_lines, u16 *config_ptr,
 			break;
 		case MSM_MI2S_SD2 | MSM_MI2S_SD3:
 			*config_ptr = AFE_PORT_I2S_QUAD23;
+			break;
+		case MSM_MI2S_SD4 | MSM_MI2S_SD5:
+			*config_ptr = AFE_PORT_I2S_QUAD45;
+			break;
+		case MSM_MI2S_SD6 | MSM_MI2S_SD7:
+			*config_ptr = AFE_PORT_I2S_QUAD67;
 			break;
 		default:
 			pr_err("%s: invalid SD lines %d\n",
@@ -5250,6 +5459,57 @@ static int msm_dai_q6_mi2s_get_lineconfig(u16 sd_lines, u16 *config_ptr,
 		switch (sd_lines) {
 		case MSM_MI2S_SD0 | MSM_MI2S_SD1 | MSM_MI2S_SD2 | MSM_MI2S_SD3:
 			*config_ptr = AFE_PORT_I2S_8CHS;
+			break;
+		case MSM_MI2S_SD4 | MSM_MI2S_SD5 | MSM_MI2S_SD6 | MSM_MI2S_SD7:
+			*config_ptr = AFE_PORT_I2S_8CHS_2;
+			break;
+		default:
+			pr_err("%s: invalid SD lines %d\n",
+				   __func__, sd_lines);
+			goto error_invalid_data;
+		}
+		break;
+	case 5:
+		switch (sd_lines) {
+		case MSM_MI2S_SD0 | MSM_MI2S_SD1 | MSM_MI2S_SD2
+		   | MSM_MI2S_SD3 | MSM_MI2S_SD4:
+			*config_ptr = AFE_PORT_I2S_10CHS;
+			break;
+		default:
+			pr_err("%s: invalid SD lines %d\n",
+				   __func__, sd_lines);
+			goto error_invalid_data;
+		}
+		break;
+	case 6:
+		switch (sd_lines) {
+		case MSM_MI2S_SD0 | MSM_MI2S_SD1 | MSM_MI2S_SD2
+		   | MSM_MI2S_SD3 | MSM_MI2S_SD4 | MSM_MI2S_SD5:
+			*config_ptr = AFE_PORT_I2S_12CHS;
+			break;
+		default:
+			pr_err("%s: invalid SD lines %d\n",
+				   __func__, sd_lines);
+			goto error_invalid_data;
+		}
+		break;
+	case 7:
+		switch (sd_lines) {
+		case MSM_MI2S_SD0 | MSM_MI2S_SD1 | MSM_MI2S_SD2 | MSM_MI2S_SD3
+		   | MSM_MI2S_SD4 | MSM_MI2S_SD5 | MSM_MI2S_SD6:
+			*config_ptr = AFE_PORT_I2S_14CHS;
+			break;
+		default:
+			pr_err("%s: invalid SD lines %d\n",
+				   __func__, sd_lines);
+			goto error_invalid_data;
+		}
+		break;
+	case 8:
+		switch (sd_lines) {
+		case MSM_MI2S_SD0 | MSM_MI2S_SD1 | MSM_MI2S_SD2 | MSM_MI2S_SD3
+		   | MSM_MI2S_SD4 | MSM_MI2S_SD5 | MSM_MI2S_SD6 | MSM_MI2S_SD7:
+			*config_ptr = AFE_PORT_I2S_16CHS;
 			break;
 		default:
 			pr_err("%s: invalid SD lines %d\n",
@@ -5484,6 +5744,9 @@ static int msm_dai_q6_dev_probe(struct platform_device *pdev)
 	case SLIMBUS_8_RX:
 		strlcpy(stream_name, "Slimbus8 Playback", sizeof(stream_name));
 		goto register_slim_playback;
+	case SLIMBUS_9_RX:
+		strlcpy(stream_name, "Slimbus9 Playback", sizeof(stream_name));
+		goto register_slim_playback;
 register_slim_playback:
 		rc = -ENODEV;
 		len = strnlen(stream_name, 80);
@@ -5528,6 +5791,9 @@ register_slim_playback:
 		goto register_slim_capture;
 	case SLIMBUS_8_TX:
 		strlcpy(stream_name, "Slimbus8 Capture", sizeof(stream_name));
+		goto register_slim_capture;
+	case SLIMBUS_9_TX:
+		strlcpy(stream_name, "Slimbus9 Capture", sizeof(stream_name));
 		goto register_slim_capture;
 register_slim_capture:
 		rc = -ENODEV;
@@ -7105,6 +7371,9 @@ static int msm_dai_q6_dai_tdm_remove(struct snd_soc_dai *dai)
 				dev_err(dai->dev, "fail to disable AFE group 0x%x\n",
 					group_id);
 			}
+		}
+
+		if (msm_dai_q6_get_tdm_clk_ref(group_idx) == 0) {
 			rc = msm_dai_q6_tdm_set_clk(tdm_dai_data,
 				dai->id, false);
 			if (rc < 0) {
@@ -7140,6 +7409,9 @@ static int msm_dai_q6_tdm_set_tdm_slot(struct snd_soc_dai *dai,
 
 	/* HW supports 1-32 slots configuration. Typical: 1, 2, 4, 8, 16, 32 */
 	switch (slots) {
+	case 1:
+		cap_mask = 0x01;
+		break;
 	case 2:
 		cap_mask = 0x03;
 		break;
@@ -7620,17 +7892,11 @@ static int msm_dai_q6_tdm_prepare(struct snd_pcm_substream *substream,
 			if (rc)
 				dev_err(dai->dev, "%s: afe send island mode failed %d\n",
 					__func__, rc);
-
 		}
 
-		/* PORT START should be set if prepare called
-		 * in active state.
-		 */
-		if (atomic_read(group_ref) == 0) {
-			/* TX and RX share the same clk.
-			 * AFE clk is enabled per group to simplify the logic.
-			 * DSP will monitor the clk count.
-			 */
+		if (msm_dai_q6_get_tdm_clk_ref(group_idx) == 0) {
+			/* TX and RX share the same clk. So enable the clk
+			 * per TDM interface. */
 			rc = msm_dai_q6_tdm_set_clk(dai_data,
 				dai->id, true);
 			if (rc < 0) {
@@ -7638,7 +7904,12 @@ static int msm_dai_q6_tdm_prepare(struct snd_pcm_substream *substream,
 					__func__, dai->id);
 				goto rtn;
 			}
+		}
 
+		/* PORT START should be set if prepare called
+		 * in active state.
+		 */
+		if (atomic_read(group_ref) == 0) {
 			/*
 			 * if only one port, don't do group enable as there
 			 * is no group need for only one port
@@ -7661,6 +7932,8 @@ static int msm_dai_q6_tdm_prepare(struct snd_pcm_substream *substream,
 			if (atomic_read(group_ref) == 0) {
 				afe_port_group_enable(group_id,
 					NULL, false);
+			}
+			if (msm_dai_q6_get_tdm_clk_ref(group_idx) == 0) {
 				msm_dai_q6_tdm_set_clk(dai_data,
 					dai->id, false);
 			}
@@ -7720,6 +7993,9 @@ static void msm_dai_q6_tdm_shutdown(struct snd_pcm_substream *substream,
 				dev_err(dai->dev, "%s: fail to disable AFE group 0x%x\n",
 					__func__, group_id);
 			}
+		}
+
+		if (msm_dai_q6_get_tdm_clk_ref(group_idx) == 0) {
 			rc = msm_dai_q6_tdm_set_clk(dai_data,
 				dai->id, false);
 			if (rc < 0) {
@@ -7761,6 +8037,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "PRI_TDM_RX_0",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_PRIMARY_TDM_RX,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -7781,6 +8058,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "PRI_TDM_RX_1",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_PRIMARY_TDM_RX_1,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -7801,6 +8079,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "PRI_TDM_RX_2",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_PRIMARY_TDM_RX_2,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -7821,6 +8100,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "PRI_TDM_RX_3",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_PRIMARY_TDM_RX_3,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -7841,6 +8121,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "PRI_TDM_RX_4",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_PRIMARY_TDM_RX_4,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -7861,6 +8142,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "PRI_TDM_RX_5",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_PRIMARY_TDM_RX_5,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -7881,6 +8163,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "PRI_TDM_RX_6",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_PRIMARY_TDM_RX_6,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -7901,6 +8184,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "PRI_TDM_RX_7",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_PRIMARY_TDM_RX_7,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -7921,6 +8205,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "PRI_TDM_TX_0",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_PRIMARY_TDM_TX,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -7941,6 +8226,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "PRI_TDM_TX_1",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_PRIMARY_TDM_TX_1,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -7961,6 +8247,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "PRI_TDM_TX_2",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_PRIMARY_TDM_TX_2,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -7981,6 +8268,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "PRI_TDM_TX_3",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_PRIMARY_TDM_TX_3,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8001,6 +8289,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "PRI_TDM_TX_4",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_PRIMARY_TDM_TX_4,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8021,6 +8310,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "PRI_TDM_TX_5",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_PRIMARY_TDM_TX_5,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8041,6 +8331,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "PRI_TDM_TX_6",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_PRIMARY_TDM_TX_6,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8061,6 +8352,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "PRI_TDM_TX_7",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_PRIMARY_TDM_TX_7,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8081,6 +8373,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "SEC_TDM_RX_0",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_SECONDARY_TDM_RX,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8101,6 +8394,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "SEC_TDM_RX_1",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_SECONDARY_TDM_RX_1,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8121,6 +8415,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "SEC_TDM_RX_2",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_SECONDARY_TDM_RX_2,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8141,6 +8436,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "SEC_TDM_RX_3",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_SECONDARY_TDM_RX_3,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8161,6 +8457,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "SEC_TDM_RX_4",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_SECONDARY_TDM_RX_4,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8181,6 +8478,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "SEC_TDM_RX_5",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_SECONDARY_TDM_RX_5,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8201,6 +8499,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "SEC_TDM_RX_6",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_SECONDARY_TDM_RX_6,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8221,6 +8520,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "SEC_TDM_RX_7",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_SECONDARY_TDM_RX_7,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8241,6 +8541,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "SEC_TDM_TX_0",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_SECONDARY_TDM_TX,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8261,6 +8562,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "SEC_TDM_TX_1",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_SECONDARY_TDM_TX_1,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8281,6 +8583,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "SEC_TDM_TX_2",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_SECONDARY_TDM_TX_2,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8301,6 +8604,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "SEC_TDM_TX_3",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_SECONDARY_TDM_TX_3,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8321,6 +8625,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "SEC_TDM_TX_4",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_SECONDARY_TDM_TX_4,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8341,6 +8646,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "SEC_TDM_TX_5",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_SECONDARY_TDM_TX_5,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8361,6 +8667,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "SEC_TDM_TX_6",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_SECONDARY_TDM_TX_6,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8381,6 +8688,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "SEC_TDM_TX_7",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_SECONDARY_TDM_TX_7,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8401,6 +8709,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "TERT_TDM_RX_0",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_TERTIARY_TDM_RX,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8421,6 +8730,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "TERT_TDM_RX_1",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_TERTIARY_TDM_RX_1,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8441,6 +8751,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "TERT_TDM_RX_2",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_TERTIARY_TDM_RX_2,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8461,6 +8772,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "TERT_TDM_RX_3",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_TERTIARY_TDM_RX_3,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8481,6 +8793,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "TERT_TDM_RX_4",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_TERTIARY_TDM_RX_4,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8501,6 +8814,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "TERT_TDM_RX_5",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_TERTIARY_TDM_RX_5,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8521,6 +8835,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "TERT_TDM_RX_6",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_TERTIARY_TDM_RX_6,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8541,6 +8856,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "TERT_TDM_RX_7",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_TERTIARY_TDM_RX_7,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8561,6 +8877,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "TERT_TDM_TX_0",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_TERTIARY_TDM_TX,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8581,6 +8898,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "TERT_TDM_TX_1",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_TERTIARY_TDM_TX_1,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8601,6 +8919,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "TERT_TDM_TX_2",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_TERTIARY_TDM_TX_2,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8621,6 +8940,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "TERT_TDM_TX_3",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_TERTIARY_TDM_TX_3,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8641,6 +8961,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "TERT_TDM_TX_4",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_TERTIARY_TDM_TX_4,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8661,6 +8982,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "TERT_TDM_TX_5",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_TERTIARY_TDM_TX_5,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8681,6 +9003,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "TERT_TDM_TX_6",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_TERTIARY_TDM_TX_6,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8701,6 +9024,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "TERT_TDM_TX_7",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_TERTIARY_TDM_TX_7,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8721,6 +9045,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUAT_TDM_RX_0",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUATERNARY_TDM_RX,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8741,6 +9066,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUAT_TDM_RX_1",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUATERNARY_TDM_RX_1,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8761,6 +9087,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUAT_TDM_RX_2",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUATERNARY_TDM_RX_2,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8781,6 +9108,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUAT_TDM_RX_3",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUATERNARY_TDM_RX_3,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8801,6 +9129,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUAT_TDM_RX_4",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUATERNARY_TDM_RX_4,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8821,6 +9150,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUAT_TDM_RX_5",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUATERNARY_TDM_RX_5,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8841,6 +9171,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUAT_TDM_RX_6",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUATERNARY_TDM_RX_6,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8861,6 +9192,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUAT_TDM_RX_7",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUATERNARY_TDM_RX_7,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8881,6 +9213,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUAT_TDM_TX_0",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUATERNARY_TDM_TX,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8901,6 +9234,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUAT_TDM_TX_1",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUATERNARY_TDM_TX_1,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8921,6 +9255,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUAT_TDM_TX_2",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUATERNARY_TDM_TX_2,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8941,6 +9276,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUAT_TDM_TX_3",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUATERNARY_TDM_TX_3,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8961,6 +9297,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUAT_TDM_TX_4",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUATERNARY_TDM_TX_4,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -8981,6 +9318,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUAT_TDM_TX_5",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUATERNARY_TDM_TX_5,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -9001,6 +9339,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUAT_TDM_TX_6",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUATERNARY_TDM_TX_6,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -9021,6 +9360,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUAT_TDM_TX_7",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUATERNARY_TDM_TX_7,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -9041,6 +9381,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUIN_TDM_RX_0",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUINARY_TDM_RX,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -9061,6 +9402,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUIN_TDM_RX_1",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUINARY_TDM_RX_1,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -9081,6 +9423,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUIN_TDM_RX_2",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUINARY_TDM_RX_2,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -9101,6 +9444,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUIN_TDM_RX_3",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUINARY_TDM_RX_3,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -9121,6 +9465,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUIN_TDM_RX_4",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUINARY_TDM_RX_4,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -9141,6 +9486,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUIN_TDM_RX_5",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUINARY_TDM_RX_5,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -9161,6 +9507,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUIN_TDM_RX_6",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUINARY_TDM_RX_6,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -9181,6 +9528,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUIN_TDM_RX_7",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUINARY_TDM_RX_7,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -9201,6 +9549,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUIN_TDM_TX_0",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUINARY_TDM_TX,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -9221,6 +9570,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUIN_TDM_TX_1",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUINARY_TDM_TX_1,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -9241,6 +9591,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUIN_TDM_TX_2",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUINARY_TDM_TX_2,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -9261,6 +9612,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUIN_TDM_TX_3",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUINARY_TDM_TX_3,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -9281,6 +9633,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUIN_TDM_TX_4",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUINARY_TDM_TX_4,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -9301,6 +9654,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUIN_TDM_TX_5",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUINARY_TDM_TX_5,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -9321,6 +9675,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUIN_TDM_TX_6",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUINARY_TDM_TX_6,
 		.probe = msm_dai_q6_dai_tdm_probe,
@@ -9341,6 +9696,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.rate_min = 8000,
 			.rate_max = 352800,
 		},
+		.name = "QUIN_TDM_TX_7",
 		.ops = &msm_dai_q6_tdm_ops,
 		.id = AFE_PORT_ID_QUINARY_TDM_TX_7,
 		.probe = msm_dai_q6_dai_tdm_probe,

@@ -246,13 +246,14 @@ static int swrm_clk_request(struct swr_mstr_ctrl *swrm, bool enable)
 			ret = swrm->clk(swrm->handle, true);
 			if (ret) {
 				dev_err(swrm->dev,
-					"clock enable req failed", __func__);
+					"%s: clock enable req failed",
+					__func__);
 				--swrm->clk_ref_count;
 			}
 		}
 	} else if (--swrm->clk_ref_count == 0) {
 		swrm->clk(swrm->handle, false);
-		complete(&swrm->clk_off);
+		complete(&swrm->clk_off_complete);
 	}
 	if (swrm->clk_ref_count < 0) {
 		pr_err("%s: swrm clk count mismatch\n", __func__);
@@ -1548,10 +1549,10 @@ static int swrm_master_init(struct swr_mstr_ctrl *swrm)
 
 	/* Mask soundwire interrupts */
 	reg[len] = SWRM_INTERRUPT_MASK_ADDR;
-	value[len++] = SWRM_INTERRUPT_STATUS_MASK;
+	value[len++] = 0x1FFFD; 
 
 	reg[len] = SWR_MSTR_RX_SWRM_CPU_INTERRUPT_EN;
-	value[len++] = 0x485;
+	value[len++] = SWRM_INTERRUPT_STATUS_MASK;
 
 	swr_master_bulk_write(swrm, reg, value, len);
 
@@ -1752,7 +1753,7 @@ static int swrm_probe(struct platform_device *pdev)
 	swrm->state = SWR_MSTR_UP;
 	init_completion(&swrm->reset);
 	init_completion(&swrm->broadcast);
-	init_completion(&swrm->clk_off);
+	init_completion(&swrm->clk_off_complete);
 	mutex_init(&swrm->mlock);
 	mutex_init(&swrm->reslock);
 	mutex_init(&swrm->force_down_lock);
@@ -2099,7 +2100,7 @@ int swrm_wcd_notify(struct platform_device *pdev, u32 id, void *data)
 	case SWR_DEVICE_SSR_UP:
 		/* wait for clk voting to be zero */
 		if (swrm->clk_ref_count &&
-			 !wait_for_completion_timeout(&swrm->clk_off,
+			 !wait_for_completion_timeout(&swrm->clk_off_complete,
 						   (1 * HZ/100)))
 			dev_err(swrm->dev, "%s: clock voting not zero\n",
 				__func__);

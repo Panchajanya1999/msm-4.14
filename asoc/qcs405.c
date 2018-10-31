@@ -9,7 +9,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/gpio.h>
@@ -22,6 +21,7 @@
 #include <linux/input.h>
 #include <linux/of_device.h>
 #include <linux/pm_qos.h>
+#include <linux/regulator/consumer.h>
 #include <sound/core.h>
 #include <sound/soc.h>
 #include <sound/soc-dapm.h>
@@ -63,7 +63,7 @@
 #define SAMPLING_RATE_352P8KHZ  352800
 #define SAMPLING_RATE_384KHZ    384000
 
-#define SPDIF_TX_CORE_CLK_204_P8_MHZ  204800000
+#define SPDIF_TX_CORE_CLK_163_P84_MHZ  163840000
 #define TLMM_EAST_SPARE 0x07BA0000
 #define TLMM_SPDIF_HDMI_ARC_CTL 0x07BA2000
 
@@ -107,6 +107,7 @@ enum {
 	TERT_MI2S,
 	QUAT_MI2S,
 	QUIN_MI2S,
+	SEN_MI2S,
 	MI2S_MAX,
 };
 
@@ -116,6 +117,7 @@ enum {
 	TERT_AUX_PCM,
 	QUAT_AUX_PCM,
 	QUIN_AUX_PCM,
+	SEN_AUX_PCM,
 	AUX_PCM_MAX,
 };
 
@@ -157,7 +159,8 @@ static u32 mi2s_ebit_clk[MI2S_MAX] = {
 	Q6AFE_LPASS_CLK_ID_SEC_MI2S_EBIT,
 	Q6AFE_LPASS_CLK_ID_TER_MI2S_EBIT,
 	Q6AFE_LPASS_CLK_ID_QUAD_MI2S_EBIT,
-	Q6AFE_LPASS_CLK_ID_QUI_MI2S_EBIT
+	Q6AFE_LPASS_CLK_ID_QUI_MI2S_EBIT,
+	Q6AFE_LPASS_CLK_ID_SEN_MI2S_EBIT
 };
 
 struct dev_config {
@@ -176,32 +179,21 @@ struct msm_csra66x0_dev_info {
 	u32 index;
 };
 
-enum pinctrl_pin_state {
-	STATE_DISABLE = 0, /* All pins are in sleep state */
-	STATE_MI2S_ACTIVE,  /* I2S = active, TDM = sleep */
-	STATE_TDM_ACTIVE,  /* I2S = sleep, TDM = active */
-};
-
-struct msm_pinctrl_info {
-	struct pinctrl *pinctrl;
-	struct pinctrl_state *mi2s_disable;
-	struct pinctrl_state *tdm_disable;
-	struct pinctrl_state *mi2s_active;
-	struct pinctrl_state *tdm_active;
-	enum pinctrl_pin_state curr_state;
-};
-
 struct msm_asoc_mach_data {
 	struct snd_info_entry *codec_root;
-	struct msm_pinctrl_info pinctrl_info;
 	struct device_node *dmic_01_gpio_p; /* used by pinctrl API */
 	struct device_node *dmic_23_gpio_p; /* used by pinctrl API */
 	struct device_node *dmic_45_gpio_p; /* used by pinctrl API */
 	struct device_node *dmic_67_gpio_p; /* used by pinctrl API */
+	struct device_node *mi2s_gpio_p[MI2S_MAX]; /* used by pinctrl API */
 	int dmic_01_gpio_cnt;
 	int dmic_23_gpio_cnt;
 	int dmic_45_gpio_cnt;
 	int dmic_67_gpio_cnt;
+	struct regulator *tdm_micb_supply;
+	u32 tdm_micb_voltage;
+	u32 tdm_micb_current;
+	bool codec_is_csra;
 };
 
 struct msm_asoc_wcd93xx_codec {
@@ -290,7 +282,6 @@ static struct dev_config tdm_rx_cfg[TDM_INTERFACE_MAX][TDM_PORT_MAX] = {
 		{SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1}, /* RX_6 */
 		{SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1}, /* RX_7 */
 	}
-
 };
 
 /* TDM default config */
@@ -412,6 +403,7 @@ static struct dev_config mi2s_rx_cfg[] = {
 	[TERT_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
 	[QUAT_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
 	[QUIN_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
+	[SEN_MI2S]  = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
 };
 
 /* Default configuration of SPDIF channels */
@@ -431,6 +423,7 @@ static struct dev_config mi2s_tx_cfg[] = {
 	[TERT_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
 	[QUAT_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
 	[QUIN_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
+	[SEN_MI2S]  = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
 };
 
 static struct dev_config aux_pcm_rx_cfg[] = {
@@ -439,6 +432,7 @@ static struct dev_config aux_pcm_rx_cfg[] = {
 	[TERT_AUX_PCM] = {SAMPLING_RATE_8KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
 	[QUAT_AUX_PCM] = {SAMPLING_RATE_8KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
 	[QUIN_AUX_PCM] = {SAMPLING_RATE_8KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
+	[SEN_AUX_PCM]  = {SAMPLING_RATE_8KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
 };
 
 static struct dev_config aux_pcm_tx_cfg[] = {
@@ -447,6 +441,7 @@ static struct dev_config aux_pcm_tx_cfg[] = {
 	[TERT_AUX_PCM] = {SAMPLING_RATE_8KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
 	[QUAT_AUX_PCM] = {SAMPLING_RATE_8KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
 	[QUIN_AUX_PCM] = {SAMPLING_RATE_8KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
+	[SEN_AUX_PCM]  = {SAMPLING_RATE_8KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
 };
 
 static int msm_vi_feed_tx_ch = 2;
@@ -483,10 +478,12 @@ static char const *tdm_sample_rate_text[] = {"KHZ_8", "KHZ_16", "KHZ_32",
 static const char *const auxpcm_rate_text[] = {"KHZ_8", "KHZ_16"};
 static char const *mi2s_rate_text[] = {"KHZ_8", "KHZ_11P025", "KHZ_16",
 				      "KHZ_22P05", "KHZ_32", "KHZ_44P1",
-				      "KHZ_48", "KHZ_96", "KHZ_192"};
-static const char *const mi2s_ch_text[] = {"One", "Two", "Three", "Four",
-					   "Five", "Six", "Seven",
-					   "Eight"};
+				      "KHZ_48", "KHZ_96", "KHZ_192", "KHZ_384"};
+static const char *const mi2s_ch_text[] = {
+		"One", "Two", "Three", "Four", "Five", "Six", "Seven",
+		"Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen",
+		"Fourteen", "Fifteen", "Sixteen"
+};
 static const char *const qos_text[] = {"Disable", "Enable"};
 
 static const char *const cdc_dma_rx_ch_text[] = {"One", "Two"};
@@ -540,21 +537,25 @@ static SOC_ENUM_SINGLE_EXT_DECL(sec_aux_pcm_rx_sample_rate, auxpcm_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(tert_aux_pcm_rx_sample_rate, auxpcm_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(quat_aux_pcm_rx_sample_rate, auxpcm_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(quin_aux_pcm_rx_sample_rate, auxpcm_rate_text);
+static SOC_ENUM_SINGLE_EXT_DECL(sen_aux_pcm_rx_sample_rate, auxpcm_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(prim_aux_pcm_tx_sample_rate, auxpcm_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(sec_aux_pcm_tx_sample_rate, auxpcm_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(tert_aux_pcm_tx_sample_rate, auxpcm_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(quat_aux_pcm_tx_sample_rate, auxpcm_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(quin_aux_pcm_tx_sample_rate, auxpcm_rate_text);
+static SOC_ENUM_SINGLE_EXT_DECL(sen_aux_pcm_tx_sample_rate, auxpcm_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(prim_mi2s_rx_sample_rate, mi2s_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(sec_mi2s_rx_sample_rate, mi2s_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(tert_mi2s_rx_sample_rate, mi2s_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(quat_mi2s_rx_sample_rate, mi2s_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(quin_mi2s_rx_sample_rate, mi2s_rate_text);
+static SOC_ENUM_SINGLE_EXT_DECL(sen_mi2s_rx_sample_rate, mi2s_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(prim_mi2s_tx_sample_rate, mi2s_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(sec_mi2s_tx_sample_rate, mi2s_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(tert_mi2s_tx_sample_rate, mi2s_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(quat_mi2s_tx_sample_rate, mi2s_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(quin_mi2s_tx_sample_rate, mi2s_rate_text);
+static SOC_ENUM_SINGLE_EXT_DECL(sen_mi2s_tx_sample_rate, mi2s_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(prim_mi2s_rx_chs, mi2s_ch_text);
 static SOC_ENUM_SINGLE_EXT_DECL(prim_mi2s_tx_chs, mi2s_ch_text);
 static SOC_ENUM_SINGLE_EXT_DECL(sec_mi2s_rx_chs, mi2s_ch_text);
@@ -565,6 +566,8 @@ static SOC_ENUM_SINGLE_EXT_DECL(quat_mi2s_rx_chs, mi2s_ch_text);
 static SOC_ENUM_SINGLE_EXT_DECL(quat_mi2s_tx_chs, mi2s_ch_text);
 static SOC_ENUM_SINGLE_EXT_DECL(quin_mi2s_rx_chs, mi2s_ch_text);
 static SOC_ENUM_SINGLE_EXT_DECL(quin_mi2s_tx_chs, mi2s_ch_text);
+static SOC_ENUM_SINGLE_EXT_DECL(sen_mi2s_rx_chs, mi2s_ch_text);
+static SOC_ENUM_SINGLE_EXT_DECL(sen_mi2s_tx_chs, mi2s_ch_text);
 static SOC_ENUM_SINGLE_EXT_DECL(mi2s_rx_format, bit_format_text);
 static SOC_ENUM_SINGLE_EXT_DECL(mi2s_tx_format, bit_format_text);
 static SOC_ENUM_SINGLE_EXT_DECL(aux_pcm_rx_format, bit_format_text);
@@ -660,6 +663,14 @@ static struct afe_clk_set mi2s_clk[MI2S_MAX] = {
 	{
 		AFE_API_VERSION_I2S_CONFIG,
 		Q6AFE_LPASS_CLK_ID_QUI_MI2S_IBIT,
+		Q6AFE_LPASS_IBIT_CLK_1_P536_MHZ,
+		Q6AFE_LPASS_CLK_ATTRIBUTE_COUPLE_NO,
+		Q6AFE_LPASS_CLK_ROOT_DEFAULT,
+		0,
+	},
+	{
+		AFE_API_VERSION_I2S_CONFIG,
+		Q6AFE_LPASS_CLK_ID_SEN_MI2S_IBIT,
 		Q6AFE_LPASS_IBIT_CLK_1_P536_MHZ,
 		Q6AFE_LPASS_CLK_ATTRIBUTE_COUPLE_NO,
 		Q6AFE_LPASS_CLK_ROOT_DEFAULT,
@@ -2431,6 +2442,9 @@ static int aux_pcm_get_port_idx(struct snd_kcontrol *kcontrol)
 	else if (strnstr(kcontrol->id.name, "QUIN_AUX_PCM",
 			 sizeof("QUIN_AUX_PCM")))
 		idx = QUIN_AUX_PCM;
+	else if (strnstr(kcontrol->id.name, "SEN_AUX_PCM",
+			 sizeof("SENN_AUX_PCM")))
+		idx = SEN_AUX_PCM;
 	else {
 		pr_err("%s: unsupported port: %s",
 			__func__, kcontrol->id.name);
@@ -2531,6 +2545,9 @@ static int mi2s_get_port_idx(struct snd_kcontrol *kcontrol)
 	else if (strnstr(kcontrol->id.name, "QUIN_MI2S_RX",
 		 sizeof("QUIN_MI2S_RX")))
 		idx = QUIN_MI2S;
+	else if (strnstr(kcontrol->id.name, "SEN_MI2S_RX",
+		 sizeof("SEN_MI2S_RX")))
+		idx = SEN_MI2S;
 	else if (strnstr(kcontrol->id.name, "PRIM_MI2S_TX",
 		 sizeof("PRIM_MI2S_TX")))
 		idx = PRIM_MI2S;
@@ -2546,6 +2563,9 @@ static int mi2s_get_port_idx(struct snd_kcontrol *kcontrol)
 	else if (strnstr(kcontrol->id.name, "QUIN_MI2S_TX",
 		 sizeof("QUIN_MI2S_TX")))
 		idx = QUIN_MI2S;
+	else if (strnstr(kcontrol->id.name, "SEN_MI2S_TX",
+		 sizeof("SEN_MI2S_TX")))
+		idx = SEN_MI2S;
 	else {
 		pr_err("%s: unsupported channel: %s",
 			__func__, kcontrol->id.name);
@@ -2587,6 +2607,9 @@ static int mi2s_get_sample_rate_val(int sample_rate)
 	case SAMPLING_RATE_192KHZ:
 		sample_rate_val = 8;
 		break;
+	case SAMPLING_RATE_384KHZ:
+		sample_rate_val = 9;
+		break;
 	default:
 		sample_rate_val = 6;
 		break;
@@ -2625,6 +2648,9 @@ static int mi2s_get_sample_rate(int value)
 		break;
 	case 8:
 		sample_rate = SAMPLING_RATE_192KHZ;
+		break;
+	case 9:
+		sample_rate = SAMPLING_RATE_384KHZ;
 		break;
 	default:
 		sample_rate = SAMPLING_RATE_48KHZ;
@@ -2834,17 +2860,34 @@ static int msm_mi2s_rx_format_get(struct snd_kcontrol *kcontrol,
 static int msm_mi2s_rx_format_put(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
 {
+
+	struct msm_asoc_mach_data *pdata = NULL;
+	struct snd_soc_component *component =  NULL;
+	struct snd_soc_card *card = NULL;
 	int idx = mi2s_get_port_idx(kcontrol);
+
+	component = snd_soc_kcontrol_component(kcontrol);
+	card = kcontrol->private_data;
+	pdata = snd_soc_card_get_drvdata(card);
 
 	if (idx < 0)
 		return idx;
 
-	mi2s_rx_cfg[idx].bit_format =
-		mi2s_auxpcm_get_format(ucontrol->value.enumerated.item[0]);
+	/* check for PRIM_MI2S and CSRAx config to allow 24bit BE config only */
+	if ((PRIM_MI2S == idx) && (true==pdata->codec_is_csra))
+	{
+		mi2s_rx_cfg[idx].bit_format = SNDRV_PCM_FORMAT_S24_LE;
+		pr_debug("%s: Keeping default format idx[%d]_rx_format = %d, item = %d\n",
+			__func__, idx, mi2s_rx_cfg[idx].bit_format,
+				ucontrol->value.enumerated.item[0]);
+	} else {
+		mi2s_rx_cfg[idx].bit_format =
+			mi2s_auxpcm_get_format(ucontrol->value.enumerated.item[0]);
 
-	pr_debug("%s: idx[%d]_rx_format = %d, item = %d\n", __func__,
-		  idx, mi2s_rx_cfg[idx].bit_format,
-		  ucontrol->value.enumerated.item[0]);
+		pr_debug("%s: idx[%d]_rx_format = %d, item = %d\n", __func__,
+			idx, mi2s_rx_cfg[idx].bit_format,
+			ucontrol->value.enumerated.item[0]);
+	}
 
 	return 0;
 }
@@ -3523,6 +3566,9 @@ static const struct snd_kcontrol_new msm_snd_controls[] = {
 	SOC_ENUM_EXT("QUIN_AUX_PCM_TX SampleRate", quin_aux_pcm_tx_sample_rate,
 			aux_pcm_tx_sample_rate_get,
 			aux_pcm_tx_sample_rate_put),
+	SOC_ENUM_EXT("SEN_AUX_PCM_TX SampleRate", sen_aux_pcm_tx_sample_rate,
+			aux_pcm_tx_sample_rate_get,
+			aux_pcm_tx_sample_rate_put),
 	SOC_ENUM_EXT("PRIM_MI2S_RX SampleRate", prim_mi2s_rx_sample_rate,
 			mi2s_rx_sample_rate_get,
 			mi2s_rx_sample_rate_put),
@@ -3538,6 +3584,9 @@ static const struct snd_kcontrol_new msm_snd_controls[] = {
 	SOC_ENUM_EXT("QUIN_MI2S_RX SampleRate", quin_mi2s_rx_sample_rate,
 			mi2s_rx_sample_rate_get,
 			mi2s_rx_sample_rate_put),
+	SOC_ENUM_EXT("SEN_MI2S_RX SampleRate",  sen_mi2s_rx_sample_rate,
+			mi2s_rx_sample_rate_get,
+			mi2s_rx_sample_rate_put),
 	SOC_ENUM_EXT("PRIM_MI2S_TX SampleRate", prim_mi2s_tx_sample_rate,
 			mi2s_tx_sample_rate_get,
 			mi2s_tx_sample_rate_put),
@@ -3551,6 +3600,9 @@ static const struct snd_kcontrol_new msm_snd_controls[] = {
 			mi2s_tx_sample_rate_get,
 			mi2s_tx_sample_rate_put),
 	SOC_ENUM_EXT("QUIN_MI2S_TX SampleRate", quin_mi2s_tx_sample_rate,
+			mi2s_tx_sample_rate_get,
+			mi2s_tx_sample_rate_put),
+	SOC_ENUM_EXT("SEN_MI2S_TX SampleRate", sen_mi2s_tx_sample_rate,
 			mi2s_tx_sample_rate_get,
 			mi2s_tx_sample_rate_put),
 	SOC_ENUM_EXT("PRIM_MI2S_RX Channels", prim_mi2s_rx_chs,
@@ -3573,6 +3625,10 @@ static const struct snd_kcontrol_new msm_snd_controls[] = {
 			msm_mi2s_rx_ch_get, msm_mi2s_rx_ch_put),
 	SOC_ENUM_EXT("QUIN_MI2S_TX Channels", quin_mi2s_tx_chs,
 			msm_mi2s_tx_ch_get, msm_mi2s_tx_ch_put),
+	SOC_ENUM_EXT("SEN_MI2S_RX Channels", sen_mi2s_rx_chs,
+			msm_mi2s_rx_ch_get, msm_mi2s_rx_ch_put),
+	SOC_ENUM_EXT("SEN_MI2S_TX Channels", sen_mi2s_tx_chs,
+			msm_mi2s_tx_ch_get, msm_mi2s_tx_ch_put),
 	SOC_ENUM_EXT("PRIM_MI2S_RX Format", mi2s_rx_format,
 			msm_mi2s_rx_format_get, msm_mi2s_rx_format_put),
 	SOC_ENUM_EXT("PRIM_MI2S_TX Format", mi2s_tx_format,
@@ -3593,6 +3649,10 @@ static const struct snd_kcontrol_new msm_snd_controls[] = {
 			msm_mi2s_rx_format_get, msm_mi2s_rx_format_put),
 	SOC_ENUM_EXT("QUIN_MI2S_TX Format", mi2s_tx_format,
 			msm_mi2s_tx_format_get, msm_mi2s_tx_format_put),
+	SOC_ENUM_EXT("SEN_MI2S_RX Format", mi2s_rx_format,
+			msm_mi2s_rx_format_get, msm_mi2s_rx_format_put),
+	SOC_ENUM_EXT("SEN_MI2S_TX Format", mi2s_tx_format,
+			msm_mi2s_tx_format_get, msm_mi2s_tx_format_put),
 	SOC_ENUM_EXT("PRIM_AUX_PCM_RX Format", aux_pcm_rx_format,
 			msm_aux_pcm_rx_format_get, msm_aux_pcm_rx_format_put),
 	SOC_ENUM_EXT("PRIM_AUX_PCM_TX Format", aux_pcm_tx_format,
@@ -3612,6 +3672,10 @@ static const struct snd_kcontrol_new msm_snd_controls[] = {
 	SOC_ENUM_EXT("QUIN_AUX_PCM_RX Format", aux_pcm_rx_format,
 			msm_aux_pcm_rx_format_get, msm_aux_pcm_rx_format_put),
 	SOC_ENUM_EXT("QUIN_AUX_PCM_TX Format", aux_pcm_tx_format,
+			msm_aux_pcm_tx_format_get, msm_aux_pcm_tx_format_put),
+	SOC_ENUM_EXT("SEN_AUX_PCM_RX Format", aux_pcm_rx_format,
+			msm_aux_pcm_rx_format_get, msm_aux_pcm_rx_format_put),
+	SOC_ENUM_EXT("SEN_AUX_PCM_TX Format", aux_pcm_tx_format,
 			msm_aux_pcm_tx_format_get, msm_aux_pcm_tx_format_put),
 	SOC_SINGLE_MULTI_EXT("VAD CFG", SND_SOC_NOPM, 0, 1000, 0, 3, NULL,
 				msm_snd_vad_cfg_put),
@@ -4143,7 +4207,6 @@ static int msm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 		rate->min = rate->max = tdm_tx_cfg[TDM_QUIN][TDM_0].sample_rate;
 		break;
 
-
 	case MSM_BACKEND_DAI_AUXPCM_RX:
 		param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
 			aux_pcm_rx_cfg[PRIM_AUX_PCM].bit_format);
@@ -4234,6 +4297,24 @@ static int msm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 			aux_pcm_tx_cfg[QUIN_AUX_PCM].channels;
 		break;
 
+	case MSM_BACKEND_DAI_SEN_AUXPCM_RX:
+		param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
+			aux_pcm_rx_cfg[SEN_AUX_PCM].bit_format);
+		rate->min = rate->max =
+			aux_pcm_rx_cfg[SEN_AUX_PCM].sample_rate;
+		channels->min = channels->max =
+			aux_pcm_rx_cfg[SEN_AUX_PCM].channels;
+		break;
+
+	case MSM_BACKEND_DAI_SEN_AUXPCM_TX:
+		param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
+			aux_pcm_tx_cfg[SEN_AUX_PCM].bit_format);
+		rate->min = rate->max =
+			aux_pcm_tx_cfg[SEN_AUX_PCM].sample_rate;
+		channels->min = channels->max =
+			aux_pcm_tx_cfg[SEN_AUX_PCM].channels;
+		break;
+
 	case MSM_BACKEND_DAI_PRI_MI2S_RX:
 		param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
 			mi2s_rx_cfg[PRIM_MI2S].bit_format);
@@ -4314,6 +4395,21 @@ static int msm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 			mi2s_tx_cfg[QUIN_MI2S].channels;
 		break;
 
+	case MSM_BACKEND_DAI_SENARY_MI2S_RX:
+		param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
+			mi2s_rx_cfg[SEN_MI2S].bit_format);
+		rate->min = rate->max = mi2s_rx_cfg[SEN_MI2S].sample_rate;
+		channels->min = channels->max =
+			mi2s_rx_cfg[SEN_MI2S].channels;
+		break;
+
+	case MSM_BACKEND_DAI_SENARY_MI2S_TX:
+		param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
+			mi2s_tx_cfg[SEN_MI2S].bit_format);
+		rate->min = rate->max = mi2s_tx_cfg[SEN_MI2S].sample_rate;
+		channels->min = channels->max =
+			mi2s_tx_cfg[SEN_MI2S].channels;
+		break;
 	case MSM_BACKEND_DAI_WSA_CDC_DMA_RX_0:
 	case MSM_BACKEND_DAI_WSA_CDC_DMA_RX_1:
 		idx = msm_cdc_dma_get_idx_from_beid(dai_link->id);
@@ -4995,6 +5091,12 @@ static int msm_get_port_id(int be_id)
 	case MSM_BACKEND_DAI_QUINARY_MI2S_TX:
 		afe_port_id = AFE_PORT_ID_QUINARY_MI2S_TX;
 		break;
+	case MSM_BACKEND_DAI_SENARY_MI2S_RX:
+		afe_port_id = AFE_PORT_ID_SENARY_MI2S_RX;
+		break;
+	case MSM_BACKEND_DAI_SENARY_MI2S_TX:
+		afe_port_id = AFE_PORT_ID_SENARY_MI2S_TX;
+		break;
 	default:
 		pr_err("%s: Invalid BE id: %d\n", __func__, be_id);
 		afe_port_id = -EINVAL;
@@ -5074,164 +5176,6 @@ err:
 	return ret;
 }
 
-static int msm_set_pinctrl(struct msm_pinctrl_info *pinctrl_info,
-				enum pinctrl_pin_state new_state)
-{
-	int ret = 0;
-	int curr_state = 0;
-
-	if (pinctrl_info == NULL) {
-		pr_err("%s: pinctrl_info is NULL\n", __func__);
-		ret = -EINVAL;
-		goto err;
-	}
-
-	if (pinctrl_info->pinctrl == NULL) {
-		pr_err("%s: pinctrl_info->pinctrl is NULL\n", __func__);
-		ret = -EINVAL;
-		goto err;
-	}
-
-	curr_state = pinctrl_info->curr_state;
-	pinctrl_info->curr_state = new_state;
-	pr_debug("%s: curr_state = %s new_state = %s\n", __func__,
-		 pin_states[curr_state], pin_states[pinctrl_info->curr_state]);
-
-	if (curr_state == pinctrl_info->curr_state) {
-		pr_debug("%s: Already in same state\n", __func__);
-		goto err;
-	}
-
-	if (curr_state != STATE_DISABLE &&
-		pinctrl_info->curr_state != STATE_DISABLE) {
-		pr_debug("%s: state already active cannot switch\n", __func__);
-		ret = -EIO;
-		goto err;
-	}
-
-	switch (pinctrl_info->curr_state) {
-	case STATE_MI2S_ACTIVE:
-		ret = pinctrl_select_state(pinctrl_info->pinctrl,
-					pinctrl_info->mi2s_active);
-		if (ret) {
-			pr_err("%s: MI2S state select failed with %d\n",
-				__func__, ret);
-			ret = -EIO;
-			goto err;
-		}
-		break;
-	case STATE_TDM_ACTIVE:
-		ret = pinctrl_select_state(pinctrl_info->pinctrl,
-					pinctrl_info->tdm_active);
-		if (ret) {
-			pr_err("%s: TDM state select failed with %d\n",
-				__func__, ret);
-			ret = -EIO;
-			goto err;
-		}
-		break;
-	case STATE_DISABLE:
-		if (curr_state == STATE_MI2S_ACTIVE) {
-			ret = pinctrl_select_state(pinctrl_info->pinctrl,
-					pinctrl_info->mi2s_disable);
-		} else {
-			ret = pinctrl_select_state(pinctrl_info->pinctrl,
-					pinctrl_info->tdm_disable);
-		}
-		if (ret) {
-			pr_err("%s:  state disable failed with %d\n",
-				__func__, ret);
-			ret = -EIO;
-			goto err;
-		}
-		break;
-	default:
-		pr_err("%s: TLMM pin state is invalid\n", __func__);
-		return -EINVAL;
-	}
-
-err:
-	return ret;
-}
-
-static void msm_release_pinctrl(struct platform_device *pdev)
-{
-	struct snd_soc_card *card = platform_get_drvdata(pdev);
-	struct msm_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
-	struct msm_pinctrl_info *pinctrl_info = &pdata->pinctrl_info;
-
-	if (pinctrl_info->pinctrl) {
-		devm_pinctrl_put(pinctrl_info->pinctrl);
-		pinctrl_info->pinctrl = NULL;
-	}
-}
-
-static int msm_get_pinctrl(struct platform_device *pdev)
-{
-	struct snd_soc_card *card = platform_get_drvdata(pdev);
-	struct msm_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
-	struct msm_pinctrl_info *pinctrl_info = NULL;
-	struct pinctrl *pinctrl;
-	int ret;
-
-	pinctrl_info = &pdata->pinctrl_info;
-
-	if (pinctrl_info == NULL) {
-		pr_err("%s: pinctrl_info is NULL\n", __func__);
-		return -EINVAL;
-	}
-
-	pinctrl = devm_pinctrl_get(&pdev->dev);
-	if (IS_ERR_OR_NULL(pinctrl)) {
-		pr_err("%s: Unable to get pinctrl handle\n", __func__);
-		return -EINVAL;
-	}
-	pinctrl_info->pinctrl = pinctrl;
-
-	/* get all the states handles from Device Tree */
-	pinctrl_info->mi2s_disable = pinctrl_lookup_state(pinctrl,
-						"quat-mi2s-sleep");
-	if (IS_ERR(pinctrl_info->mi2s_disable)) {
-		pr_err("%s: could not get mi2s_disable pinstate\n", __func__);
-		goto err;
-	}
-	pinctrl_info->mi2s_active = pinctrl_lookup_state(pinctrl,
-						"quat-mi2s-active");
-	if (IS_ERR(pinctrl_info->mi2s_active)) {
-		pr_err("%s: could not get mi2s_active pinstate\n", __func__);
-		goto err;
-	}
-	pinctrl_info->tdm_disable = pinctrl_lookup_state(pinctrl,
-						"quat-tdm-sleep");
-	if (IS_ERR(pinctrl_info->tdm_disable)) {
-		pr_err("%s: could not get tdm_disable pinstate\n", __func__);
-		goto err;
-	}
-	pinctrl_info->tdm_active = pinctrl_lookup_state(pinctrl,
-						"quat-tdm-active");
-	if (IS_ERR(pinctrl_info->tdm_active)) {
-		pr_err("%s: could not get tdm_active pinstate\n",
-			__func__);
-		goto err;
-	}
-	/* Reset the TLMM pins to a default state */
-	ret = pinctrl_select_state(pinctrl_info->pinctrl,
-					pinctrl_info->mi2s_disable);
-	if (ret != 0) {
-		pr_err("%s: Disable TLMM pins failed with %d\n",
-			__func__, ret);
-		ret = -EIO;
-		goto err;
-	}
-	pinctrl_info->curr_state = STATE_DISABLE;
-
-	return 0;
-
-err:
-	devm_pinctrl_put(pinctrl);
-	pinctrl_info->pinctrl = NULL;
-	return -EINVAL;
-}
 
 static int msm_tdm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 				      struct snd_pcm_hw_params *params)
@@ -5281,7 +5225,7 @@ static int qcs405_tdm_snd_hw_params(struct snd_pcm_substream *substream,
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
 	int ret = 0;
 	int slot_width = 32;
-	int channels, slots;
+	int channels, slots = 8;
 	unsigned int slot_mask, rate, clk_freq;
 	unsigned int slot_offset[8] = {0, 4, 8, 12, 16, 20, 24, 28};
 
@@ -5290,36 +5234,35 @@ static int qcs405_tdm_snd_hw_params(struct snd_pcm_substream *substream,
 	/* currently only supporting TDM_RX_0 and TDM_TX_0 */
 	switch (cpu_dai->id) {
 	case AFE_PORT_ID_PRIMARY_TDM_RX:
-		slots = tdm_rx_cfg[TDM_PRI][TDM_0].channels;
+		channels = tdm_rx_cfg[TDM_PRI][TDM_0].channels;
 		break;
 	case AFE_PORT_ID_SECONDARY_TDM_RX:
-		slots = tdm_rx_cfg[TDM_SEC][TDM_0].channels;
+		channels = tdm_rx_cfg[TDM_SEC][TDM_0].channels;
 		break;
 	case AFE_PORT_ID_TERTIARY_TDM_RX:
-		slots = tdm_rx_cfg[TDM_TERT][TDM_0].channels;
+		channels = tdm_rx_cfg[TDM_TERT][TDM_0].channels;
 		break;
 	case AFE_PORT_ID_QUATERNARY_TDM_RX:
-		slots = tdm_rx_cfg[TDM_QUAT][TDM_0].channels;
+		channels = tdm_rx_cfg[TDM_QUAT][TDM_0].channels;
 		break;
 	case AFE_PORT_ID_QUINARY_TDM_RX:
-		slots = tdm_rx_cfg[TDM_QUIN][TDM_0].channels;
+		channels = tdm_rx_cfg[TDM_QUIN][TDM_0].channels;
 		break;
 	case AFE_PORT_ID_PRIMARY_TDM_TX:
-		slots = tdm_tx_cfg[TDM_PRI][TDM_0].channels;
+		channels = tdm_tx_cfg[TDM_PRI][TDM_0].channels;
 		break;
 	case AFE_PORT_ID_SECONDARY_TDM_TX:
-		slots = tdm_tx_cfg[TDM_SEC][TDM_0].channels;
+		channels = tdm_tx_cfg[TDM_SEC][TDM_0].channels;
 		break;
 	case AFE_PORT_ID_TERTIARY_TDM_TX:
-		slots = tdm_tx_cfg[TDM_TERT][TDM_0].channels;
+		channels = tdm_tx_cfg[TDM_TERT][TDM_0].channels;
 		break;
 	case AFE_PORT_ID_QUATERNARY_TDM_TX:
-		slots = tdm_tx_cfg[TDM_QUAT][TDM_0].channels;
+		channels = tdm_tx_cfg[TDM_QUAT][TDM_0].channels;
 		break;
 	case AFE_PORT_ID_QUINARY_TDM_TX:
-		slots = tdm_tx_cfg[TDM_QUIN][TDM_0].channels;
+		channels = tdm_tx_cfg[TDM_QUIN][TDM_0].channels;
 		break;
-
 	default:
 		pr_err("%s: dai id 0x%x not supported\n",
 			__func__, cpu_dai->id);
@@ -5328,8 +5271,7 @@ static int qcs405_tdm_snd_hw_params(struct snd_pcm_substream *substream,
 
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		/*2 slot config - bits 0 and 1 set for the first two slots */
-		slot_mask = 0x0000FFFF >> (16-slots);
-		channels = slots;
+		slot_mask = 0x0000FFFF >> (16-channels);
 
 		pr_debug("%s: tdm rx slot_width %d slots %d\n",
 			__func__, slot_width, slots);
@@ -5351,8 +5293,7 @@ static int qcs405_tdm_snd_hw_params(struct snd_pcm_substream *substream,
 		}
 	} else if (substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
 		/*2 slot config - bits 0 and 1 set for the first two slots */
-		slot_mask = 0x0000FFFF >> (16-slots);
-		channels = slots;
+		slot_mask = 0x0000FFFF >> (16-channels);
 
 		pr_debug("%s: tdm tx slot_width %d slots %d\n",
 			__func__, slot_width, slots);
@@ -5390,6 +5331,38 @@ end:
 	return ret;
 }
 
+static int msm_get_tdm_mode(u32 port_id)
+{
+	u32 tdm_mode;
+
+	switch (port_id) {
+	case AFE_PORT_ID_PRIMARY_TDM_RX:
+	case AFE_PORT_ID_PRIMARY_TDM_TX:
+		tdm_mode = TDM_PRI;
+		break;
+	case AFE_PORT_ID_SECONDARY_TDM_RX:
+	case AFE_PORT_ID_SECONDARY_TDM_TX:
+		tdm_mode = TDM_SEC;
+		break;
+	case AFE_PORT_ID_TERTIARY_TDM_RX:
+	case AFE_PORT_ID_TERTIARY_TDM_TX:
+		tdm_mode = TDM_TERT;
+		break;
+	case AFE_PORT_ID_QUATERNARY_TDM_RX:
+	case AFE_PORT_ID_QUATERNARY_TDM_TX:
+		tdm_mode = TDM_QUAT;
+		break;
+	case AFE_PORT_ID_QUINARY_TDM_RX:
+	case AFE_PORT_ID_QUINARY_TDM_TX:
+		tdm_mode = TDM_QUIN;
+		break;
+	default:
+		pr_err("%s: Invalid port id: %d\n", __func__, port_id);
+		tdm_mode = -EINVAL;
+	}
+	return tdm_mode;
+}
+
 static int qcs405_tdm_snd_startup(struct snd_pcm_substream *substream)
 {
 	int ret = 0;
@@ -5397,15 +5370,48 @@ static int qcs405_tdm_snd_startup(struct snd_pcm_substream *substream)
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
 	struct snd_soc_card *card = rtd->card;
 	struct msm_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
-	struct msm_pinctrl_info *pinctrl_info = &pdata->pinctrl_info;
+	u32 tdm_mode = msm_get_tdm_mode(cpu_dai->id);
 
-	/* currently only supporting TDM_RX_0 and TDM_TX_0 */
-	if ((cpu_dai->id == AFE_PORT_ID_QUATERNARY_TDM_RX) ||
-		(cpu_dai->id == AFE_PORT_ID_QUATERNARY_TDM_TX)) {
-		ret = msm_set_pinctrl(pinctrl_info, STATE_TDM_ACTIVE);
+	if (tdm_mode >= TDM_INTERFACE_MAX) {
+		ret = -EINVAL;
+		pr_err("%s: Invalid TDM interface %d\n",
+			__func__, ret);
+		return ret;
+	}
+
+	if (pdata->mi2s_gpio_p[tdm_mode]) {
+		ret = msm_cdc_pinctrl_select_active_state(
+			pdata->mi2s_gpio_p[tdm_mode]);
 		if (ret)
-			pr_err("%s: TDM TLMM pinctrl set failed with %d\n",
+			pr_err("%s: TDM GPIO pinctrl set active failed with %d\n",
 				__func__, ret);
+	}
+
+	/* Enable Mic bias for TDM Mics */
+	if (cpu_dai->id == AFE_PORT_ID_QUINARY_TDM_TX) {
+		if (pdata->tdm_micb_supply) {
+			ret = regulator_set_voltage(pdata->tdm_micb_supply,
+						pdata->tdm_micb_voltage,
+						pdata->tdm_micb_voltage);
+			if (ret) {
+				pr_err("%s: Setting voltage failed, err = %d\n",
+					__func__, ret);
+				return ret;
+			}
+			ret = regulator_set_load(pdata->tdm_micb_supply,
+						pdata->tdm_micb_current);
+			if (ret) {
+				pr_err("%s: Setting current failed, err = %d\n",
+					__func__, ret);
+				return ret;
+			}
+			ret = regulator_enable(pdata->tdm_micb_supply);
+			if (ret) {
+				pr_err("%s: regulator enable failed, err = %d\n",
+					__func__, ret);
+				return ret;
+			}
+		}
 	}
 
 	return ret;
@@ -5418,14 +5424,25 @@ static void qcs405_tdm_snd_shutdown(struct snd_pcm_substream *substream)
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
 	struct snd_soc_card *card = rtd->card;
 	struct msm_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
-	struct msm_pinctrl_info *pinctrl_info = &pdata->pinctrl_info;
+	u32 tdm_mode = msm_get_tdm_mode(cpu_dai->id);
 
-	/* currently only supporting TDM_RX_0 and TDM_TX_0 */
-	if ((cpu_dai->id == AFE_PORT_ID_QUATERNARY_TDM_RX) ||
-		(cpu_dai->id == AFE_PORT_ID_QUATERNARY_TDM_TX)) {
-		ret = msm_set_pinctrl(pinctrl_info, STATE_DISABLE);
+	if (cpu_dai->id == AFE_PORT_ID_QUINARY_TDM_TX) {
+		if (pdata->tdm_micb_supply) {
+			ret = regulator_disable(pdata->tdm_micb_supply);
+			if (ret)
+				pr_err("%s: regulator disable failed, err = %d\n",
+					__func__, ret);
+			regulator_set_voltage(pdata->tdm_micb_supply, 0,
+					pdata->tdm_micb_voltage);
+			regulator_set_load(pdata->tdm_micb_supply, 0);
+		}
+	}
+
+	if (pdata->mi2s_gpio_p[tdm_mode]) {
+		ret = msm_cdc_pinctrl_select_sleep_state(
+			pdata->mi2s_gpio_p[tdm_mode]);
 		if (ret)
-			pr_err("%s: TDM TLMM pinctrl set failed with %d\n",
+			pr_err("%s: TDM GPIO pinctrl set sleep failed with %d\n",
 				__func__, ret);
 	}
 }
@@ -5460,17 +5477,17 @@ static struct snd_soc_ops msm_fe_qos_ops = {
 	.prepare = msm_fe_qos_prepare,
 };
 
+
 static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 {
 	int ret = 0;
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
+
 	int index = cpu_dai->id;
 	unsigned int fmt = SND_SOC_DAIFMT_CBS_CFS;
 	struct snd_soc_card *card = rtd->card;
 	struct msm_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
-	struct msm_pinctrl_info *pinctrl_info = &pdata->pinctrl_info;
-	int ret_pinctrl = 0;
 
 	dev_dbg(rtd->card->dev,
 		"%s: substream = %s  stream = %d, dai name %s, dai ID %d\n",
@@ -5510,13 +5527,9 @@ static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 				__func__, index, ret);
 			goto clk_off;
 		}
-		if (index == QUAT_MI2S) {
-			ret_pinctrl = msm_set_pinctrl(pinctrl_info,
-						      STATE_MI2S_ACTIVE);
-			if (ret_pinctrl)
-				pr_err("%s: MI2S TLMM pinctrl set failed with %d\n",
-					__func__, ret_pinctrl);
-		}
+		if (pdata->mi2s_gpio_p[index])
+			msm_cdc_pinctrl_select_active_state(
+					pdata->mi2s_gpio_p[index]);
 	}
 clk_off:
 	if (ret < 0)
@@ -5536,8 +5549,6 @@ static void msm_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
 	int index = rtd->cpu_dai->id;
 	struct snd_soc_card *card = rtd->card;
 	struct msm_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
-	struct msm_pinctrl_info *pinctrl_info = &pdata->pinctrl_info;
-	int ret_pinctrl = 0;
 
 	pr_debug("%s(): substream = %s  stream = %d\n", __func__,
 		 substream->name, substream->stream);
@@ -5548,17 +5559,14 @@ static void msm_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
 
 	mutex_lock(&mi2s_intf_conf[index].lock);
 	if (--mi2s_intf_conf[index].ref_cnt == 0) {
+		if (pdata->mi2s_gpio_p[index])
+			msm_cdc_pinctrl_select_sleep_state(
+					pdata->mi2s_gpio_p[index]);
+
 		ret = msm_mi2s_set_sclk(substream, false);
 		if (ret < 0)
 			pr_err("%s:clock disable failed for MI2S (%d); ret=%d\n",
 				__func__, index, ret);
-		if (index == QUAT_MI2S) {
-			ret_pinctrl = msm_set_pinctrl(pinctrl_info,
-						      STATE_DISABLE);
-			if (ret_pinctrl)
-				pr_err("%s: MI2S TLMM pinctrl set failed with %d\n",
-					__func__, ret_pinctrl);
-		}
 	}
 	mutex_unlock(&mi2s_intf_conf[index].lock);
 }
@@ -5591,11 +5599,11 @@ static int msm_spdif_set_clk(struct snd_pcm_substream *substream, bool enable)
 		break;
 	case AFE_PORT_ID_PRIMARY_SPDIF_TX:
 		clk_cfg.clk_id = AFE_CLOCK_SET_CLOCK_ID_PRI_SPDIF_INPUT_CORE;
-		clk_cfg.clk_freq_in_hz = SPDIF_TX_CORE_CLK_204_P8_MHZ;
+		clk_cfg.clk_freq_in_hz = SPDIF_TX_CORE_CLK_163_P84_MHZ;
 		break;
 	case AFE_PORT_ID_SECONDARY_SPDIF_TX:
 		clk_cfg.clk_id = AFE_CLOCK_SET_CLOCK_ID_SEC_SPDIF_INPUT_CORE;
-		clk_cfg.clk_freq_in_hz = SPDIF_TX_CORE_CLK_204_P8_MHZ;
+		clk_cfg.clk_freq_in_hz = SPDIF_TX_CORE_CLK_163_P84_MHZ;
 		break;
 	}
 
@@ -6383,6 +6391,37 @@ static struct snd_soc_dai_link msm_common_misc_fe_dai_links[] = {
 			    SND_SOC_DPCM_TRIGGER_POST},
 		.ignore_pmdown_time = 1,
 		.id = MSM_FRONTEND_DAI_MULTIMEDIA18,
+	},
+	{
+		.name = MSM_DAILINK_NAME(Transcode Loopback Playback),
+		.stream_name = "Transcode Loopback Playback",
+		.cpu_dai_name = "MultiMedia26",
+		.platform_name = "msm-transcode-loopback",
+		.dynamic = 1,
+		.dpcm_playback = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			 SND_SOC_DPCM_TRIGGER_POST},
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+		 /* this dailink has playback support */
+		.id = MSM_FRONTEND_DAI_MULTIMEDIA26,
+	},
+	{
+		.name = MSM_DAILINK_NAME(Transcode Loopback Capture),
+		.stream_name = "Transcode Loopback Capture",
+		.cpu_dai_name = "MultiMedia27",
+		.platform_name = "msm-transcode-loopback",
+		.dynamic = 1,
+		.dpcm_capture = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			 SND_SOC_DPCM_TRIGGER_POST},
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+		.id = MSM_FRONTEND_DAI_MULTIMEDIA27,
 	},
 };
 
@@ -8342,6 +8381,10 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 	struct msm_asoc_mach_data *pdata;
 	int ret;
 	u32 val;
+	const char *micb_supply_str = "tdm-vdd-micb-supply";
+	const char *micb_supply_str1 = "tdm-vdd-micb";
+	const char *micb_voltage_str = "qcom,tdm-vdd-micb-voltage";
+	const char *micb_current_str = "qcom,tdm-vdd-micb-current";
 
 	if (!pdev->dev.of_node) {
 		dev_err(&pdev->dev, "No platform supplied from device tree\n");
@@ -8394,27 +8437,66 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 		val = 0;
 	}
 	if (val) {
+		pdata->codec_is_csra = true;
+		mi2s_rx_cfg[PRIM_MI2S].bit_format = SNDRV_PCM_FORMAT_S24_LE;
 		ret = msm_init_csra_dev(pdev, card);
 		if (ret)
 			goto err;
 	} else {
+		pdata->codec_is_csra = false;
 		ret = msm_init_wsa_dev(pdev, card);
 		if (ret)
 			goto err;
 	}
 
 	pdata->dmic_01_gpio_p = of_parse_phandle(pdev->dev.of_node,
-					      "qcom,cdc-dmic01-gpios",
-					       0);
+					"qcom,cdc-dmic01-gpios", 0);
 	pdata->dmic_23_gpio_p = of_parse_phandle(pdev->dev.of_node,
-					      "qcom,cdc-dmic23-gpios",
-					       0);
+					"qcom,cdc-dmic23-gpios", 0);
 	pdata->dmic_45_gpio_p = of_parse_phandle(pdev->dev.of_node,
-					      "qcom,cdc-dmic45-gpios",
-					       0);
+					"qcom,cdc-dmic45-gpios", 0);
 	pdata->dmic_67_gpio_p = of_parse_phandle(pdev->dev.of_node,
-					      "qcom,cdc-dmic67-gpios",
-					       0);
+					"qcom,cdc-dmic67-gpios", 0);
+
+	pdata->mi2s_gpio_p[PRIM_MI2S] = of_parse_phandle(pdev->dev.of_node,
+					"qcom,pri-mi2s-gpios", 0);
+	pdata->mi2s_gpio_p[SEC_MI2S] = of_parse_phandle(pdev->dev.of_node,
+					"qcom,sec-mi2s-gpios", 0);
+	pdata->mi2s_gpio_p[TERT_MI2S] = of_parse_phandle(pdev->dev.of_node,
+					"qcom,tert-mi2s-gpios", 0);
+	pdata->mi2s_gpio_p[QUAT_MI2S] = of_parse_phandle(pdev->dev.of_node,
+					"qcom,quat-mi2s-gpios", 0);
+	pdata->mi2s_gpio_p[QUIN_MI2S] = of_parse_phandle(pdev->dev.of_node,
+					"qcom,quin-mi2s-gpios", 0);
+
+	if (of_parse_phandle(pdev->dev.of_node, micb_supply_str, 0)) {
+		pdata->tdm_micb_supply = devm_regulator_get(&pdev->dev,
+					micb_supply_str1);
+		if (IS_ERR(pdata->tdm_micb_supply)) {
+			ret = PTR_ERR(pdata->tdm_micb_supply);
+			dev_err(&pdev->dev,
+				"%s:Failed to get micbias supply for TDM Mic %d\n",
+				__func__, ret);
+		}
+		ret = of_property_read_u32(pdev->dev.of_node,
+					micb_voltage_str,
+					&pdata->tdm_micb_voltage);
+		if (ret) {
+			dev_err(&pdev->dev,
+				"%s:Looking up %s property in node %s failed\n",
+				__func__, micb_voltage_str,
+				pdev->dev.of_node->full_name);
+		}
+		ret = of_property_read_u32(pdev->dev.of_node,
+					micb_current_str,
+					&pdata->tdm_micb_current);
+		if (ret) {
+			dev_err(&pdev->dev,
+				"%s:Looking up %s property in node %s failed\n",
+				__func__, micb_current_str,
+				pdev->dev.of_node->full_name);
+		}
+	}
 
 	ret = devm_snd_soc_register_card(&pdev->dev, card);
 	if (ret == -EPROBE_DEFER) {
@@ -8434,23 +8516,11 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "msm_mdf_mem_init failed (%d)\n",
 			 ret);
 
-	/* Parse pinctrl info from devicetree */
-	ret = msm_get_pinctrl(pdev);
-	if (!ret) {
-		pr_debug("%s: pinctrl parsing successful\n", __func__);
-	} else {
-		dev_dbg(&pdev->dev,
-			"%s: Parsing pinctrl failed with %d. Cannot use Ports\n",
-			__func__, ret);
-		ret = 0;
-	}
-
 	msm_i2s_auxpcm_init(pdev);
 
 	is_initial_boot = true;
 	return 0;
 err:
-	msm_release_pinctrl(pdev);
 	return ret;
 }
 
@@ -8460,7 +8530,6 @@ static int msm_asoc_machine_remove(struct platform_device *pdev)
 	msm_i2s_auxpcm_deinit();
 	msm_mdf_mem_deinit();
 
-	msm_release_pinctrl(pdev);
 	return 0;
 }
 
