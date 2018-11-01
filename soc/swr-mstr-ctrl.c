@@ -42,7 +42,7 @@
 
 #define SWR_INVALID_PARAM 0xFF
 
-#define SWRM_INTERRUPT_STATUS_MASK 0x485
+#define SWRM_INTERRUPT_STATUS_MASK 0x1FDFD
 /* pm runtime auto suspend timer in msecs */
 static int auto_suspend_timer = SWR_AUTO_SUSPEND_DELAY * 1000;
 module_param(auto_suspend_timer, int, 0664);
@@ -1393,7 +1393,7 @@ handle_irq:
 	intr_sts &= SWRM_INTERRUPT_STATUS_MASK;
 
 	if (intr_sts) {
-		dev_dbg(swrm->dev, "new interrupt received\n", __func__);
+		dev_dbg(swrm->dev, "%s: new interrupt received\n", __func__);
 		goto handle_irq;
 	}
 
