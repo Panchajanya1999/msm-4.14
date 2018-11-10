@@ -357,6 +357,7 @@ typedef void (*qdf_timer_func_t)(void *);
  * @QDF_MODULE_ID_IPA: IPA module ID
  * @QDF_MODULE_ID_CP_STATS: Control Plane Statistics ID
  * @QDF_MODULE_ID_ACTION_OUI: ACTION OUI module ID
+ * @QDF_MODULE_ID_TARGET: Target module ID
  * @QDF_MODULE_ID_ANY: anything
  * @QDF_MODULE_ID_MAX: Max place holder module ID
  */
@@ -461,6 +462,7 @@ typedef enum {
 	QDF_MODULE_ID_IPA,
 	QDF_MODULE_ID_CP_STATS,
 	QDF_MODULE_ID_ACTION_OUI,
+	QDF_MODULE_ID_TARGET,
 	QDF_MODULE_ID_ANY,
 	QDF_MODULE_ID_MAX,
 } QDF_MODULE_ID;
@@ -482,6 +484,10 @@ typedef enum {
  * @QDF_TRACE_LEVEL_INFO_LOW: Low level operational messages that require
  *			      no action
  * @QDF_TRACE_LEVEL_DEBUG: Information useful to developers for debugging
+ * @QDF_TRACE_LEVEL_TRACE: Indicates trace level for automation scripts,
+ *			whenever there is a context switch in driver, one
+ *			print using this trace level will be added with
+ *			the help of qdf_trace api.
  * @QDF_TRACE_LEVEL_ALL: All trace levels
  * @QDF_TRACE_LEVEL_MAX: Max trace level
  */
@@ -495,6 +501,7 @@ typedef enum {
 	QDF_TRACE_LEVEL_INFO_MED,
 	QDF_TRACE_LEVEL_INFO_LOW,
 	QDF_TRACE_LEVEL_DEBUG,
+	QDF_TRACE_LEVEL_TRACE,
 	QDF_TRACE_LEVEL_ALL,
 	QDF_TRACE_LEVEL_MAX
 } QDF_TRACE_LEVEL;
