@@ -292,6 +292,7 @@ static const struct category_info cinfo[MAX_SUPPORTED_CATEGORY] = {
 	[QDF_MODULE_ID_OCB] = {QDF_TRACE_LEVEL_ALL},
 	[QDF_MODULE_ID_IPA] = {QDF_TRACE_LEVEL_ALL},
 	[QDF_MODULE_ID_ACTION_OUI] = {QDF_TRACE_LEVEL_ALL},
+	[QDF_MODULE_ID_TARGET] = {QDF_TRACE_LEVEL_ALL},
 };
 
 int limit_off_chan_tbl[HDD_MAX_AC][HDD_MAX_OFF_CHAN_ENTRIES] = {
@@ -5334,7 +5335,7 @@ QDF_STATUS hdd_stop_adapter_ext(struct hdd_context *hdd_ctx,
 				qdf_status =
 					qdf_wait_for_event_completion(
 					&hostapd_state->qdf_stop_bss_event,
-					SME_CMD_TIMEOUT_VALUE);
+					SME_CMD_START_STOP_BSS_TIMEOUT);
 
 				if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
 					hdd_err("failure waiting for wlansap_stop_bss %d",
@@ -8819,6 +8820,26 @@ static void hdd_override_ini_config(struct hdd_context *hdd_ctx)
 	}
 }
 
+#ifdef ENABLE_MTRACE_LOG
+static void hdd_set_mtrace_for_each(struct hdd_context *hdd_ctx)
+{
+	uint8_t module_id = 0;
+	int qdf_print_idx = -1;
+
+	qdf_print_idx = qdf_get_pidx();
+	for (module_id = 0; module_id < QDF_MODULE_ID_MAX; module_id++)
+		qdf_print_set_category_verbose(
+					qdf_print_idx,
+					module_id, QDF_TRACE_LEVEL_TRACE,
+					hdd_ctx->config->enable_mtrace);
+}
+#else
+static void hdd_set_mtrace_for_each(struct hdd_context *hdd_ctx)
+{
+}
+
+#endif
+
 /**
  * hdd_set_trace_level_for_each - Set trace level for each INI config
  * @hdd_ctx - HDD context
@@ -8875,6 +8896,8 @@ static void hdd_set_trace_level_for_each(struct hdd_context *hdd_ctx)
 				hdd_ctx->config->qdf_trace_enable_regulatory);
 	hdd_qdf_trace_enable(QDF_MODULE_ID_CP_STATS,
 				hdd_ctx->config->qdf_trace_enable_cp_stats);
+
+	hdd_set_mtrace_for_each(hdd_ctx);
 
 	hdd_cfg_print(hdd_ctx);
 }
@@ -12146,7 +12169,7 @@ void wlan_hdd_stop_sap(struct hdd_adapter *ap_adapter)
 							sap_context)) {
 			qdf_status = qdf_wait_for_event_completion(&hostapd_state->
 					qdf_stop_bss_event,
-					SME_CMD_TIMEOUT_VALUE);
+					SME_CMD_START_STOP_BSS_TIMEOUT);
 			if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
 				mutex_unlock(&hdd_ctx->sap_lock);
 				hdd_err("SAP Stop Failed");
@@ -12218,7 +12241,7 @@ void wlan_hdd_start_sap(struct hdd_adapter *ap_adapter, bool reinit)
 
 	hdd_debug("Waiting for SAP to start");
 	qdf_status = qdf_wait_for_event_completion(&hostapd_state->qdf_event,
-					SME_CMD_TIMEOUT_VALUE);
+					SME_CMD_START_STOP_BSS_TIMEOUT);
 	if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
 		hdd_err("SAP Start failed");
 		goto end;
@@ -13693,8 +13716,10 @@ static void hdd_update_score_config(
 
 	score_config->cb_mode_24G = cfg->nChannelBondingMode24GHz;
 	score_config->cb_mode_5G = cfg->nChannelBondingMode5GHz;
-	score_config->nss = cfg->enable2x2 ? 2 : 1;
-
+	score_config->vdev_nss_24g = cfg->enable2x2 ?
+					 CFG_STA_NSS(cfg->vdev_type_nss_2g) : 1;
+	score_config->vdev_nss_5g = cfg->enable2x2 ?
+					 CFG_STA_NSS(cfg->vdev_type_nss_5g) : 1;
 	if (cfg->dot11Mode == eHDD_DOT11_MODE_AUTO ||
 	    cfg->dot11Mode == eHDD_DOT11_MODE_11ax ||
 	    cfg->dot11Mode == eHDD_DOT11_MODE_11ax_ONLY)
@@ -14050,7 +14075,7 @@ void hdd_restart_sap(struct hdd_adapter *ap_adapter)
 			qdf_status =
 				qdf_wait_for_event_completion(&hostapd_state->
 					qdf_stop_bss_event,
-					SME_CMD_TIMEOUT_VALUE);
+					SME_CMD_START_STOP_BSS_TIMEOUT);
 
 			if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
 				hdd_err("SAP Stop Failed");
@@ -14084,7 +14109,7 @@ void hdd_restart_sap(struct hdd_adapter *ap_adapter)
 		hdd_info("Waiting for SAP to start");
 		qdf_status =
 			qdf_wait_for_event_completion(&hostapd_state->qdf_event,
-					SME_CMD_TIMEOUT_VALUE);
+					SME_CMD_START_STOP_BSS_TIMEOUT);
 		wlansap_reset_sap_config_add_ie(sap_config,
 				eUPDATE_IE_ALL);
 		if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {

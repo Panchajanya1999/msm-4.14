@@ -420,7 +420,9 @@ static inline void wma_send_del_sta_self_resp(struct del_sta_self_params *param)
 	sme_msg.type = eWNI_SME_DEL_STA_SELF_RSP;
 	sme_msg.bodyptr = param;
 
-	status = scheduler_post_msg(QDF_MODULE_ID_SME, &sme_msg);
+	status = scheduler_post_message(QDF_MODULE_ID_WMA,
+					QDF_MODULE_ID_SME,
+					QDF_MODULE_ID_SME, &sme_msg);
 	if (!QDF_IS_STATUS_SUCCESS(status)) {
 		WMA_LOGE("Failed to post eWNI_SME_DEL_STA_SELF_RSP");
 		qdf_mem_free(param);
@@ -790,7 +792,7 @@ QDF_STATUS wma_vdev_detach(tp_wma_handle wma_handle,
 	 * Cleanup the ObjMgr Peers for the current vdev and detach the
 	 * CDP Vdev.
 	 */
-	if (cds_is_driver_recovering() || !cds_is_target_ready()) {
+	if (!cds_is_target_ready()) {
 		wma_force_objmgr_vdev_peer_cleanup(wma_handle, vdev_id);
 		wma_cdp_vdev_detach(soc, wma_handle, vdev_id);
 		goto send_rsp;
@@ -1169,8 +1171,7 @@ int wma_vdev_start_resp_handler(void *handle, uint8_t *cmd_param_info,
 		if (!params) {
 			WMA_LOGE("%s: channel switch params is NULL for vdev %d",
 				__func__, resp_event->vdev_id);
-			policy_mgr_set_do_hw_mode_change_flag(
-				wma->psoc, false);
+			policy_mgr_set_do_hw_mode_change_flag(wma->psoc, false);
 			return -EINVAL;
 		}
 
@@ -1187,11 +1188,13 @@ int wma_vdev_start_resp_handler(void *handle, uint8_t *cmd_param_info,
 			wma->interfaces[resp_event->vdev_id].is_channel_switch =
 				false;
 		}
-		if (((resp_event->resp_type == WMI_VDEV_RESTART_RESP_EVENT) &&
-			((iface->type == WMI_VDEV_TYPE_STA) ||
-				(iface->type == WMI_VDEV_TYPE_MONITOR))) ||
-			((resp_event->resp_type == WMI_VDEV_START_RESP_EVENT) &&
-			 (iface->type == WMI_VDEV_TYPE_MONITOR))) {
+
+		if ((QDF_IS_STATUS_SUCCESS(resp_event->status) &&
+		     (resp_event->resp_type == WMI_VDEV_RESTART_RESP_EVENT) &&
+		     ((iface->type == WMI_VDEV_TYPE_STA) ||
+		      (iface->type == WMI_VDEV_TYPE_MONITOR))) ||
+		    ((resp_event->resp_type == WMI_VDEV_START_RESP_EVENT) &&
+		     (iface->type == WMI_VDEV_TYPE_MONITOR))) {
 			/* for CSA case firmware expects phymode before ch_wd */
 			err = wma_set_peer_param(wma, iface->bssid,
 					WMI_PEER_PHYMODE, iface->chanmode,
@@ -2526,7 +2529,9 @@ end:
 		sme_msg.bodyptr = self_sta_req;
 		sme_msg.bodyval = 0;
 
-		status = scheduler_post_msg(QDF_MODULE_ID_SME, &sme_msg);
+		status = scheduler_post_message(QDF_MODULE_ID_WMA,
+						QDF_MODULE_ID_SME,
+						QDF_MODULE_ID_SME, &sme_msg);
 		if (!QDF_IS_STATUS_SUCCESS(status)) {
 			WMA_LOGE("Failed to post eWNI_SME_ADD_STA_SELF_RSP");
 			qdf_mem_free(self_sta_req);
