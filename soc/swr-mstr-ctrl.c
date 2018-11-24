@@ -41,6 +41,8 @@
 			((reg) | ((id) << 16) | ((dev) << 20) | ((data) << 24))
 
 #define SWR_INVALID_PARAM 0xFF
+#define SWR_HSTOP_MAX_VAL 0xF
+#define SWR_HSTART_MIN_VAL 0x0
 
 #define SWRM_INTERRUPT_STATUS_MASK 0x1FDFD
 /* pm runtime auto suspend timer in msecs */
@@ -534,6 +536,10 @@ static int swrm_read(struct swr_master *master, u8 dev_num, u16 reg_addr,
 		dev_err(&master->dev, "%s: swrm is NULL\n", __func__);
 		return -EINVAL;
 	}
+	if (!dev_num) {
+		dev_err(&master->dev, "%s: invalid slave dev num\n", __func__);
+		return -EINVAL;
+	}
 	mutex_lock(&swrm->devlock);
 	if (!swrm->dev_up) {
 		mutex_unlock(&swrm->devlock);
@@ -542,11 +548,7 @@ static int swrm_read(struct swr_master *master, u8 dev_num, u16 reg_addr,
 	mutex_unlock(&swrm->devlock);
 
 	pm_runtime_get_sync(swrm->dev);
-	if (dev_num)
-		ret = swrm_cmd_fifo_rd_cmd(swrm, &val, dev_num, 0, reg_addr,
-					   len);
-	else
-		val = swr_master_read(swrm, reg_addr);
+	ret = swrm_cmd_fifo_rd_cmd(swrm, &val, dev_num, 0, reg_addr, len);
 
 	if (!ret)
 		*reg_val = (u8)val;
@@ -567,6 +569,10 @@ static int swrm_write(struct swr_master *master, u8 dev_num, u16 reg_addr,
 		dev_err(&master->dev, "%s: swrm is NULL\n", __func__);
 		return -EINVAL;
 	}
+	if (!dev_num) {
+		dev_err(&master->dev, "%s: invalid slave dev num\n", __func__);
+		return -EINVAL;
+	}
 	mutex_lock(&swrm->devlock);
 	if (!swrm->dev_up) {
 		mutex_unlock(&swrm->devlock);
@@ -575,10 +581,7 @@ static int swrm_write(struct swr_master *master, u8 dev_num, u16 reg_addr,
 	mutex_unlock(&swrm->devlock);
 
 	pm_runtime_get_sync(swrm->dev);
-	if (dev_num)
-		ret = swrm_cmd_fifo_wr_cmd(swrm, reg_val, dev_num, 0, reg_addr);
-	else
-		swr_master_write(swrm, reg_addr, reg_val);
+	ret = swrm_cmd_fifo_wr_cmd(swrm, reg_val, dev_num, 0, reg_addr);
 
 	pm_runtime_put_autosuspend(swrm->dev);
 	pm_runtime_mark_last_busy(swrm->dev);
@@ -924,7 +927,11 @@ static void swrm_copy_data_port_config(struct swr_master *master, u8 bank)
 		if (mport->hstart != SWR_INVALID_PARAM
 				&& mport->hstop != SWR_INVALID_PARAM) {
 			reg[len] = SWRM_DP_PORT_HCTRL_BANK(i + 1, bank);
-			hparams = (mport->hstart << 4) | mport->hstop;
+			hparams = (mport->hstop << 4) | mport->hstart;
+			val[len++] = hparams;
+		} else {
+			reg[len] = SWRM_DP_PORT_HCTRL_BANK(i + 1, bank);
+			hparams = (SWR_HSTOP_MAX_VAL << 4) | SWR_HSTART_MIN_VAL;
 			val[len++] = hparams;
 		}
 		if (mport->blk_pack_mode != SWR_INVALID_PARAM) {
@@ -2111,9 +2118,10 @@ int swrm_wcd_notify(struct platform_device *pdev, u32 id, void *data)
 		break;
 	case SWR_DEVICE_SSR_UP:
 		/* wait for clk voting to be zero */
+		reinit_completion(&swrm->clk_off_complete);
 		if (swrm->clk_ref_count &&
 			 !wait_for_completion_timeout(&swrm->clk_off_complete,
-						   (1 * HZ/100)))
+						   msecs_to_jiffies(200)))
 			dev_err(swrm->dev, "%s: clock voting not zero\n",
 				__func__);
 
@@ -2133,6 +2141,13 @@ int swrm_wcd_notify(struct platform_device *pdev, u32 id, void *data)
 		break;
 	case SWR_DEVICE_UP:
 		dev_dbg(swrm->dev, "%s: swr master up called\n", __func__);
+		mutex_lock(&swrm->devlock);
+		if (!swrm->dev_up) {
+			dev_dbg(swrm->dev, "SSR not complete yet\n");
+			mutex_unlock(&swrm->devlock);
+			return -EBUSY;
+		}
+		mutex_unlock(&swrm->devlock);
 		mutex_lock(&swrm->mlock);
 		pm_runtime_mark_last_busy(&pdev->dev);
 		pm_runtime_get_sync(&pdev->dev);
