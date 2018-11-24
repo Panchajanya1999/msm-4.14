@@ -185,7 +185,7 @@ static inline bool in_compat_syscall(void) { return is_compat_task(); }
  * @ACS_PENDING: Auto Channel Selection (ACS) is pending
  * @SOFTAP_INIT_DONE: Software Access Point (SAP) is initialized
  * @VENDOR_ACS_RESPONSE_PENDING: Waiting for event for vendor acs
- * DOWN_DURING_SSR: Interface went down during SSR
+ * @DOWN_DURING_SSR: Mark interface is down during SSR
  */
 enum hdd_adapter_flags {
 	NET_DEVICE_REGISTERED,
@@ -197,7 +197,7 @@ enum hdd_adapter_flags {
 	ACS_PENDING,
 	SOFTAP_INIT_DONE,
 	VENDOR_ACS_RESPONSE_PENDING,
-	DOWN_DURING_SSR
+	DOWN_DURING_SSR,
 };
 
 /**
@@ -224,11 +224,7 @@ enum hdd_driver_flags {
 #define WLAN_WAIT_TIME_COUNTRY     1000
 #define WLAN_WAIT_TIME_LINK_STATUS 800
 #define WLAN_WAIT_TIME_POWER_STATS 800
-/* Amount of time to wait for sme close session callback.
- * This value should be larger than the timeout used by WDI to wait for
- * a response from WCNSS
- */
-#define WLAN_WAIT_TIME_SESSIONOPENCLOSE  15000
+
 #define WLAN_WAIT_TIME_ABORTSCAN         2000
 
 /** Maximum time(ms) to wait for mc thread suspend **/
@@ -1027,6 +1023,7 @@ struct hdd_station_info {
 	uint64_t rx_bytes;
 	qdf_time_t last_tx_rx_ts;
 	qdf_time_t assoc_ts;
+	qdf_time_t disassoc_ts;
 	uint32_t tx_rate;
 	uint32_t rx_rate;
 	bool ampdu;
@@ -1344,6 +1341,7 @@ struct hdd_adapter {
 	/* tsf value received from firmware */
 	uint64_t cur_target_time;
 	uint64_t tsf_sync_soc_timer;
+	qdf_mc_timer_t host_capture_req_timer;
 #ifdef WLAN_FEATURE_TSF_PLUS
 	/* spin lock for read/write timestamps */
 	qdf_spinlock_t host_target_sync_lock;
@@ -1992,6 +1990,7 @@ struct hdd_context {
 	uint32_t apf_version;
 	bool apf_enabled_v2;
 #endif
+	struct qdf_mac_addr dynamic_mac_list[QDF_MAX_CONCURRENCY_PERSONA];
 };
 
 /**
@@ -3428,5 +3427,21 @@ struct hdd_context *hdd_handle_to_context(hdd_handle_t hdd_handle)
  * Return: None
  */
 void wlan_hdd_free_cache_channels(struct hdd_context *hdd_ctx);
+
+/**
+ * hdd_update_dynamic_mac() - Updates the dynamic MAC list
+ * @hdd_ctx: Pointer to HDD context
+ * @curr_mac_addr: Current interface mac address
+ * @new_mac_addr: New mac address which needs to be updated
+ *
+ * This function updates newly configured MAC address to the
+ * dynamic MAC address list corresponding to the current
+ * adapter MAC address
+ *
+ * Return: None
+ */
+void hdd_update_dynamic_mac(struct hdd_context *hdd_ctx,
+			    struct qdf_mac_addr *curr_mac_addr,
+			    struct qdf_mac_addr *new_mac_addr);
 
 #endif /* end #if !defined(WLAN_HDD_MAIN_H) */

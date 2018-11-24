@@ -66,6 +66,11 @@ ifeq ($(CONFIG_ARCH_MSM8917), y)
 	endif
 endif
 
+ifeq ($(CONFIG_ARCH_QCS405), y)
+	CONFIG_WLAN_SYNC_TSF_PLUS := y
+	CONFIG_WLAN_SYNC_TSF_PLUS_NOIRQ := y
+endif
+
 #Flag to enable Legacy Fast Roaming2(LFR2)
 CONFIG_QCACLD_WLAN_LFR2 := y
 #Flag to enable Legacy Fast Roaming3(LFR3)
@@ -107,6 +112,10 @@ CONFIG_QCACLD_FEATURE_METERING := y
 endif
 
 ifeq ($(CONFIG_ARCH_SDM670), y)
+CONFIG_QCACLD_FEATURE_METERING := y
+endif
+
+ifeq ($(CONFIG_ARCH_SM6150), y)
 CONFIG_QCACLD_FEATURE_METERING := y
 endif
 
@@ -494,6 +503,9 @@ CONFIG_ENABLE_MTRACE_LOG := y
 
 #Flag to enable nud tracking feature
 CONFIG_WLAN_NUD_TRACKING := y
+
+#Flag to enable wbuff feature
+CONFIG_WLAN_WBUFF := y
 
 #Flag to enable set and get disable channel list feature
 CONFIG_DISABLE_CHANNEL_LIST :=y

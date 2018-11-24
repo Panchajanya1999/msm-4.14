@@ -94,6 +94,11 @@
 /* SME timeout for Start/Stop BSS commands is set to 10 secs */
 #define SME_START_STOP_BSS_CMD_TIMEOUT (10 * 1000)
 #define SME_CMD_START_STOP_BSS_TIMEOUT (SME_START_STOP_BSS_CMD_TIMEOUT + 1000)
+
+/* SME timeout for vdev delete is set to 10 secs */
+#define SME_VDEV_DELETE_CMD_TIMEOUT (10 * 1000)
+#define SME_CMD_VDEV_CREATE_DELETE_TIMEOUT (SME_VDEV_DELETE_CMD_TIMEOUT + 1000)
+
 /*--------------------------------------------------------------------------
   Type declarations
   ------------------------------------------------------------------------*/
@@ -1160,7 +1165,8 @@ void sme_register_hw_mode_trans_cb(tHalHandle hal,
 QDF_STATUS sme_nss_update_request(uint32_t vdev_id,
 				uint8_t  new_nss, policy_mgr_nss_update_cback cback,
 				uint8_t next_action, struct wlan_objmgr_psoc *psoc,
-				enum policy_mgr_conn_update_reason reason);
+				enum policy_mgr_conn_update_reason reason,
+				uint32_t original_vdev_id);
 
 typedef void (*sme_peer_authorized_fp) (uint32_t vdev_id);
 QDF_STATUS sme_set_peer_authorized(uint8_t *peer_addr,
@@ -1360,13 +1366,8 @@ QDF_STATUS sme_set_tsfcb(tHalHandle hHal,
 
 QDF_STATUS sme_reset_tsfcb(tHalHandle h_hal);
 
-#ifdef WLAN_FEATURE_TSF
+#if defined(WLAN_FEATURE_TSF) && !defined(WLAN_FEATURE_TSF_PLUS_NOIRQ)
 QDF_STATUS sme_set_tsf_gpio(tHalHandle h_hal, uint32_t pinvalue);
-#else
-static inline QDF_STATUS sme_set_tsf_gpio(tHalHandle h_hal, uint32_t pinvalue)
-{
-	return QDF_STATUS_E_FAILURE;
-}
 #endif
 
 QDF_STATUS sme_update_mimo_power_save(tHalHandle hHal,

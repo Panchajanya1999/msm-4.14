@@ -479,6 +479,18 @@ ifeq ($(CONFIG_LEAK_DETECTION), y)
 	QDF_OBJS += $(QDF_OBJ_DIR)/qdf_debug_domain.o
 endif
 
+############ WBUFF ############
+WBUFF_OS_DIR :=	wbuff
+WBUFF_OS_INC_DIR := $(WBUFF_OS_DIR)/inc
+WBUFF_OS_SRC_DIR := $(WBUFF_OS_DIR)/src
+WBUFF_OBJ_DIR := $(WLAN_COMMON_ROOT)/$(WBUFF_OS_SRC_DIR)
+
+WBUFF_INC :=	-I$(WLAN_COMMON_INC)/$(WBUFF_OS_INC_DIR) \
+
+ifeq ($(CONFIG_WLAN_WBUFF), y)
+WBUFF_OBJS += 	$(WBUFF_OBJ_DIR)/wbuff.o
+endif
+
 ##########OS_IF #######
 OS_IF_DIR := $(WLAN_COMMON_ROOT)/os_if
 
@@ -1345,6 +1357,7 @@ INCS :=		$(HDD_INC) \
 		$(SME_INC) \
 		$(SYS_INC) \
 		$(QDF_INC) \
+		$(WBUFF_INC) \
 		$(CDS_INC) \
 		$(DFS_INC) \
 		$(TARGET_IF_INC) \
@@ -1435,6 +1448,7 @@ OBJS :=		$(HDD_OBJS) \
 		$(SME_OBJS) \
 		$(SYS_OBJS) \
 		$(QDF_OBJS) \
+		$(WBUFF_OBJS) \
 		$(CDS_OBJS) \
 		$(FTM_OBJS)
 
@@ -1825,6 +1839,9 @@ ifeq ($(CONFIG_ARCH_SDX20), y)
 cppflags-y += -DSYNC_IPA_READY
 endif
 
+#Enable wbuff
+cppflags-$(CONFIG_WLAN_WBUFF) += -DWLAN_FEATURE_WBUFF
+
 #Enable GTK Offload
 cppflags-$(CONFIG_GTK_OFFLOAD) += -DWLAN_FEATURE_GTK_OFFLOAD
 
@@ -1900,9 +1917,11 @@ cppflags-$(CONFIG_ATH_PCIE_ACCESS_DEBUG) += -DCONFIG_ATH_PCIE_ACCESS_DEBUG
 # Enable feature support for Linux version QCMBR
 cppflags-$(CONFIG_LINUX_QCMBR) += -DLINUX_QCMBR
 
-# Enable featue sync tsf between multi devices
+# Enable feature sync tsf between multi devices
 cppflags-$(CONFIG_WLAN_SYNC_TSF) += -DWLAN_FEATURE_TSF
 cppflags-$(CONFIG_WLAN_SYNC_TSF_PLUS) += -DWLAN_FEATURE_TSF_PLUS
+# Enable feature sync tsf for chips based on Adrastea arch
+cppflags-$(CONFIG_WLAN_SYNC_TSF_PLUS_NOIRQ) += -DWLAN_FEATURE_TSF_PLUS_NOIRQ
 
 cppflags-$(CONFIG_ATH_PROCFS_DIAG_SUPPORT) += -DCONFIG_ATH_PROCFS_DIAG_SUPPORT
 
