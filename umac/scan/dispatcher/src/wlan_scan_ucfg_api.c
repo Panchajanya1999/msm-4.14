@@ -559,8 +559,9 @@ int ucfg_scan_get_burst_duration(int max_ch_time,
 		 * If miracast is not running, accommodate max
 		 * stations to make the scans faster
 		 */
-		burst_duration = SCAN_BURST_SCAN_MAX_NUM_OFFCHANNELS *
-						max_ch_time;
+		burst_duration = SCAN_GO_BURST_SCAN_MAX_NUM_OFFCHANNELS *
+							max_ch_time;
+
 		if (burst_duration > SCAN_GO_MAX_ACTIVE_SCAN_BURST_DURATION) {
 			uint8_t channels = SCAN_P2P_SCAN_MAX_BURST_DURATION /
 								 max_ch_time;
@@ -626,8 +627,10 @@ static void ucfg_scan_req_update_concurrency_params(
 	 * firmware spends more time on home channel which will increase the
 	 * probability of sending beacon at TBTT
 	 */
-	if (ap_present || go_present)
+	if (ap_present || go_present) {
+		req->scan_req.dwell_time_active_2g = 0;
 		req->scan_req.min_rest_time = req->scan_req.max_rest_time;
+	}
 
 	if (req->scan_req.p2p_scan_type == SCAN_NON_P2P_DEFAULT) {
 		/*
@@ -803,6 +806,7 @@ ucfg_scan_req_update_params(struct wlan_objmgr_vdev *vdev,
 		req->scan_req.scan_f_add_tpc_ie_in_probe = true;
 	} else {
 		req->scan_req.adaptive_dwell_time_mode = SCAN_DWELL_MODE_STATIC;
+		req->scan_req.dwell_time_active_2g = 0;
 		if (req->scan_req.p2p_scan_type == SCAN_P2P_LISTEN) {
 			req->scan_req.repeat_probe_time = 0;
 		} else {
@@ -1201,12 +1205,19 @@ void
 ucfg_scan_unregister_requester(struct wlan_objmgr_psoc *psoc,
 	wlan_scan_requester requester)
 {
-	int idx = requester & WLAN_SCAN_REQUESTER_ID_MASK;
+	int idx;
 	struct wlan_scan_obj *scan;
 	struct scan_requester_info *requesters;
 
+	idx = requester & WLAN_SCAN_REQUESTER_ID_PREFIX;
+	if (idx != WLAN_SCAN_REQUESTER_ID_PREFIX) {
+		scm_err("prefix didn't match for requester id %d", requester);
+		return;
+	}
+
+	idx = requester & WLAN_SCAN_REQUESTER_ID_MASK;
 	if (idx >= WLAN_MAX_REQUESTORS) {
-		scm_err("requester id invalid");
+		scm_err("requester id %d greater than max value", requester);
 		return;
 	}
 

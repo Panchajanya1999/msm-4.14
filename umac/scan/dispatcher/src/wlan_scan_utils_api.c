@@ -133,8 +133,8 @@ bool util_is_scan_entry_match(
 	   entry1->channel.chan_idx) ==
 	   util_scan_scm_chan_to_band(entry2->channel.chan_idx)) {
 		/* Check for BSS */
-		if (util_is_ssid_match(
-		   &entry1->ssid, &entry2->ssid))
+		if (util_is_ssid_match(&entry1->ssid, &entry2->ssid) ||
+		    util_scan_is_null_ssid(&entry1->ssid))
 			return true;
 	} else if (entry1->cap_info.wlan_caps.ibss &&
 	   (entry1->channel.chan_idx ==
@@ -949,7 +949,7 @@ util_scan_unpack_beacon_frame(struct wlan_objmgr_pdev *pdev, uint8_t *frame,
 		scan_entry->ie_list.ssid = NULL;
 	} else {
 		qdf_mem_copy(scan_entry->ssid.ssid,
-				ssid->ssid, WLAN_SSID_MAX_LEN);
+				ssid->ssid, ssid->ssid_len);
 		scan_entry->ssid.length = ssid->ssid_len;
 		scan_entry->hidden_ssid_timestamp =
 			scan_entry->scan_entry_time;

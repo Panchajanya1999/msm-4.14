@@ -23,6 +23,7 @@
 #include "wmi_version_whitelist.h"
 #include <qdf_module.h>
 #include <wlan_defs.h>
+#include <wlan_cmn.h>
 #include <htc_services.h>
 #ifdef FEATURE_WLAN_APF
 #include "wmi_unified_apf_tlv.h"
@@ -964,7 +965,7 @@ QDF_STATUS send_peer_rx_reorder_queue_setup_cmd_tlv(wmi_unified_t wmi,
 			WMI_PEER_REORDER_QUEUE_SETUP_CMDID)) {
 		WMI_LOGP("%s: fail to send WMI_PEER_REORDER_QUEUE_SETUP_CMDID",
 			__func__);
-		qdf_nbuf_free(buf);
+		wmi_buf_free(buf);
 		return QDF_STATUS_E_FAILURE;
 	}
 	WMI_LOGD("%s: peer_macaddr %pM vdev_id %d, tid %d\n", __func__,
@@ -1009,7 +1010,7 @@ QDF_STATUS send_peer_rx_reorder_queue_remove_cmd_tlv(wmi_unified_t wmi,
 			WMI_PEER_REORDER_QUEUE_REMOVE_CMDID)) {
 		WMI_LOGP("%s: fail to send WMI_PEER_REORDER_QUEUE_REMOVE_CMDID",
 			__func__);
-		qdf_nbuf_free(buf);
+		wmi_buf_free(buf);
 		return QDF_STATUS_E_FAILURE;
 	}
 	WMI_LOGD("%s: peer_macaddr %pM vdev_id %d, tid_map %d", __func__,
@@ -14240,7 +14241,7 @@ QDF_STATUS send_enable_enhance_multicast_offload_tlv(
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 			sizeof(*cmd), WMI_CONFIG_ENHANCED_MCAST_FILTER_CMDID);
 	if (status != QDF_STATUS_SUCCESS) {
-		qdf_nbuf_free(buf);
+		wmi_buf_free(buf);
 		WMI_LOGE("%s:Failed to send ENHANCED_MCAST_FILTER_CMDID",
 			__func__);
 	}
@@ -14276,6 +14277,12 @@ static QDF_STATUS extract_gtk_rsp_event_tlv(wmi_unified_t wmi_handle,
 
 	fixed_param = (WMI_GTK_OFFLOAD_STATUS_EVENT_fixed_param *)
 		param_buf->fixed_param;
+
+	if (fixed_param->vdev_id >= WLAN_UMAC_PSOC_MAX_VDEVS) {
+		wmi_err_rl("Invalid vdev_id %u", fixed_param->vdev_id);
+		return QDF_STATUS_E_INVAL;
+	}
+
 	gtk_rsp_param->vdev_id = fixed_param->vdev_id;
 	gtk_rsp_param->status_flag = QDF_STATUS_SUCCESS;
 	gtk_rsp_param->refresh_cnt = fixed_param->refresh_cnt;
@@ -15329,7 +15336,7 @@ QDF_STATUS send_fw_test_cmd_tlv(wmi_unified_t wmi_handle,
 	if (wmi_unified_cmd_send(wmi_handle, wmi_buf, len,
 				 WMI_FWTEST_CMDID)) {
 		WMI_LOGP("%s: failed to send fw test command", __func__);
-		qdf_nbuf_free(wmi_buf);
+		wmi_buf_free(wmi_buf);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -17132,8 +17139,6 @@ static QDF_STATUS extract_ndp_confirm_tlv(wmi_unified_t wmi_handle,
 	}
 
 	WMI_LOGD("ndp_cfg - %d bytes", fixed_params->ndp_cfg_len);
-	QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_DEBUG,
-		&event->ndp_cfg, fixed_params->ndp_cfg_len);
 
 	if (fixed_params->ndp_app_info_len > event->num_ndp_app_info) {
 		WMI_LOGE("FW message ndp app info length %d more than TLV hdr %d",
@@ -17144,8 +17149,6 @@ static QDF_STATUS extract_ndp_confirm_tlv(wmi_unified_t wmi_handle,
 
 	WMI_LOGD("ndp_app_info - %d bytes",
 			fixed_params->ndp_app_info_len);
-	QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_DEBUG,
-		&event->ndp_app_info, fixed_params->ndp_app_info_len);
 
 	if (fixed_params->ndp_cfg_len >
 			(WMI_SVC_MSG_MAX_SIZE - sizeof(*fixed_params))) {
@@ -19498,7 +19501,10 @@ static QDF_STATUS extract_chainmask_tables_tlv(wmi_unified_t wmi_handle,
 	if (!hw_caps)
 		return QDF_STATUS_E_INVAL;
 
-	if (!hw_caps->num_chainmask_tables)
+	if ((!hw_caps->num_chainmask_tables) ||
+	    (hw_caps->num_chainmask_tables > PSOC_MAX_CHAINMASK_TABLES) ||
+	    (hw_caps->num_chainmask_tables >
+	     param_buf->num_mac_phy_chainmask_combo))
 		return QDF_STATUS_E_INVAL;
 
 	chainmask_caps = param_buf->mac_phy_chainmask_caps;
@@ -19611,6 +19617,13 @@ static QDF_STATUS extract_service_ready_ext_tlv(wmi_unified_t wmi_handle,
 	} else
 		param->num_chainmask_tables = 0;
 
+	if (param->num_chainmask_tables > PSOC_MAX_CHAINMASK_TABLES ||
+	    param->num_chainmask_tables >
+		param_buf->num_mac_phy_chainmask_combo) {
+		wmi_err_rl("num_chainmask_tables is OOB: %u",
+			   param->num_chainmask_tables);
+		return QDF_STATUS_E_INVAL;
+	}
 	chain_mask_combo = param_buf->mac_phy_chainmask_combo;
 
 	if (chain_mask_combo == NULL)
@@ -20664,6 +20677,25 @@ static QDF_STATUS extract_reg_chan_list_update_event_tlv(
 
 	reg_info->num_2g_reg_rules = chan_list_event_hdr->num_2g_reg_rules;
 	reg_info->num_5g_reg_rules = chan_list_event_hdr->num_5g_reg_rules;
+	num_2g_reg_rules = reg_info->num_2g_reg_rules;
+	num_5g_reg_rules = reg_info->num_5g_reg_rules;
+	if ((num_2g_reg_rules > MAX_REG_RULES) ||
+	    (num_5g_reg_rules > MAX_REG_RULES) ||
+	    (num_2g_reg_rules + num_5g_reg_rules > MAX_REG_RULES) ||
+	    (num_2g_reg_rules + num_5g_reg_rules !=
+	     param_buf->num_reg_rule_array)) {
+		wmi_err_rl("Invalid num_2g_reg_rules: %u, num_5g_reg_rules: %u",
+			   num_2g_reg_rules, num_5g_reg_rules);
+		return QDF_STATUS_E_FAILURE;
+	}
+	if (param_buf->num_reg_rule_array >
+		(WMI_SVC_MSG_MAX_SIZE - sizeof(*chan_list_event_hdr)) /
+		sizeof(*wmi_reg_rule)) {
+		wmi_err_rl("Invalid num_reg_rule_array: %u",
+			   param_buf->num_reg_rule_array);
+		return QDF_STATUS_E_FAILURE;
+	}
+
 	qdf_mem_copy(reg_info->alpha2, &(chan_list_event_hdr->alpha2),
 		     REG_ALPHA2_LEN);
 	reg_info->dfs_region = chan_list_event_hdr->dfs_region;
@@ -20695,9 +20727,6 @@ static QDF_STATUS extract_reg_chan_list_update_event_tlv(
 	reg_info->max_bw_2g = chan_list_event_hdr->max_bw_2g;
 	reg_info->min_bw_5g = chan_list_event_hdr->min_bw_5g;
 	reg_info->max_bw_5g = chan_list_event_hdr->max_bw_5g;
-
-	num_2g_reg_rules = reg_info->num_2g_reg_rules;
-	num_5g_reg_rules = reg_info->num_5g_reg_rules;
 
 	WMI_LOGD("%s:cc %s dsf %d BW: min_2g %d max_2g %d min_5g %d max_5g %d",
 			__func__, reg_info->alpha2, reg_info->dfs_region,
@@ -20739,6 +20768,7 @@ static QDF_STATUS extract_reg_11d_new_country_event_tlv(
 
 	qdf_mem_copy(reg_11d_country->alpha2,
 			&reg_11d_country_event->new_alpha2, REG_ALPHA2_LEN);
+	reg_11d_country->alpha2[REG_ALPHA2_LEN] = '\0';
 
 	WMI_LOGD("processed 11d country event, new cc %s",
 			reg_11d_country->alpha2);
@@ -21777,7 +21807,7 @@ extract_roam_scan_stats_res_evt_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	uint32_t total_len;
 	struct wmi_roam_scan_stats_res *res;
 	uint32_t i, j;
-	uint32_t num_scans;
+	uint32_t num_scans, scan_param_size;
 
 	*res_param = NULL;
 	*vdev_id = 0xFF; /* Initialize to invalid vdev id */
@@ -21788,11 +21818,17 @@ extract_roam_scan_stats_res_evt_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	}
 
 	fixed_param = param_buf->fixed_param;
-	total_len = sizeof(*res) + fixed_param->num_roam_scans *
-		    sizeof(struct wmi_roam_scan_stats_params);
 
-	*vdev_id = fixed_param->vdev_id;
 	num_scans = fixed_param->num_roam_scans;
+	scan_param_size = sizeof(struct wmi_roam_scan_stats_params);
+	*vdev_id = fixed_param->vdev_id;
+	if (num_scans > WMI_ROAM_SCAN_STATS_MAX) {
+		wmi_err_rl("%u exceeded maximum roam scan stats: %u",
+			   num_scans, WMI_ROAM_SCAN_STATS_MAX);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	total_len = sizeof(*res) + num_scans * scan_param_size;
 
 	res = qdf_mem_malloc(total_len);
 	if (!res) {
@@ -21834,8 +21870,16 @@ extract_roam_scan_stats_res_evt_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 		uint32_t count, chan_info_sum = 0;
 
 		num_channels = param_buf->num_channels;
-		for (count = 0; count < param_buf->num_num_channels; count++)
+		for (count = 0; count < param_buf->num_num_channels; count++) {
+			if (param_buf->num_channels[count] >
+			    WMI_ROAM_SCAN_STATS_CHANNELS_MAX) {
+				wmi_err_rl("%u exceeded max scan channels %u",
+					   param_buf->num_channels[count],
+					   WMI_ROAM_SCAN_STATS_CHANNELS_MAX);
+				goto error;
+			}
 			chan_info_sum += param_buf->num_channels[count];
+		}
 
 		if (param_buf->chan_info &&
 		    param_buf->num_chan_info == chan_info_sum)
@@ -21844,12 +21888,19 @@ extract_roam_scan_stats_res_evt_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 
 	if (param_buf->num_roam_candidates &&
 	    param_buf->num_num_roam_candidates == num_scans) {
-		uint32_t count, roam_cand_sum = 0;
+		uint32_t cnt, roam_cand_sum = 0;
 
 		num_roam_candidates = param_buf->num_roam_candidates;
-		for (count = 0; count < param_buf->num_num_roam_candidates;
-		     count++)
-			roam_cand_sum += param_buf->num_roam_candidates[count];
+		for (cnt = 0; cnt < param_buf->num_num_roam_candidates; cnt++) {
+			if (param_buf->num_roam_candidates[cnt] >
+			    WMI_ROAM_SCAN_STATS_CANDIDATES_MAX) {
+				wmi_err_rl("%u exceeded max scan cand %u",
+					   param_buf->num_roam_candidates[cnt],
+					   WMI_ROAM_SCAN_STATS_CANDIDATES_MAX);
+				goto error;
+			}
+			roam_cand_sum += param_buf->num_roam_candidates[cnt];
+		}
 
 		if (param_buf->bssid &&
 		    param_buf->num_bssid == roam_cand_sum)
@@ -21929,6 +21980,9 @@ extract_roam_scan_stats_res_evt_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	*res_param = res;
 
 	return QDF_STATUS_SUCCESS;
+error:
+	qdf_mem_free(res);
+	return QDF_STATUS_E_FAILURE;
 }
 
 /**
@@ -22321,6 +22375,13 @@ static QDF_STATUS extract_comb_phyerr_tlv(wmi_unified_t wmi_handle,
 	phyerr->tsf64 = pe_hdr->tsf_l32;
 	phyerr->tsf64 |= (((uint64_t)pe_hdr->tsf_u32) << 32);
 	phyerr->bufp = param_tlvs->bufp;
+
+	if (pe_hdr->buf_len > param_tlvs->num_bufp) {
+		WMI_LOGD("Invalid buf_len %d, num_bufp %d",
+			 pe_hdr->buf_len, param_tlvs->num_bufp);
+		return QDF_STATUS_E_FAILURE;
+	}
+
 	phyerr->buf_len = pe_hdr->buf_len;
 	phyerr->phy_err_mask0 = pe_hdr->rsPhyErrMask0;
 	phyerr->phy_err_mask1 = pe_hdr->rsPhyErrMask1;
