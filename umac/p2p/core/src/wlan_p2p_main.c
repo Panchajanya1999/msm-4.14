@@ -42,6 +42,7 @@
  *
  * Return: command string
  */
+#ifdef WLAN_DEBUG
 static char *p2p_get_cmd_type_str(enum p2p_cmd_type cmd_type)
 {
 	switch (cmd_type) {
@@ -87,6 +88,7 @@ static char *p2p_get_event_type_str(enum p2p_event_type event_type)
 		return "Invalid P2P event";
 	}
 }
+#endif
 
 /**
  * p2p_psoc_obj_create_notification() - Function to allocate per P2P
@@ -199,7 +201,7 @@ static QDF_STATUS p2p_vdev_obj_create_notification(
 	}
 
 	mode = wlan_vdev_mlme_get_opmode(vdev);
-	p2p_info("vdev mode:%d", mode);
+	p2p_debug("vdev mode:%d", mode);
 	if (mode != QDF_P2P_GO_MODE) {
 		p2p_debug("won't create p2p vdev private object if it is not GO");
 		return QDF_STATUS_SUCCESS;
@@ -358,7 +360,7 @@ static QDF_STATUS p2p_peer_obj_destroy_notification(
 						WLAN_UMAC_COMP_P2P);
 	psoc = wlan_vdev_get_psoc(vdev);
 	if (!p2p_vdev_obj || !psoc) {
-		p2p_err("p2p_vdev_obj:%pK psoc:%pK", p2p_vdev_obj, psoc);
+		p2p_debug("p2p_vdev_obj:%pK psoc:%pK", p2p_vdev_obj, psoc);
 		return QDF_STATUS_E_INVAL;
 	}
 

@@ -189,7 +189,7 @@ QDF_STATUS ucfg_scan_pno_stop(struct wlan_objmgr_vdev *vdev)
 		return QDF_STATUS_E_INVAL;
 	}
 	if (!scan_vdev_obj->pno_in_progress) {
-		scm_err("pno already stopped");
+		scm_debug("pno already stopped");
 		return QDF_STATUS_E_ALREADY;
 	}
 
@@ -1328,8 +1328,8 @@ ucfg_scan_register_event_handler(struct wlan_objmgr_pdev *pdev,
 		if ((cb_handler->func == event_cb) &&
 			(cb_handler->arg == arg)) {
 			qdf_spin_unlock_bh(&scan->lock);
-			scm_warn("func: %pK, arg: %pK already exists",
-				event_cb, arg);
+			scm_debug("func: %pK, arg: %pK already exists",
+				  event_cb, arg);
 			return QDF_STATUS_SUCCESS;
 		}
 	}
@@ -1925,9 +1925,10 @@ ucfg_scan_cancel_pdev_scan(struct wlan_objmgr_pdev *pdev)
 		return QDF_STATUS_E_NOMEM;
 	}
 
-	vdev = wlan_objmgr_get_vdev_by_id_from_pdev(pdev, 0, WLAN_OSIF_ID);
+	vdev = wlan_objmgr_pdev_get_first_vdev(pdev, WLAN_SCAN_ID);
 	if (!vdev) {
 		scm_err("Failed to get vdev");
+		qdf_mem_free(req);
 		return QDF_STATUS_E_INVAL;
 	}
 	req->vdev = vdev;
@@ -1938,7 +1939,7 @@ ucfg_scan_cancel_pdev_scan(struct wlan_objmgr_pdev *pdev)
 	status = ucfg_scan_cancel_sync(req);
 	if (QDF_IS_STATUS_ERROR(status))
 		scm_err("Cancel scan request failed");
-	wlan_objmgr_vdev_release_ref(vdev, WLAN_OSIF_ID);
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_SCAN_ID);
 
 	return status;
 }
@@ -1950,6 +1951,7 @@ ucfg_scan_suspend_handler(struct wlan_objmgr_psoc *psoc, void *arg)
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	int i;
 
+	ucfg_scan_set_enable(psoc, false);
 	/* Check all pdev */
 	for (i = 0; i < WLAN_UMAC_MAX_PDEVS; i++) {
 		pdev = wlan_objmgr_get_pdev_by_id(psoc, i, WLAN_SCAN_ID);
@@ -1971,6 +1973,7 @@ ucfg_scan_suspend_handler(struct wlan_objmgr_psoc *psoc, void *arg)
 static QDF_STATUS
 ucfg_scan_resume_handler(struct wlan_objmgr_psoc *psoc, void *arg)
 {
+	ucfg_scan_set_enable(psoc, true);
 	return QDF_STATUS_SUCCESS;
 }
 
