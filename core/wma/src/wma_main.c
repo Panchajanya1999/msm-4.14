@@ -108,6 +108,22 @@ bool wma_get_fw_wlan_feat_caps(enum cap_bitmap feature)
 	return (g_fw_wlan_feat_caps & (1 << feature)) ? true : false;
 }
 
+QDF_STATUS
+wma_vdev_nss_chain_params_send(uint8_t vdev_id,
+			       struct mlme_nss_chains *user_cfg)
+{
+	tp_wma_handle wma_handle = cds_get_context(QDF_MODULE_ID_WMA);
+
+	if (!wma_handle) {
+		WMA_LOGE("%s: wma_handle is NULL", __func__);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return wmi_unified_vdev_nss_chain_params_send(wma_handle->wmi_handle,
+						      vdev_id,
+						      user_cfg);
+}
+
 /**
  * wma_set_fw_wlan_feat_caps() - set fw feature capablity
  * @feature: feature enum value
@@ -1509,7 +1525,7 @@ static void wma_process_cli_set_cmd(tp_wma_handle wma,
 					      privcmd->param_value);
 			break;
 		default:
-			WMA_LOGE("Invalid wma_cli_set vdev command/Not yet implemented 0x%x",
+			WMA_LOGD("Invalid wma_cli_set vdev command/Not yet implemented 0x%x",
 				 privcmd->param_id);
 			break;
 		}
@@ -1999,7 +2015,7 @@ static void wma_state_info_dump(char **buf_ptr, uint16_t *size)
 		return;
 	}
 
-	WMA_LOGE("%s: size of buffer: %d", __func__, *size);
+	WMA_LOGD("%s: size of buffer: %d", __func__, *size);
 
 	for (vdev_id = 0; vdev_id < wma->max_bssid; vdev_id++) {
 		iface = &wma->interfaces[vdev_id];
@@ -5536,6 +5552,8 @@ static void wma_update_hdd_cfg(tp_wma_handle wma_handle)
 	tgt_cfg.wmi_max_len = wmi_get_max_msg_len(wma_handle->wmi_handle)
 			      - WMI_TLV_HEADROOM;
 	tgt_cfg.tx_bfee_8ss_enabled = wma_handle->tx_bfee_8ss_enabled;
+	tgt_cfg.dynamic_nss_chains_support =
+					wma_handle->dynamic_nss_chains_support;
 	wma_update_obss_detection_support(wma_handle, &tgt_cfg);
 	wma_update_obss_color_collision_support(wma_handle, &tgt_cfg);
 	wma_update_hdd_cfg_ndp(wma_handle, &tgt_cfg);
@@ -5984,7 +6002,9 @@ int wma_rx_service_ready_event(void *handle, uint8_t *cmd_param_info,
 	}
 	wma_handle->tx_bfee_8ss_enabled =
 		wmi_service_enabled(wmi_handle, wmi_service_8ss_tx_bfee);
-
+	wma_handle->dynamic_nss_chains_support =
+				wmi_service_enabled(wmi_handle,
+					wmi_service_per_vdev_chain_support);
 	target_psoc_set_num_radios(tgt_hdl, 1);
 
 	return 0;
@@ -7701,8 +7721,8 @@ static QDF_STATUS wma_process_limit_off_chan(tp_wma_handle wma_handle,
 		return QDF_STATUS_E_INVAL;
 	}
 	if (!wma_is_vdev_up(param->vdev_id)) {
-		WMA_LOGE("vdev %d is not up skipping limit_off_chan_param",
-			param->vdev_id);
+		WMA_LOGD("vdev %d is not up skipping limit_off_chan_param",
+			 param->vdev_id);
 		return QDF_STATUS_E_INVAL;
 	}
 
@@ -8561,7 +8581,7 @@ void wma_log_completion_timeout(void *data)
 {
 	tp_wma_handle wma_handle;
 
-	WMA_LOGE("%s: Timeout occurred for log completion command", __func__);
+	WMA_LOGD("%s: Timeout occurred for log completion command", __func__);
 
 	wma_handle = (tp_wma_handle) data;
 	if (!wma_handle)

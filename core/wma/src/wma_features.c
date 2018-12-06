@@ -4252,6 +4252,7 @@ int wma_update_tdls_peer_state(WMA_HANDLE handle,
 	int ret = 0;
 	uint32_t *ch_mhz = NULL;
 	bool restore_last_peer = false;
+	QDF_STATUS qdf_status;
 
 	if (!wma_handle || !wma_handle->wmi_handle) {
 		WMA_LOGE("%s: WMA is closed, can not issue cmd", __func__);
@@ -4339,8 +4340,13 @@ int wma_update_tdls_peer_state(WMA_HANDLE handle,
 			 " vdevId: %d", __func__,
 			 MAC_ADDR_ARRAY(peer_mac_addr),
 			 peerStateParams->vdevId);
-		wma_remove_peer(wma_handle, peer_mac_addr,
+		qdf_status = wma_remove_peer(wma_handle, peer_mac_addr,
 				peerStateParams->vdevId, peer, false);
+		if (QDF_IS_STATUS_ERROR(qdf_status)) {
+			WMA_LOGE(FL("wma_remove_peer failed"));
+			ret = -EINVAL;
+			goto end_tdls_peer_state;
+		}
 		cdp_peer_update_last_real_peer(soc,
 				pdev, peer, &peer_id,
 				restore_last_peer);
@@ -4659,7 +4665,7 @@ int wma_apf_read_work_memory_event_handler(void *handle, uint8_t *evt_buf,
 	QDF_STATUS status;
 	tpAniSirGlobal pmac = cds_get_context(QDF_MODULE_ID_PE);
 
-	WMA_LOGI(FL("handle:%pK event:%pK len:%u"), handle, evt_buf, len);
+	WMA_LOGD(FL("handle:%pK event:%pK len:%u"), handle, evt_buf, len);
 
 	wma_handle = handle;
 	if (!wma_handle) {

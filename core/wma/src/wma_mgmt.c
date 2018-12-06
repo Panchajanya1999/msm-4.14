@@ -1222,6 +1222,13 @@ QDF_STATUS wma_send_peer_assoc(tp_wma_handle wma,
 	qdf_mem_zero(cmd, sizeof(struct peer_assoc_params));
 
 	is_he = wma_is_peer_he_capable(params);
+	if ((params->ch_width > CH_WIDTH_40MHZ) &&
+	    ((nw_type == eSIR_11G_NW_TYPE) ||
+	     (nw_type == eSIR_11B_NW_TYPE))) {
+		WMA_LOGE("ch_width %d sent in 11G, configure to 40MHz",
+			 params->ch_width);
+		params->ch_width = CH_WIDTH_40MHZ;
+	}
 	phymode = wma_peer_phymode(nw_type, params->staType,
 				   params->htCapable, params->ch_width,
 				   params->vhtCapable, is_he);
@@ -2050,7 +2057,7 @@ void wma_set_bsskey(tp_wma_handle wma_handle, tpSetBssKeyParams key_info)
 		/* vdev mac address will be passed for all other modes */
 		qdf_mem_copy(key_params.peer_mac, mac_addr,
 			     IEEE80211_ADDR_LEN);
-		WMA_LOGA("BSS Key setup with vdev_mac %pM\n",
+		WMA_LOGD("BSS Key setup with vdev_mac %pM\n",
 			 mac_addr);
 	}
 
@@ -2658,7 +2665,8 @@ static QDF_STATUS wma_store_bcn_tmpl(tp_wma_handle wma, uint8_t vdev_id,
 	len = *(u32 *) &bcn_info->beacon[0];
 	if (len > SIR_MAX_BEACON_SIZE - sizeof(uint32_t)) {
 		WMA_LOGE("%s: Received beacon len %u exceeding max limit %lu",
-			 __func__, len, SIR_MAX_BEACON_SIZE - sizeof(uint32_t));
+			 __func__, len, (unsigned long)(
+			 SIR_MAX_BEACON_SIZE - sizeof(uint32_t)));
 		return QDF_STATUS_E_INVAL;
 	}
 	WMA_LOGD("%s: Storing received beacon template buf to local buffer",
