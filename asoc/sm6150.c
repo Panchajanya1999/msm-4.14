@@ -43,7 +43,7 @@
 #include "codecs/bolero/bolero-cdc.h"
 #include <dt-bindings/sound/audio-codec-port-types.h>
 #include "codecs/bolero/wsa-macro.h"
-#include "codecs/wcd937x/internal.h"
+#include "codecs/wcd937x/wcd937x.h"
 
 #define DRV_NAME "sm6150-asoc-snd"
 
@@ -8035,8 +8035,8 @@ static int msm_init_aux_dev(struct platform_device *pdev,
 	u32 wsa_dev_cnt;
 	u32 codec_aux_dev_cnt = 0;
 	int i;
-	struct msm_wsa881x_dev_info *wsa881x_dev_info;
-	struct aux_codec_dev_info *aux_cdc_dev_info;
+	struct msm_wsa881x_dev_info *wsa881x_dev_info = NULL;
+	struct aux_codec_dev_info *aux_cdc_dev_info = NULL;
 	const char *auxdev_name_prefix[1];
 	char *dev_name_str = NULL;
 	int found = 0;
