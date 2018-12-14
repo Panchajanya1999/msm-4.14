@@ -494,6 +494,15 @@
 					fsmgr_flags = "wait,avb";
 					status = "ok";
 				};
+				persist {
+					compatible = "android,persist";
+					dev = "/dev/block/platform/soc/7c4000.sdhci/by-name/persist";
+					type = "ext4";
+					mnt_point = "/mnt/vendor/persist";	
+					mnt_flags = "nosuid,nodev,noatime,barrier=1";
+					fsmgr_flags = "wait";
+					status = "ok";
+				};
 			};
 		};
 	};
