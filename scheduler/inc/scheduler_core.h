@@ -32,7 +32,7 @@
 #endif
 #define SCHEDULER_NUMBER_OF_MSG_QUEUE 6
 #define SCHEDULER_WRAPPER_MAX_FAIL_COUNT (SCHEDULER_CORE_MAX_MESSAGES * 3)
-#define SCHEDULER_WATCHDOG_TIMEOUT (10 * 1000) /* 10s */
+#define SCHEDULER_WATCHDOG_TIMEOUT (30 * 1000) /* 30s */
 
 #define __sched_log(level, format, args...) \
 	QDF_TRACE(QDF_MODULE_ID_SCHEDULER, level, FL(format), ## args)
