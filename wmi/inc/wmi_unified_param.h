@@ -5457,6 +5457,7 @@ typedef enum {
 	wmi_p2p_disc_event_id,
 	wmi_p2p_noa_event_id,
 	wmi_p2p_lo_stop_event_id,
+	wmi_vdev_add_macaddr_rx_filter_event_id,
 	wmi_pdev_resume_event_id,
 	wmi_d0_wow_disable_ack_event_id,
 	wmi_wow_initial_wakeup_event_id,
@@ -5566,6 +5567,7 @@ typedef enum {
 	wmi_apf_get_vdev_work_memory_resp_event_id,
 	wmi_roam_scan_stats_event_id,
 	wmi_wlan_sar2_result_event_id,
+	wmi_vdev_bcn_reception_stats_event_id,
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -5997,6 +5999,9 @@ typedef enum {
 	wmi_service_twt_responder,
 	wmi_service_listen_interval_offload_support,
 	wmi_service_per_vdev_chain_support,
+	wmi_service_new_htt_msg_format,
+	wmi_service_peer_unmap_cnf_support,
+	wmi_service_beacon_reception_stats,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -6086,6 +6091,7 @@ struct wmi_host_fw_abi_ver {
  * @atf_config: ATF config
  * @mgmt_comp_evt_bundle_support: bundle support required for mgmt complete evt
  * @tx_msdu_new_partition_id_support: new partiition id support for tx msdu
+ * @peer_unmap_conf_support: peer unmap conf support in fw
  * @iphdr_pad_config: ipheader pad config
  * @qwrap_config: Qwrap configuration
  * @alloc_frag_desc_for_data_pkt: Frag desc for data
@@ -6158,7 +6164,9 @@ typedef struct {
 	uint32_t tt_support;
 	uint32_t atf_config:1,
 		 mgmt_comp_evt_bundle_support:1,
-		 tx_msdu_new_partition_id_support:1;
+		 tx_msdu_new_partition_id_support:1,
+		 new_htt_msg_format:1,
+		 peer_unmap_conf_support:1;
 	uint32_t iphdr_pad_config;
 	uint32_t
 		qwrap_config:16,

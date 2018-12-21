@@ -463,6 +463,11 @@ QDF_STATUS wmi_unified_peer_delete_send(void *wmi_hdl,
 				    peer_addr[IEEE80211_ADDR_LEN],
 				    uint8_t vdev_id);
 
+QDF_STATUS wmi_unified_peer_unmap_conf_send(void *wmi_hdl,
+					    uint8_t vdev_id,
+					    uint32_t peer_id_cnt,
+					    uint16_t *peer_id_list);
+
 QDF_STATUS wmi_unified_peer_flush_tids_send(void *wmi_hdl,
 					 uint8_t peer_addr[IEEE80211_ADDR_LEN],
 					 struct peer_flush_params *param);
@@ -1655,6 +1660,14 @@ QDF_STATUS wmi_extract_p2p_lo_stop_ev_param(void *wmi_hdl,
 
 QDF_STATUS wmi_extract_p2p_noa_ev_param(void *wmi_hdl,
 		void *evt_buf, struct p2p_noa_info *param);
+
+QDF_STATUS
+wmi_send_set_mac_addr_rx_filter_cmd(void *wmi_hdl,
+				    struct p2p_set_mac_filter *param);
+
+QDF_STATUS
+wmi_extract_mac_addr_rx_filter_evt_param(void *wmi_hdl, void *evt_buf,
+					 struct p2p_set_mac_filter_evt *param);
 #endif
 
 QDF_STATUS wmi_extract_peer_sta_ps_statechange_ev(void *wmi_hdl,
