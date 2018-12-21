@@ -1237,6 +1237,11 @@ QDF_STATUS hdd_wlan_shutdown(void)
 	 * increment their counts from 0.
 	 */
 	hdd_reset_all_adapters_connectivity_stats(hdd_ctx);
+	/*
+	 * Purge all active and pending list to avoid vdev destroy timeout and
+	 * thus avoid peer/vdev refcount leak.
+	 */
+	sme_purge_pdev_all_ser_cmd_list(hdd_ctx->mac_handle);
 
 	hdd_reset_all_adapters(hdd_ctx);
 
@@ -1494,7 +1499,9 @@ end:
 
 static void wlan_hdd_print_suspend_fail_stats(struct hdd_context *hdd_ctx)
 {
+#ifdef WLAN_DEBUG
 	struct suspend_resume_stats *stats = &hdd_ctx->suspend_resume_stats;
+#endif
 
 	hdd_err("ipa:%d, radar:%d, roam:%d, scan:%d, initial_wakeup:%d",
 		stats->suspend_fail[SUSPEND_FAIL_IPA],

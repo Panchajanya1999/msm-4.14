@@ -4196,6 +4196,7 @@ static void csr_roam_populate_channels(tDot11fBeaconIEs *beacon_ies,
 }
 
 #ifdef FEATURE_WLAN_DIAG_SUPPORT_CSR
+#ifdef WLAN_DEBUG
 static const char *csr_get_ch_width_str(uint8_t ch_width)
 {
 	switch (ch_width) {
@@ -4262,6 +4263,7 @@ static const char *csr_get_encr_type_str(uint8_t encr_type)
 		return "Unknown";
 	}
 }
+#endif
 
 static void csr_dump_connection_stats(tpAniSirGlobal mac_ctx,
 		struct csr_roam_session *session,
@@ -9638,11 +9640,19 @@ QDF_STATUS csr_roam_save_connected_information(tpAniSirGlobal pMac,
 #endif
 	/* save ssid */
 	if (QDF_IS_STATUS_SUCCESS(status)) {
-		if (pIesTemp->SSID.present) {
+		if (pIesTemp->SSID.present &&
+		    !csr_is_nullssid(pIesTemp->SSID.ssid,
+				     pIesTemp->SSID.num_ssid)) {
 			pConnectProfile->SSID.length = pIesTemp->SSID.num_ssid;
 			qdf_mem_copy(pConnectProfile->SSID.ssId,
 				     pIesTemp->SSID.ssid,
 				     pIesTemp->SSID.num_ssid);
+		} else if (pProfile->SSIDs.SSIDList) {
+			pConnectProfile->SSID.length =
+					pProfile->SSIDs.SSIDList[0].SSID.length;
+			qdf_mem_copy(pConnectProfile->SSID.ssId,
+				     pProfile->SSIDs.SSIDList[0].SSID.ssId,
+				     pConnectProfile->SSID.length);
 		}
 		/* Save the bss desc */
 		status = csr_roam_save_connected_bss_desc(pMac, sessionId,
@@ -13128,9 +13138,11 @@ static QDF_STATUS csr_roam_start_wait_for_key_timer(
 		tpAniSirGlobal pMac, uint32_t interval)
 {
 	QDF_STATUS status;
+#ifdef WLAN_DEBUG
 	tpCsrNeighborRoamControlInfo pNeighborRoamInfo =
 		&pMac->roam.neighborRoamInfo[pMac->roam.WaitForKeyTimerInfo.
 					     sessionId];
+#endif
 	if (csr_neighbor_roam_is_handoff_in_progress(pMac,
 				     pMac->roam.WaitForKeyTimerInfo.
 				     sessionId)) {
@@ -13152,9 +13164,11 @@ static QDF_STATUS csr_roam_start_wait_for_key_timer(
 
 QDF_STATUS csr_roam_stop_wait_for_key_timer(tpAniSirGlobal pMac)
 {
+#ifdef WLAN_DEBUG
 	tpCsrNeighborRoamControlInfo pNeighborRoamInfo =
 		&pMac->roam.neighborRoamInfo[pMac->roam.WaitForKeyTimerInfo.
 					     sessionId];
+#endif
 
 	sme_debug("WaitForKey timer stopped in state: %s sub-state: %s",
 		mac_trace_get_neighbour_roam_state(pNeighborRoamInfo->
@@ -15711,16 +15725,25 @@ QDF_STATUS csr_send_join_req_msg(tpAniSirGlobal pMac, uint32_t sessionId,
 		csr_join_req->length = msgLen;
 		csr_join_req->sessionId = (uint8_t) sessionId;
 		csr_join_req->transactionId = 0;
-		if (pIes->SSID.present && pIes->SSID.num_ssid) {
+		if (pIes->SSID.present &&
+		    !csr_is_nullssid(pIes->SSID.ssid,
+				     pIes->SSID.num_ssid)) {
 			csr_join_req->ssId.length = pIes->SSID.num_ssid;
 			qdf_mem_copy(&csr_join_req->ssId.ssId, pIes->SSID.ssid,
 				     pIes->SSID.num_ssid);
-		} else
+		} else if (pProfile->SSIDs.SSIDList) {
+			csr_join_req->ssId.length =
+					pProfile->SSIDs.SSIDList[0].SSID.length;
+			qdf_mem_copy(&csr_join_req->ssId.ssId,
+				     pProfile->SSIDs.SSIDList[0].SSID.ssId,
+				     csr_join_req->ssId.length);
+		} else {
 			csr_join_req->ssId.length = 0;
+		}
 		qdf_mem_copy(&csr_join_req->selfMacAddr, &pSession->selfMacAddr,
 			     sizeof(tSirMacAddr));
 		sme_err("Connecting to ssid:%.*s bssid: "MAC_ADDRESS_STR" rssi: %d channel: %d country_code: %c%c",
-			pIes->SSID.num_ssid, pIes->SSID.ssid,
+			csr_join_req->ssId.length, csr_join_req->ssId.ssId,
 			MAC_ADDR_ARRAY(pBssDescription->bssId),
 			pBssDescription->rssi, pBssDescription->channelId,
 			pMac->scan.countryCodeCurrent[0],

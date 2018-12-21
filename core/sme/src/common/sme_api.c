@@ -277,6 +277,19 @@ static QDF_STATUS sme_process_hw_mode_trans_ind(tpAniSirGlobal mac,
 	return QDF_STATUS_SUCCESS;
 }
 
+void sme_purge_pdev_all_ser_cmd_list(mac_handle_t mac_handle)
+{
+	QDF_STATUS status;
+	tpAniSirGlobal mac_ctx = PMAC_STRUCT(mac_handle);
+
+	status = sme_acquire_global_lock(&mac_ctx->sme);
+	if (QDF_IS_STATUS_ERROR(status))
+		return;
+
+	csr_purge_pdev_all_ser_cmd_list(mac_ctx);
+	sme_release_global_lock(&mac_ctx->sme);
+}
+
 /**
  * free_sme_cmds() - This function frees memory allocated for SME commands
  * @mac_ctx:      Pointer to Global MAC structure
@@ -5787,6 +5800,7 @@ QDF_STATUS sme_get_cfg_valid_channels(uint8_t *aValidChannels,
 	return status;
 }
 
+#ifdef WLAN_DEBUG
 static uint8_t *sme_reg_hint_to_str(const enum country_src src)
 {
 	switch (src) {
@@ -5806,6 +5820,7 @@ static uint8_t *sme_reg_hint_to_str(const enum country_src src)
 		return "unknown";
 	}
 }
+#endif
 
 void sme_set_cc_src(tHalHandle hHal, enum country_src cc_src)
 {
@@ -12376,6 +12391,56 @@ QDF_STATUS sme_power_debug_stats_req(tHalHandle hal, void (*callback_fn)
 }
 #endif
 
+#ifdef WLAN_FEATURE_BEACON_RECEPTION_STATS
+QDF_STATUS sme_beacon_debug_stats_req(
+		mac_handle_t mac_handle, uint32_t vdev_id,
+		void (*callback_fn)(struct bcn_reception_stats_rsp
+				    *response, void *context),
+		void *beacon_stats_context)
+{
+	QDF_STATUS status;
+	struct sAniSirGlobal *mac_ctx = MAC_CONTEXT(mac_handle);
+	uint32_t *val;
+	struct scheduler_msg msg = {0};
+
+	status = sme_acquire_global_lock(&mac_ctx->sme);
+	if (QDF_IS_STATUS_SUCCESS(status)) {
+		if (!callback_fn) {
+			sme_err("Indication callback did not registered");
+			sme_release_global_lock(&mac_ctx->sme);
+			return QDF_STATUS_E_FAILURE;
+		}
+
+		if (!mac_ctx->bcn_reception_stats) {
+			sme_err("Beacon Reception stats not supported by FW");
+			sme_release_global_lock(&mac_ctx->sme);
+			return QDF_STATUS_E_NOSUPPORT;
+		}
+
+		val = qdf_mem_malloc(sizeof(*val));
+		if (!val) {
+			sme_release_global_lock(&mac_ctx->sme);
+			return QDF_STATUS_E_NOMEM;
+		}
+
+		*val = vdev_id;
+		mac_ctx->sme.beacon_stats_context = beacon_stats_context;
+		mac_ctx->sme.beacon_stats_resp_callback = callback_fn;
+		msg.bodyptr = val;
+		msg.type = WMA_BEACON_DEBUG_STATS_REQ;
+		status = scheduler_post_message(QDF_MODULE_ID_SME,
+						QDF_MODULE_ID_WMA,
+						QDF_MODULE_ID_WMA, &msg);
+		if (!QDF_IS_STATUS_SUCCESS(status)) {
+			sme_err("not able to post WMA_BEACON_DEBUG_STATS_REQ");
+			qdf_mem_free(val);
+		}
+		sme_release_global_lock(&mac_ctx->sme);
+	}
+	return status;
+}
+#endif
+
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 /*
  * sme_update_roam_offload_enabled() - enable/disable roam offload feaure
@@ -14028,6 +14093,7 @@ void sme_update_tgt_services(tHalHandle hal, struct wma_tgt_services *cfg)
 	sme_debug("pmf_offload: %d fils_roam support %d 11k_offload %d",
 		  mac_ctx->pmf_offload, mac_ctx->is_fils_roaming_supported,
 		  mac_ctx->is_11k_offload_supported);
+	mac_ctx->bcn_reception_stats = cfg->bcn_reception_stats;
 }
 
 /**
@@ -14400,53 +14466,16 @@ QDF_STATUS sme_get_apf_capabilities(tHalHandle hal,
 QDF_STATUS sme_set_apf_instructions(tHalHandle hal,
 				    struct sir_apf_set_offload *req)
 {
-	QDF_STATUS          status     = QDF_STATUS_SUCCESS;
-	tpAniSirGlobal      mac_ctx    = PMAC_STRUCT(hal);
-	struct scheduler_msg           cds_msg = {0};
-	struct sir_apf_set_offload *set_offload;
+	void *wma_handle;
 
-	set_offload = qdf_mem_malloc(sizeof(*set_offload) +
-					req->current_length);
-
-	if (NULL == set_offload) {
+	wma_handle = cds_get_context(QDF_MODULE_ID_WMA);
+	if (!wma_handle) {
 		QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_ERROR,
-			FL("Failed to alloc set_offload"));
-		return QDF_STATUS_E_NOMEM;
+				"wma handle is NULL");
+		return QDF_STATUS_E_FAILURE;
 	}
 
-	set_offload->session_id = req->session_id;
-	set_offload->filter_id = req->filter_id;
-	set_offload->current_offset = req->current_offset;
-	set_offload->total_length = req->total_length;
-	set_offload->current_length = req->current_length;
-	if (set_offload->total_length) {
-		set_offload->program = ((uint8_t *)set_offload) +
-					sizeof(*set_offload);
-		qdf_mem_copy(set_offload->program, req->program,
-				set_offload->current_length);
-	}
-	status = sme_acquire_global_lock(&mac_ctx->sme);
-	if (QDF_STATUS_SUCCESS == status) {
-		/* Serialize the req through MC thread */
-		cds_msg.bodyptr = set_offload;
-		cds_msg.type = WDA_APF_SET_INSTRUCTIONS_REQ;
-		status = scheduler_post_message(QDF_MODULE_ID_SME,
-						QDF_MODULE_ID_WMA,
-						QDF_MODULE_ID_WMA, &cds_msg);
-
-		if (!QDF_IS_STATUS_SUCCESS(status)) {
-			QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_ERROR,
-				FL("Post APF set offload msg fail"));
-			status = QDF_STATUS_E_FAILURE;
-			qdf_mem_free(set_offload);
-		}
-		sme_release_global_lock(&mac_ctx->sme);
-	} else {
-		QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_ERROR,
-				FL("sme_acquire_global_lock failed"));
-		qdf_mem_free(set_offload);
-	}
-	return status;
+	return wma_set_apf_instructions(wma_handle, req);
 }
 
 QDF_STATUS sme_set_apf_enable_disable(tHalHandle hal, uint8_t vdev_id,

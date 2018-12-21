@@ -637,7 +637,7 @@ QDF_STATUS wma_form_unit_test_cmd_and_send(uint32_t vdev_id,
 	QDF_STATUS status;
 
 	WMA_LOGD(FL("enter"));
-	if (arg_count >= WMA_MAX_NUM_ARGS) {
+	if (arg_count > WMA_MAX_NUM_ARGS) {
 		WMA_LOGE(FL("arg_count is crossed the boundary"));
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -3433,6 +3433,13 @@ QDF_STATUS wma_open(struct wlan_objmgr_psoc *psoc,
 				wma_unified_power_debug_stats_event_handler,
 				WMA_RX_SERIALIZER_CTX);
 #endif
+#ifdef WLAN_FEATURE_BEACON_RECEPTION_STATS
+	/* register for beacon stats event */
+	wmi_unified_register_event_handler(wma_handle->wmi_handle,
+				wmi_vdev_bcn_reception_stats_event_id,
+				wma_unified_beacon_debug_stats_event_handler,
+				WMA_RX_SERIALIZER_CTX);
+#endif
 
 	/* register for linkspeed response event */
 	wmi_unified_register_event_handler(wma_handle->wmi_handle,
@@ -4617,7 +4624,8 @@ QDF_STATUS wma_wmi_service_close(void)
 	/* free the wma_handle */
 	cds_free_context(QDF_MODULE_ID_WMA, wma_handle);
 
-	qdf_mem_free(((struct cds_context *) cds_ctx)->cfg_ctx);
+	if (((struct cds_context *) cds_ctx)->cfg_ctx)
+		qdf_mem_free(((struct cds_context *) cds_ctx)->cfg_ctx);
 	((struct cds_context *)cds_ctx)->cfg_ctx = NULL;
 	WMA_LOGD("%s: Exit", __func__);
 	return QDF_STATUS_SUCCESS;
@@ -4924,6 +4932,8 @@ static inline void wma_update_target_services(struct wmi_unified *wmi_handle,
 		cfg->twt_requestor = true;
 	if (wmi_service_enabled(wmi_handle, wmi_service_twt_responder))
 		cfg->twt_responder = true;
+	if (wmi_service_enabled(wmi_handle, wmi_service_beacon_reception_stats))
+		cfg->bcn_reception_stats = true;
 }
 
 /**
@@ -6579,6 +6589,9 @@ int wma_rx_service_ready_ext_event(void *handle, uint8_t *event,
 	QDF_STATUS ret;
 	struct target_psoc_info *tgt_hdl;
 	uint32_t conc_scan_config_bits, fw_config_bits;
+	struct wmi_unified *wmi_handle;
+	void *soc = cds_get_context(QDF_MODULE_ID_SOC);
+	target_resource_config *wlan_res_cfg;
 
 	WMA_LOGD("%s: Enter", __func__);
 
@@ -6587,12 +6600,15 @@ int wma_rx_service_ready_ext_event(void *handle, uint8_t *event,
 		return -EINVAL;
 	}
 
+	wmi_handle = get_wmi_unified_hdl_from_psoc(wma_handle->psoc);
+
 	tgt_hdl = wlan_psoc_get_tgt_if_handle(wma_handle->psoc);
 	if (!tgt_hdl) {
 		WMA_LOGE("%s: target psoc info is NULL", __func__);
 		return -EINVAL;
 	}
 
+	wlan_res_cfg = target_psoc_get_wlan_res_cfg(tgt_hdl);
 	param_buf = (WMI_SERVICE_READY_EXT_EVENTID_param_tlvs *) event;
 	if (!param_buf) {
 		WMA_LOGE("%s: Invalid event", __func__);
@@ -6632,6 +6648,16 @@ int wma_rx_service_ready_ext_event(void *handle, uint8_t *event,
 				     fw_config_bits);
 
 	target_psoc_set_num_radios(tgt_hdl, 1);
+
+	if (wmi_service_enabled(wmi_handle,
+				wmi_service_new_htt_msg_format)) {
+		cdp_cfg_set_new_htt_msg_format(soc, 1);
+		wlan_res_cfg->new_htt_msg_format = true;
+	} else {
+		cdp_cfg_set_new_htt_msg_format(soc, 0);
+		wlan_res_cfg->new_htt_msg_format = false;
+	}
+
 	return 0;
 }
 
@@ -7400,6 +7426,55 @@ static QDF_STATUS wma_process_power_debug_stats_req(tp_wma_handle wma_handle)
 }
 #else
 static QDF_STATUS wma_process_power_debug_stats_req(tp_wma_handle wma_handle)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+#ifdef WLAN_FEATURE_BEACON_RECEPTION_STATS
+static QDF_STATUS wma_process_beacon_debug_stats_req(tp_wma_handle wma_handle,
+						     uint32_t *vdev_id)
+{
+	wmi_vdev_get_bcn_recv_stats_cmd_fixed_param *cmd;
+	int32_t len;
+	wmi_buf_t buf;
+	uint8_t *buf_ptr;
+	int ret;
+
+	WMA_LOGD("%s: Enter", __func__);
+	if (!wma_handle) {
+		WMA_LOGE("%s: input pointer is NULL", __func__);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	len = sizeof(*cmd);
+	buf = wmi_buf_alloc(wma_handle->wmi_handle, len);
+	if (!buf)
+		return QDF_STATUS_E_NOMEM;
+
+	buf_ptr = (u_int8_t *)wmi_buf_data(buf);
+	cmd = (wmi_vdev_get_bcn_recv_stats_cmd_fixed_param *)buf_ptr;
+
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		WMITLV_TAG_STRUC_wmi_get_bcn_recv_stats_fixed_param,
+		WMITLV_GET_STRUCT_TLVLEN(
+			wmi_vdev_get_bcn_recv_stats_cmd_fixed_param));
+	cmd->vdev_id = *vdev_id;
+
+	WMA_LOGD("BEACON_DEBUG_STATS - Get Request Params; vdev id - %d",
+		 cmd->vdev_id);
+	ret = wmi_unified_cmd_send(wma_handle->wmi_handle, buf, len,
+				   WMI_VDEV_GET_BCN_RECEPTION_STATS_CMDID);
+	if (ret) {
+		wmi_buf_free(buf);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	WMA_LOGD("%s: Exit", __func__);
+	return QDF_STATUS_SUCCESS;
+}
+#else
+static QDF_STATUS wma_process_beacon_debug_stats_req(tp_wma_handle wma_handle,
+						     uint32_t *vdev_id)
 {
 	return QDF_STATUS_SUCCESS;
 }
@@ -8468,10 +8543,6 @@ static QDF_STATUS wma_mc_process_msg(struct scheduler_msg *msg)
 	case WDA_APF_GET_CAPABILITIES_REQ:
 		wma_get_apf_capabilities(wma_handle);
 		break;
-	case WDA_APF_SET_INSTRUCTIONS_REQ:
-		wma_set_apf_instructions(wma_handle, msg->bodyptr);
-		qdf_mem_free(msg->bodyptr);
-		break;
 	case SIR_HAL_POWER_DBG_CMD:
 		wma_process_hal_pwr_dbg_cmd(wma_handle,
 					    msg->bodyptr);
@@ -8499,6 +8570,10 @@ static QDF_STATUS wma_mc_process_msg(struct scheduler_msg *msg)
 		break;
 	case SIR_HAL_POWER_DEBUG_STATS_REQ:
 		wma_process_power_debug_stats_req(wma_handle);
+		break;
+	case WMA_BEACON_DEBUG_STATS_REQ:
+		wma_process_beacon_debug_stats_req(wma_handle, msg->bodyptr);
+		qdf_mem_free(msg->bodyptr);
 		break;
 	case WMA_GET_RCPI_REQ:
 		wma_get_rcpi_req(wma_handle,

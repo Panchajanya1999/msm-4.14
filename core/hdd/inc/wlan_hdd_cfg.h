@@ -15005,7 +15005,12 @@ enum hdd_external_acs_policy {
  *   OUI data Len : 00
  *   Info Mask : 35 - Check for NSS, VHT Caps and Band
  *   Capabilities: 6C - (NSS == 3 or 4) && VHT Caps Preset && Band == 2G
- *
+ * OUI 5 : 001018
+ *   OUI data Len : 06
+ *   OUI Data : 02FF009C0000
+ *   OUI data Mask: BC - 10111100
+ *   Info Mask : 25 - Check for NSS and Band
+ *   Capabilities: 48 - NSS == 4 && Band == 2G
  * This ini is used to specify the AP OUIs with which only 1x1 connection
  * is allowed.
  *
@@ -15018,7 +15023,7 @@ enum hdd_external_acs_policy {
  * </ini>
  */
 #define CFG_ACTION_OUI_CONNECT_1X1_NAME    "gActionOUIConnect1x1"
-#define CFG_ACTION_OUI_CONNECT_1X1_DEFAULT "000C43 00 25 42 001018 06 02FFF02C0000 BC 25 42 001018 06 02FF040C0000 BC 25 42 00037F 00 35 6C"
+#define CFG_ACTION_OUI_CONNECT_1X1_DEFAULT "000C43 00 25 42 001018 06 02FFF02C0000 BC 25 42 001018 06 02FF040C0000 BC 25 42 00037F 00 35 6C 001018 06 02FF009C0000 BC 25 48"
 
 /*
  * <ini>
@@ -15594,6 +15599,28 @@ enum hdd_external_acs_policy {
 #define CFG_DERIVED_INTERFACE_POOL_MIN     (0)
 #define CFG_DERIVED_INTERFACE_POOL_MAX     (0xffffffff)
 #define CFG_DERIVED_INTERFACE_POOL_DEFAULT (0xffffffff)
+
+/*
+ * <ini>
+ * gEnablePeerUnmapConfSupport - Set PEER UNMAP confirmation support
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini is used to enable or disable peer unmap confirmation support
+ * in Host. Host sends this support to FW only if FW support is enabled.
+ *
+ *
+ * Supported Feature: STA/SAP/P2P
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_ENABLE_PEER_UNMAP_CONF_NAME    "gEnablePeerUnmapConfSupport"
+#define CFG_ENABLE_PEER_UNMAP_CONF_MIN     (0)
+#define CFG_ENABLE_PEER_UNMAP_CONF_MAX     (1)
+#define CFG_ENABLE_PEER_UNMAP_CONF_DEFAULT (0)
 
 /*
  * Type declarations
@@ -16540,6 +16567,7 @@ struct hdd_config {
 	bool mac_provision;
 	uint32_t provisioned_intf_pool;
 	uint32_t derived_intf_pool;
+	bool enable_peer_unmap_conf_support;
 };
 
 #define VAR_OFFSET(_Struct, _Var) (offsetof(_Struct, _Var))

@@ -721,6 +721,7 @@ WLAN_PHY_MODE wma_chan_phy_mode(u8 chan, enum phy_ch_width chan_width,
 				else if (bw_val == 40)
 					phymode = MODE_11AC_VHT40_2G;
 				break;
+#if SUPPORT_11AX
 			case WNI_CFG_DOT11_MODE_11AX:
 			case WNI_CFG_DOT11_MODE_11AX_ONLY:
 				if (20 == bw_val)
@@ -728,6 +729,7 @@ WLAN_PHY_MODE wma_chan_phy_mode(u8 chan, enum phy_ch_width chan_width,
 				else if (40 == bw_val)
 					phymode = MODE_11AX_HE40_2G;
 				break;
+#endif
 			default:
 				break;
 			}
@@ -770,6 +772,7 @@ WLAN_PHY_MODE wma_chan_phy_mode(u8 chan, enum phy_ch_width chan_width,
 				else if (chan_width == CH_WIDTH_80P80MHZ)
 					phymode = MODE_11AC_VHT80_80;
 				break;
+#if SUPPORT_11AX
 			case WNI_CFG_DOT11_MODE_11AX:
 			case WNI_CFG_DOT11_MODE_11AX_ONLY:
 				if (20 == bw_val)
@@ -783,6 +786,7 @@ WLAN_PHY_MODE wma_chan_phy_mode(u8 chan, enum phy_ch_width chan_width,
 				else if (CH_WIDTH_80P80MHZ == chan_width)
 					phymode = MODE_11AX_HE80_80;
 				break;
+#endif
 			default:
 				break;
 			}
@@ -1552,6 +1556,7 @@ QDF_STATUS wma_pktlog_wmi_send_cmd(WMA_HANDLE handle,
  *
  * Return: reason code in string format
  */
+#ifdef WLAN_DEBUG
 static const u8 *wma_wow_wake_reason_str(A_INT32 wake_reason)
 {
 	switch (wake_reason) {
@@ -1663,6 +1668,7 @@ static const u8 *wma_wow_wake_reason_str(A_INT32 wake_reason)
 		return "unknown";
 	}
 }
+#endif
 
 #ifdef QCA_SUPPORT_CP_STATS
 static bool wma_wow_reason_has_stats(enum wake_reason_e reason)
@@ -1678,6 +1684,7 @@ static bool wma_wow_reason_has_stats(enum wake_reason_e reason)
 	case WOW_REASON_ACTION_FRAME_RECV:
 	case WOW_REASON_BPF_ALLOW:
 	case WOW_REASON_PATTERN_MATCH_FOUND:
+	case WOW_REASON_PACKET_FILTER_MATCH:
 	case WOW_REASON_RA_MATCH:
 	case WOW_REASON_NLOD:
 	case WOW_REASON_NLO_SCAN_COMPLETE:
@@ -1789,6 +1796,7 @@ static void wma_print_wow_stats(t_wma_handle *wma,
 	switch (wake_info->wake_reason) {
 	case WOW_REASON_BPF_ALLOW:
 	case WOW_REASON_PATTERN_MATCH_FOUND:
+	case WOW_REASON_PACKET_FILTER_MATCH:
 	case WOW_REASON_RA_MATCH:
 	case WOW_REASON_NLOD:
 	case WOW_REASON_NLO_SCAN_COMPLETE:
@@ -2647,6 +2655,7 @@ wma_wake_reason_ap_assoc_lost(t_wma_handle *wma, void *event, uint32_t len)
 	return 0;
 }
 
+#ifdef WLAN_DEBUG
 static const char *wma_vdev_type_str(uint32_t vdev_type)
 {
 	switch (vdev_type) {
@@ -2668,6 +2677,7 @@ static const char *wma_vdev_type_str(uint32_t vdev_type)
 		return "unknown";
 	}
 }
+#endif
 
 static int wma_wake_event_packet(
 	t_wma_handle *wma,
@@ -2720,6 +2730,7 @@ static int wma_wake_event_packet(
 	case WOW_REASON_PATTERN_MATCH_FOUND:
 	case WOW_REASON_RA_MATCH:
 	case WOW_REASON_RECV_MAGIC_PATTERN:
+	case WOW_REASON_PACKET_FILTER_MATCH:
 		WMA_LOGD("Wake event packet:");
 		qdf_trace_hex_dump(QDF_MODULE_ID_WMA, QDF_TRACE_LEVEL_DEBUG,
 				   packet, packet_len);
@@ -5628,6 +5639,65 @@ int wma_unified_power_debug_stats_event_handler(void *handle,
 #else
 int wma_unified_power_debug_stats_event_handler(void *handle,
 		uint8_t *cmd_param_info, uint32_t len)
+{
+	return 0;
+}
+#endif
+#ifdef WLAN_FEATURE_BEACON_RECEPTION_STATS
+int wma_unified_beacon_debug_stats_event_handler(void *handle,
+						 uint8_t *cmd_param_info,
+						 uint32_t len)
+{
+	WMI_VDEV_BCN_RECEPTION_STATS_EVENTID_param_tlvs *param_tlvs;
+	struct bcn_reception_stats_rsp *bcn_reception_stats;
+	wmi_vdev_bcn_recv_stats_fixed_param *param_buf;
+	 struct sAniSirGlobal *mac = cds_get_context(QDF_MODULE_ID_PE);
+
+	param_tlvs =
+	   (WMI_VDEV_BCN_RECEPTION_STATS_EVENTID_param_tlvs *)cmd_param_info;
+	if (!param_tlvs) {
+		WMA_LOGA("%s: Invalid stats event", __func__);
+		return -EINVAL;
+	}
+
+	param_buf = (wmi_vdev_bcn_recv_stats_fixed_param *)
+		param_tlvs->fixed_param;
+	if (!param_buf || !mac || !mac->sme.beacon_stats_resp_callback) {
+		WMA_LOGD("%s: NULL mac ptr or HDD callback is null", __func__);
+		return -EINVAL;
+	}
+
+	if (!param_buf) {
+		WMA_LOGD("%s: NULL beacon stats event fixed param", __func__);
+		return -EINVAL;
+	}
+
+	bcn_reception_stats = qdf_mem_malloc(sizeof(*bcn_reception_stats));
+	if (!bcn_reception_stats)
+		return -ENOMEM;
+
+	bcn_reception_stats->total_bcn_cnt = param_buf->total_bcn_cnt;
+	bcn_reception_stats->total_bmiss_cnt = param_buf->total_bmiss_cnt;
+	bcn_reception_stats->vdev_id = param_buf->vdev_id;
+
+	WMA_LOGD("Total beacon count %d total beacon miss count %d vdev_id %d",
+		 param_buf->total_bcn_cnt,
+		 param_buf->total_bmiss_cnt,
+		 param_buf->vdev_id);
+
+	qdf_mem_copy(bcn_reception_stats->bmiss_bitmap,
+		     param_buf->bmiss_bitmap,
+		     MAX_BCNMISS_BITMAP * sizeof(uint32_t));
+
+	mac->sme.beacon_stats_resp_callback(bcn_reception_stats,
+			mac->sme.beacon_stats_context);
+	qdf_mem_free(bcn_reception_stats);
+	return 0;
+}
+#else
+int wma_unified_beacon_debug_stats_event_handler(void *handle,
+						 uint8_t *cmd_param_info,
+						  uint32_t len)
 {
 	return 0;
 }

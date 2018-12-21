@@ -2420,7 +2420,7 @@ typedef struct sSirUpdateAPWPARSNIEsReq {
 #define SIR_ROAM_SCAN_RESERVED_BYTES     61
 
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
-#define SIR_ROAM_SCAN_PSK_SIZE    32
+#define SIR_ROAM_SCAN_PSK_SIZE    48
 #define SIR_ROAM_R0KH_ID_MAX_LEN  48
 #endif
 /* SME -> HAL - This is the host offload request. */
@@ -3164,7 +3164,7 @@ typedef struct sSirTdlsAddStaReq {
 	uint8_t supported_rates_length;
 	uint8_t supported_rates[SIR_MAC_MAX_SUPP_RATES];
 	uint8_t htcap_present;
-	tSirHTCap htCap;
+	struct htcap_cmn_ie htCap;
 	uint8_t vhtcap_present;
 	tSirVHTCap vhtCap;
 	uint8_t uapsd_queues;
@@ -4474,6 +4474,26 @@ struct power_stats_response {
 	uint32_t debug_register_fmt;
 	uint32_t num_debug_register;
 	uint32_t *debug_registers;
+};
+#endif
+
+#ifdef WLAN_FEATURE_BEACON_RECEPTION_STATS
+#define MAX_BCNMISS_BITMAP 8
+/**
+ * struct bcn_reception_stats_rsp - beacon stats response
+ * @total_bcn_cnt: total beacon count (tbtt instances)
+ * @total_bmiss_cnt: Total beacon miss count in last 255 beacons, max 255
+ * @bmiss_bitmap: This bitmap indicates the status of the last 255 beacons.
+ * If a bit is set, that means the corresponding beacon was missed.
+ * Bit 0 of bmiss_bitmap[0] represents the most recent beacon.
+ * The total_bcn_cnt field indicates how many bits within bmiss_bitmap
+ * are valid.
+ */
+struct bcn_reception_stats_rsp {
+	uint32_t vdev_id;
+	uint32_t total_bcn_cnt;
+	uint32_t total_bmiss_cnt;
+	uint32_t bmiss_bitmap[MAX_BCNMISS_BITMAP];
 };
 #endif
 

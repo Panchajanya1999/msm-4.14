@@ -4213,7 +4213,9 @@ static int __wlan_hdd_cfg80211_disable_dfs_chan_scan(struct wiphy *wiphy,
 						     const void *data,
 						     int data_len)
 {
+#ifdef WLAN_DEBUG
 	struct net_device *dev = wdev->netdev;
+#endif
 	struct hdd_context *hdd_ctx  = wiphy_priv(wiphy);
 	struct nlattr *tb[QCA_WLAN_VENDOR_ATTR_SET_NO_DFS_FLAG_MAX + 1];
 	int ret_val;
@@ -15038,6 +15040,30 @@ static void wlan_hdd_cfg80211_scan_randomization_init(struct wiphy *wiphy)
 
 #define WLAN_HDD_MAX_NUM_CSA_COUNTERS 2
 
+#if defined(CFG80211_RAND_TA_FOR_PUBLIC_ACTION_FRAME) || \
+		(LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0))
+/**
+ * wlan_hdd_cfg80211_action_frame_randomization_init() - Randomize SA of MA
+ * frames
+ * @wiphy: Pointer to wiphy
+ *
+ * This function is used to indicate the support of source mac address
+ * randomization of management action frames
+ *
+ * Return: None
+ */
+static void
+wlan_hdd_cfg80211_action_frame_randomization_init(struct wiphy *wiphy)
+{
+	wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_MGMT_TX_RANDOM_TA);
+}
+#else
+static void
+wlan_hdd_cfg80211_action_frame_randomization_init(struct wiphy *wiphy)
+{
+}
+#endif
+
 #if defined(WLAN_FEATURE_FILS_SK) && \
 	(defined(CFG80211_FILS_SK_OFFLOAD_SUPPORT) || \
 		 (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0)))
@@ -15447,6 +15473,7 @@ int wlan_hdd_cfg80211_init(struct device *dev,
 	wiphy->max_num_csa_counters = WLAN_HDD_MAX_NUM_CSA_COUNTERS;
 	if (pCfg->enable_mac_spoofing)
 		wlan_hdd_cfg80211_scan_randomization_init(wiphy);
+	wlan_hdd_cfg80211_action_frame_randomization_init(wiphy);
 
 	hdd_exit();
 	return 0;
@@ -15622,6 +15649,10 @@ int wlan_hdd_cfg80211_register_frames(struct hdd_adapter *adapter)
 	QDF_STATUS status;
 
 	hdd_enter();
+	if (adapter->device_mode == QDF_FTM_MODE) {
+		hdd_info("No need to register frames in FTM mode");
+		return 0;
+	}
 
 	/* Register frame indication call back */
 	status = sme_register_mgmt_frame_ind_callback(mac_handle,
@@ -19866,6 +19897,7 @@ disconnected:
  * Return: string conversion of reason code, if match found;
  *         "Unknown" otherwise.
  */
+#ifdef WLAN_DEBUG
 static const char *hdd_ieee80211_reason_code_to_str(uint16_t reason)
 {
 	switch (reason) {
@@ -19920,6 +19952,7 @@ static const char *hdd_ieee80211_reason_code_to_str(uint16_t reason)
 		return "Unknown";
 	}
 }
+#endif
 
 /**
  * hdd_print_netdev_txq_status() - print netdev tx queue status
@@ -19937,7 +19970,9 @@ static void hdd_print_netdev_txq_status(struct net_device *dev)
 		return;
 
 	for (i = 0; i < dev->num_tx_queues; i++) {
+#ifdef WLAN_DEBUG
 		struct netdev_queue *txq = netdev_get_tx_queue(dev, i);
+#endif
 
 		hdd_debug("netdev tx queue[%u] state: 0x%lx", i, txq->state);
 	}
