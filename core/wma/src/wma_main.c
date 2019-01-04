@@ -3241,6 +3241,9 @@ QDF_STATUS wma_open(struct wlan_objmgr_psoc *psoc,
 	wma_handle->qdf_dev = qdf_dev;
 	wma_handle->max_scan = cds_cfg->max_scan;
 
+	wma_handle->enable_peer_unmap_conf_support =
+			cds_cfg->enable_peer_unmap_conf_support;
+
 	/* Register Converged Event handlers */
 	init_deinit_register_tgt_psoc_ev_handlers(psoc);
 
@@ -4934,6 +4937,8 @@ static inline void wma_update_target_services(struct wmi_unified *wmi_handle,
 		cfg->twt_responder = true;
 	if (wmi_service_enabled(wmi_handle, wmi_service_beacon_reception_stats))
 		cfg->bcn_reception_stats = true;
+	if (wmi_service_enabled(wmi_handle, wmi_service_vdev_latency_config))
+		g_fw_wlan_feat_caps |= (1 << VDEV_LATENCY_CONFIG);
 }
 
 /**
@@ -6656,6 +6661,16 @@ int wma_rx_service_ready_ext_event(void *handle, uint8_t *event,
 	} else {
 		cdp_cfg_set_new_htt_msg_format(soc, 0);
 		wlan_res_cfg->new_htt_msg_format = false;
+	}
+
+	if (wma_handle->enable_peer_unmap_conf_support &&
+	    wmi_service_enabled(wmi_handle,
+				wmi_service_peer_unmap_cnf_support)) {
+		wlan_res_cfg->peer_unmap_conf_support = true;
+		cdp_cfg_set_peer_unmap_conf_support(soc, true);
+	} else {
+		wlan_res_cfg->peer_unmap_conf_support = false;
+		cdp_cfg_set_peer_unmap_conf_support(soc, false);
 	}
 
 	return 0;
