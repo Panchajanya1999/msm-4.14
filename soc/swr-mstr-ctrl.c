@@ -1,4 +1,4 @@
-/* Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -21,6 +21,8 @@
 #include <linux/kthread.h>
 #include <linux/bitops.h>
 #include <linux/clk.h>
+#include <linux/gpio.h>
+#include <linux/of_gpio.h>
 #include <linux/pm_runtime.h>
 #include <linux/of.h>
 #include <linux/debugfs.h>
@@ -509,9 +511,9 @@ static int swrm_cmd_fifo_wr_cmd(struct swr_mstr_ctrl *swrm, u8 cmd_data,
 	dev_dbg(swrm->dev, "%s: reg: 0x%x, cmd_id: 0x%x,wcmd_id: 0x%x, \
 			dev_num: 0x%x, cmd_data: 0x%x\n", __func__,
 			reg_addr, cmd_id, swrm->wcmd_id,dev_addr, cmd_data);
+	swr_master_write(swrm, SWRM_CMD_FIFO_WR_CMD, val);
 	/* wait for FIFO WR command to complete to avoid overflow */
 	usleep_range(250, 255);
-	swr_master_write(swrm, SWRM_CMD_FIFO_WR_CMD, val);
 	if (cmd_id == 0xF) {
 		/*
 		 * sleep for 10ms for MSM soundwire variant to allow broadcast
@@ -2054,6 +2056,7 @@ static int swrm_runtime_resume(struct device *dev)
 		if (swrm_clk_request(swrm, true))
 			goto exit;
 		if (!swrm->clk_stop_mode0_supp || swrm->state == SWR_MSTR_SSR) {
+			enable_bank_switch(swrm, 0, SWR_ROW_50, SWR_MIN_COL);
 			list_for_each_entry(swr_dev, &mstr->devices, dev_list) {
 				ret = swr_device_up(swr_dev);
 				if (ret) {
@@ -2108,6 +2111,7 @@ static int swrm_runtime_suspend(struct device *dev)
 			goto exit;
 		}
 		if (!swrm->clk_stop_mode0_supp || swrm->state == SWR_MSTR_SSR) {
+			enable_bank_switch(swrm, 0, SWR_ROW_50, SWR_MIN_COL);
 			swrm_clk_pause(swrm);
 			swr_master_write(swrm, SWRM_COMP_CFG_ADDR, 0x00);
 			list_for_each_entry(swr_dev, &mstr->devices, dev_list) {
@@ -2173,17 +2177,28 @@ static int swrm_device_down(struct device *dev)
 int swrm_register_wake_irq(struct swr_mstr_ctrl *swrm)
 {
 	int ret = 0;
+	int irq, dir_apps_irq;
 
 	if (!swrm->ipc_wakeup) {
-		swrm->wake_irq = platform_get_irq_byname(swrm->pdev,
-					"swr_wake_irq");
-		if (swrm->wake_irq < 0) {
-			dev_err(swrm->dev,
-				"%s() error getting wake irq handle: %d\n",
-				__func__, swrm->wake_irq);
-			return -EINVAL;
+		irq = of_get_named_gpio(swrm->dev->of_node,
+					"qcom,swr-wakeup-irq", 0);
+		if (gpio_is_valid(irq)) {
+			swrm->wake_irq = gpio_to_irq(irq);
+			if (swrm->wake_irq < 0) {
+				dev_err(swrm->dev,
+					"Unable to configure irq\n");
+				return swrm->wake_irq;
+			}
+		} else {
+			dir_apps_irq = platform_get_irq_byname(swrm->pdev,
+							"swr_wake_irq");
+			if (dir_apps_irq < 0) {
+				dev_err(swrm->dev,
+					"TLMM connect gpio not found\n");
+				return -EINVAL;
+			}
+			swrm->wake_irq = dir_apps_irq;
 		}
-
 		ret = request_threaded_irq(swrm->wake_irq, NULL,
 					   swrm_wakeup_interrupt,
 					   IRQF_TRIGGER_HIGH | IRQF_ONESHOT,
@@ -2247,7 +2262,7 @@ int swrm_wcd_notify(struct platform_device *pdev, u32 id, void *data)
 		reinit_completion(&swrm->clk_off_complete);
 		if (swrm->clk_ref_count &&
 			 !wait_for_completion_timeout(&swrm->clk_off_complete,
-						   msecs_to_jiffies(200)))
+						   msecs_to_jiffies(500)))
 			dev_err(swrm->dev, "%s: clock voting not zero\n",
 				__func__);
 
