@@ -25,6 +25,7 @@
 #include <soc/snd_event.h>
 #include <linux/pm_runtime.h>
 #include <dsp/audio_notifier.h>
+#include <linux/delay.h>
 
 #include "core.h"
 #include "pinctrl-utils.h"
@@ -62,6 +63,8 @@
 #define LPI_GPIO_FUNC_FUNC3			"func3"
 #define LPI_GPIO_FUNC_FUNC4			"func4"
 #define LPI_GPIO_FUNC_FUNC5			"func5"
+
+#define MAX_RETRIES				3
 
 static bool lpi_dev_up;
 static struct device *lpi_dev;
@@ -124,16 +127,31 @@ static const char *const lpi_gpio_functions[] = {
 	[LPI_GPIO_FUNC_INDEX_FUNC5]	= LPI_GPIO_FUNC_FUNC5,
 };
 
+static void pm_acquire_hw_vote(struct device *lpi_dev)
+{
+	uint32_t retry_attempts = 0;
+
+	while (pm_runtime_get_sync(lpi_dev) < 0 && retry_attempts < MAX_RETRIES)
+	{
+		pm_runtime_set_suspended(lpi_dev);
+		msleep(100);
+		pm_runtime_mark_last_busy(lpi_dev);
+		pm_runtime_put_autosuspend(lpi_dev);
+		retry_attempts++;
+	}
+}
+
 static int lpi_gpio_read(struct lpi_gpio_pad *pad, unsigned int addr)
 {
-	int ret;
+	int ret = 0;
 
 	if (!lpi_dev_up) {
 		pr_err_ratelimited("%s: ADSP is down due to SSR, return\n",
 				   __func__);
 		return 0;
 	}
-	pm_runtime_get_sync(lpi_dev);
+
+	pm_acquire_hw_vote(lpi_dev);
 
 	ret = ioread32(pad->base + pad->offset + addr);
 	if (ret < 0)
@@ -152,7 +170,8 @@ static int lpi_gpio_write(struct lpi_gpio_pad *pad, unsigned int addr,
 				   __func__);
 		return 0;
 	}
-	pm_runtime_get_sync(lpi_dev);
+
+	pm_acquire_hw_vote(lpi_dev);
 
 	iowrite32(val, pad->base + pad->offset + addr);
 
@@ -670,29 +689,45 @@ static int lpi_pinctrl_runtime_resume(struct device *dev)
 {
 	struct lpi_gpio_state *state = dev_get_drvdata(dev);
 	int ret = 0;
+	struct clk *lpass_core_hw_vote = NULL;
 
 	if (state->lpass_core_hw_vote == NULL) {
-		dev_dbg(dev, "%s: Invalid core hw node\n", __func__);
-		return 0;
+		lpass_core_hw_vote = devm_clk_get(dev, "lpass_core_hw_vote");
+		if (IS_ERR(lpass_core_hw_vote) || lpass_core_hw_vote == NULL) {
+			ret = PTR_ERR(lpass_core_hw_vote);
+			dev_dbg(dev, "%s: clk get %s failed %d\n",
+				__func__, "lpass_core_hw_vote", ret);
+			return 0;
+		}
+		state->lpass_core_hw_vote = lpass_core_hw_vote;
 	}
-
+	pr_err("%s: test: voting for afe lpass hw\n", __func__);
 	ret = clk_prepare_enable(state->lpass_core_hw_vote);
 	if (ret < 0)
-		dev_dbg(dev, "%s:lpass core hw enable failed\n",
+		dev_err(dev, "%s:lpass core hw enable failed\n",
 			__func__);
 
 	pm_runtime_set_autosuspend_delay(dev, LPI_AUTO_SUSPEND_DELAY);
-	return 0;
+	return ret;
 }
 
 static int lpi_pinctrl_runtime_suspend(struct device *dev)
 {
 	struct lpi_gpio_state *state = dev_get_drvdata(dev);
+	struct clk *lpass_core_hw_vote = NULL;
+	int ret = 0;
 
 	if (state->lpass_core_hw_vote == NULL) {
-		dev_dbg(dev, "%s: Invalid lpass core hw node\n", __func__);
-		return 0;
+		lpass_core_hw_vote = devm_clk_get(dev, "lpass_core_hw_vote");
+		if (IS_ERR(lpass_core_hw_vote) || lpass_core_hw_vote == NULL) {
+			ret = PTR_ERR(lpass_core_hw_vote);
+			dev_dbg(dev, "%s: clk get %s failed %d\n",
+				__func__, "lpass_core_hw_vote", ret);
+			return 0;
+		}
+		state->lpass_core_hw_vote = lpass_core_hw_vote;
 	}
+	pr_err("%s: test: Remove Voting for afe lpass hw\n", __func__);
 	clk_disable_unprepare(state->lpass_core_hw_vote);
 	return 0;
 }

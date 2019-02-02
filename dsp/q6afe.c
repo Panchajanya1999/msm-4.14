@@ -8352,6 +8352,12 @@ int afe_vote_lpass_core_hw(uint32_t hw_block_id, char *client_name,
 		return -EINVAL;
 	}
 
+	ret = afe_q6_interface_prepare();
+	if (ret != 0) {
+		pr_err("%s: Q6 interface prepare failed %d\n", __func__, ret);
+		return ret;
+	}
+
 	mutex_lock(&this_afe.afe_cmd_lock);
 
 	memset(cmd_ptr, 0, sizeof(hw_vote_cfg));
@@ -8368,7 +8374,7 @@ int afe_vote_lpass_core_hw(uint32_t hw_block_id, char *client_name,
 	strlcpy(cmd_ptr->client_name, client_name,
 			sizeof(cmd_ptr->client_name));
 
-	pr_debug("%s: lpass core hw vote opcode[0x%x] hw id[0x%x]\n",
+	pr_err("%s: lpass core hw vote opcode[0x%x] hw id[0x%x]\n",
 		__func__, cmd_ptr->hdr.opcode, cmd_ptr->hw_block_id);
 
 	*client_handle = 0;
@@ -8427,6 +8433,12 @@ int afe_unvote_lpass_core_hw(uint32_t hw_block_id, uint32_t client_handle)
 						&hw_vote_cfg;
 	int ret = 0;
 
+	ret = afe_q6_interface_prepare();
+	if (ret != 0) {
+		pr_err("%s: Q6 interface prepare failed %d\n", __func__, ret);
+		return ret;
+	}
+
 	mutex_lock(&this_afe.afe_cmd_lock);
 
 	memset(cmd_ptr, 0, sizeof(hw_vote_cfg));
@@ -8442,7 +8454,7 @@ int afe_unvote_lpass_core_hw(uint32_t hw_block_id, uint32_t client_handle)
 	cmd_ptr->hw_block_id = hw_block_id;
 	cmd_ptr->client_handle = client_handle;
 
-	pr_debug("%s: lpass core hw devote opcode[0x%x] hw id[0x%x]\n",
+	pr_err("%s: lpass core hw devote opcode[0x%x] hw id[0x%x]\n",
 		__func__, cmd_ptr->hdr.opcode, cmd_ptr->hw_block_id);
 
 	if (cmd_ptr->client_handle <= 0) {
