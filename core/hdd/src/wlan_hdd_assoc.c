@@ -237,7 +237,7 @@ hdd_conn_set_authenticated(struct hdd_adapter *adapter, uint8_t auth_state)
 		qdf_get_time_of_the_day_in_hr_min_sec_usec(auth_time,
 							   time_buffer_size);
 	else
-		qdf_mem_set(auth_time, 0x00, time_buffer_size);
+		qdf_mem_zero(auth_time, time_buffer_size);
 
 }
 
@@ -274,7 +274,7 @@ void hdd_conn_set_connection_state(struct hdd_adapter *adapter,
 		qdf_get_time_of_the_day_in_hr_min_sec_usec(connect_time,
 							   time_buffer_size);
 	else
-		qdf_mem_set(connect_time, 0x00, time_buffer_size);
+		qdf_mem_zero(connect_time, time_buffer_size);
 
 }
 
@@ -4888,7 +4888,6 @@ hdd_sme_roam_callback(void *pContext, struct csr_roam_info *roam_info,
 		wlan_hdd_netif_queue_control(adapter,
 				WLAN_STOP_ALL_NETIF_QUEUE,
 				WLAN_CONTROL_PATH);
-		hdd_napi_serialize(1);
 		hdd_set_connection_in_progress(true);
 		hdd_set_roaming_in_progress(true);
 		policy_mgr_restart_opportunistic_timer(hdd_ctx->psoc, true);
