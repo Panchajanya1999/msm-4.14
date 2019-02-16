@@ -13,9 +13,11 @@
 #include <linux/moduleparam.h>
 #include <linux/slab.h>
 #include <uapi/linux/sched/types.h>
+#include "../../kernel/sched/sched.h"
 
 static unsigned int input_boost_freq_lp = CONFIG_INPUT_BOOST_FREQ_LP;
 static unsigned int input_boost_freq_hp = CONFIG_INPUT_BOOST_FREQ_PERF;
+static unsigned int input_boost_return_freq_hp = CONFIG_INPUT_BOOST_RETURN_FREQ_PERF;
 static unsigned short input_boost_duration = CONFIG_INPUT_BOOST_DURATION_MS;
 
 module_param(input_boost_freq_lp, uint, 0644);
@@ -47,7 +49,10 @@ static u32 get_boost_freq(struct boost_drv *b, u32 cpu)
 	if (cpumask_test_cpu(cpu, cpu_lp_mask))
 		return input_boost_freq_lp;
 
-	return input_boost_freq_hp;
+	if (cpu_rq(cpu)->nr_running > 1)
+			return input_boost_freq_hp;
+
+		return input_boost_return_freq_hp;
 }
 
 static u32 get_min_freq(struct boost_drv *b, u32 cpu)

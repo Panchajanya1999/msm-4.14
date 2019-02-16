@@ -266,6 +266,12 @@ config INPUT_BOOST_FREQ_PERF
 	help
 	  Input boost frequency for the performance CPU cluster.
 
+config INPUT_BOOST_RETURN_FREQ_PERF
+	int "Performance cluster return boost frequency"
+	default "0"
+	help
+	  Input boost frequency for the performance cluster when load is less.
+
 config REMOVE_INPUT_BOOST_FREQ_LP
 	int "Low-power cluster return frequency"
 	default "0"
