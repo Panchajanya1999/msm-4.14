@@ -434,7 +434,6 @@ int apr_send_pkt(void *handle, uint32_t *buf)
 		}
 	}
 	spin_unlock_irqrestore(&svc->w_lock, flags);
-
 	return rc;
 }
 EXPORT_SYMBOL(apr_send_pkt);
