@@ -16,6 +16,7 @@
 #include "../../kernel/sched/sched.h"
 
 static unsigned int input_boost_freq_lp = CONFIG_INPUT_BOOST_FREQ_LP;
+static unsigned int input_boost_return_freq_lp = CONFIG_INPUT_BOOST_RETURN_FREQ_LP;
 static unsigned int input_boost_freq_hp = CONFIG_INPUT_BOOST_FREQ_PERF;
 static unsigned int input_boost_return_freq_hp = CONFIG_INPUT_BOOST_RETURN_FREQ_PERF;
 static unsigned short input_boost_duration = CONFIG_INPUT_BOOST_DURATION_MS;
@@ -46,8 +47,12 @@ static struct boost_drv *boost_drv_g __read_mostly;
 
 static u32 get_boost_freq(struct boost_drv *b, u32 cpu)
 {
-	if (cpumask_test_cpu(cpu, cpu_lp_mask))
-		return input_boost_freq_lp;
+	if (cpumask_test_cpu(cpu, cpu_lp_mask)){
+		if (cpu_rq(cpu)->nr_running > 1)	
+			return input_boost_freq_lp;
+
+		return input_boost_return_freq_lp;
+	}
 
 	if (cpu_rq(cpu)->nr_running > 1)
 			return input_boost_freq_hp;
