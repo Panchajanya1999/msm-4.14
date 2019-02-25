@@ -4724,28 +4724,6 @@ static void msm_afe_clear_config(void)
 	afe_clear_config(AFE_SLIMBUS_SLAVE_CONFIG);
 }
 
-static int msm_config_hph_en0_gpio(struct snd_soc_codec *codec, bool high)
-{
-	struct snd_soc_card *card = codec->component.card;
-	struct msm_asoc_mach_data *pdata;
-	int val;
-
-	if (!card)
-		return 0;
-
-	pdata = snd_soc_card_get_drvdata(card);
-	if (!pdata || !gpio_is_valid(pdata->hph_en0_gpio))
-		return 0;
-
-	val = gpio_get_value_cansleep(pdata->hph_en0_gpio);
-	if ((!!val) == high)
-		return 0;
-
-	gpio_direction_output(pdata->hph_en0_gpio, (int)high);
-
-	return 1;
-}
-
 static int msm_audrx_tavil_init(struct snd_soc_pcm_runtime *rtd)
 {
 	int ret = 0;
@@ -4870,15 +4848,17 @@ static int msm_audrx_tavil_init(struct snd_soc_pcm_runtime *rtd)
 	}
 
 	card = rtd->card->snd_card;
-	entry = snd_info_create_subdir(card->module, "codecs",
-					 card->proc_root);
-	if (!entry) {
-		pr_debug("%s: Cannot create codecs module entry\n",
-			 __func__);
-		ret = 0;
-		goto err;
+	if (!pdata->codec_root) {
+		entry = snd_info_create_subdir(card->module, "codecs",
+						 card->proc_root);
+		if (!entry) {
+			pr_debug("%s: Cannot create codecs module entry\n",
+				 __func__);
+			ret = 0;
+			goto err;
+		}
+		pdata->codec_root = entry;
 	}
-	pdata->codec_root = entry;
 	tavil_codec_info_create_codec_entry(pdata->codec_root, codec);
 
 	codec_reg_done = true;
@@ -5038,17 +5018,18 @@ static int msm_audrx_tasha_init(struct snd_soc_pcm_runtime *rtd)
 	}
 
 	card = rtd->card->snd_card;
-	entry = snd_info_create_subdir(card->module, "codecs",
-					 card->proc_root);
-	if (!entry) {
-		pr_debug("%s: Cannot create codecs module entry\n",
-			 __func__);
-		ret = 0;
-		goto err;
+	if (!pdata->codec_root) {
+		entry = snd_info_create_subdir(card->module, "codecs",
+						 card->proc_root);
+		if (!entry) {
+			pr_debug("%s: Cannot create codecs module entry\n",
+				 __func__);
+			ret = 0;
+			goto err;
+		}
+		pdata->codec_root = entry;
 	}
-	pdata->codec_root = entry;
 	tasha_codec_info_create_codec_entry(pdata->codec_root, codec);
-	tasha_mbhc_zdet_gpio_ctrl(msm_config_hph_en0_gpio, rtd->codec);
 
 	codec_reg_done = true;
 	return 0;
