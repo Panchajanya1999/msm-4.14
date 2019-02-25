@@ -998,6 +998,7 @@ enum dhcp_nego_status {
  * @vht_caps: VHT capabilities of current station
  * @reason_code: Disconnection reason code for current station
  * @rssi: RSSI of the current station reported from F/W
+ * @capability: Capability information of current station
  */
 struct hdd_station_info {
 	bool in_use;
@@ -1041,6 +1042,7 @@ struct hdd_station_info {
 	int8_t rssi;
 	enum dhcp_phase dhcp_phase;
 	enum dhcp_nego_status dhcp_nego_status;
+	uint16_t capability;
 };
 
 /**
@@ -1329,12 +1331,13 @@ struct hdd_adapter {
 		struct hdd_ap_ctx ap;
 	} session;
 
-	qdf_atomic_t dfs_radar_found;
+	qdf_atomic_t ch_switch_in_progress;
 
 #ifdef WLAN_FEATURE_TSF
 	/* tsf value received from firmware */
 	uint64_t cur_target_time;
-	uint64_t tsf_sync_soc_timer;
+	uint64_t cur_tsf_sync_soc_time;
+	uint64_t last_tsf_sync_soc_time;
 	qdf_mc_timer_t host_capture_req_timer;
 #ifdef WLAN_FEATURE_TSF_PLUS
 	/* spin lock for read/write timestamps */
@@ -3588,4 +3591,15 @@ void wlan_hdd_send_tcp_param_update_event(struct hdd_context *hdd_ctx,
 }
 
 #endif /* MSM_PLATFORM */
+
+/**
+ * hdd_hidden_ssid_enable_roaming() - enable roaming after hidden ssid rsp
+ * @hdd_handle: Hdd handler
+ * @vdev_id: Vdev Id
+ *
+ * This is a wrapper function to enable roaming after getting hidden
+ * ssid rsp
+ */
+void hdd_hidden_ssid_enable_roaming(hdd_handle_t hdd_handle, uint8_t vdev_id);
+
 #endif /* end #if !defined(WLAN_HDD_MAIN_H) */
