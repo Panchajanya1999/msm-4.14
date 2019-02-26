@@ -1049,14 +1049,6 @@ static int rx_macro_mclk_enable(struct rx_macro_priv *rx_priv,
 
 	mutex_lock(&rx_priv->mclk_lock);
 	if (mclk_enable) {
-		if (!rx_priv->dev_up) {
-			dev_dbg_ratelimited(rx_priv->dev,
-					    "%s:SSR in progress, exit\n",
-					    __func__);
-			ret = -ENODEV;
-			goto exit;
-		}
-
 		if (rx_priv->rx_mclk_users == 0) {
 			if (rx_priv->is_native_on)
 				mclk_mux = MCLK_MUX1;
@@ -1227,9 +1219,7 @@ static int rx_macro_event_handler(struct snd_soc_codec *codec, u16 event,
 		rx_macro_wcd_clsh_imped_config(codec, data, false);
 		break;
 	case BOLERO_MACRO_EVT_SSR_DOWN:
-		mutex_lock(&rx_priv->mclk_lock);
 		rx_priv->dev_up = false;
-		mutex_unlock(&rx_priv->mclk_lock);
 		swrm_wcd_notify(
 			rx_priv->swr_ctrl_data[0].rx_swr_pdev,
 			SWR_DEVICE_DOWN, NULL);
@@ -1238,9 +1228,7 @@ static int rx_macro_event_handler(struct snd_soc_codec *codec, u16 event,
 			SWR_DEVICE_SSR_DOWN, NULL);
 		break;
 	case BOLERO_MACRO_EVT_SSR_UP:
-		mutex_lock(&rx_priv->mclk_lock);
 		rx_priv->dev_up = true;
-		mutex_unlock(&rx_priv->mclk_lock);
 		/* reset swr after ssr/pdr */
 		rx_priv->reset_swr = true;
 		/* enable&disable MCLK_MUX1 to reset GFMUX reg */
@@ -3168,17 +3156,6 @@ static int rx_swrm_clock(void *handle, bool enable)
 	dev_dbg(rx_priv->dev, "%s: swrm clock %s\n",
 		__func__, (enable ? "enable" : "disable"));
 	if (enable) {
-		mutex_lock(&rx_priv->mclk_lock);
-		if (!rx_priv->dev_up) {
-			dev_dbg_ratelimited(rx_priv->dev,
-					    "%s:SSR in progress, exit\n",
-					    __func__);
-			ret = -ENODEV;
-			mutex_unlock(&rx_priv->mclk_lock);
-			goto exit;
-		}
-		mutex_unlock(&rx_priv->mclk_lock);
-
 		if (rx_priv->swr_clk_users == 0) {
 			ret = rx_macro_mclk_enable(rx_priv, 1, true);
 			if (ret < 0) {
@@ -3318,6 +3295,7 @@ static int rx_macro_init(struct snd_soc_codec *codec)
 		dev_err(rx_dev, "%s: failed to add snd_ctls\n", __func__);
 		return ret;
 	}
+	rx_priv->dev_up = true;
 	snd_soc_dapm_ignore_suspend(dapm, "RX_MACRO_AIF1 Playback");
 	snd_soc_dapm_ignore_suspend(dapm, "RX_MACRO_AIF2 Playback");
 	snd_soc_dapm_ignore_suspend(dapm, "RX_MACRO_AIF3 Playback");
@@ -3531,7 +3509,6 @@ static int rx_macro_probe(struct platform_device *pdev)
 	}
 	rx_priv->rx_mclk_mode_muxsel = muxsel_io;
 	rx_priv->reset_swr = true;
-	rx_priv->dev_up = true;
 	INIT_WORK(&rx_priv->rx_macro_add_child_devices_work,
 		  rx_macro_add_child_devices);
 	rx_priv->swr_plat_data.handle = (void *) rx_priv;

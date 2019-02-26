@@ -198,7 +198,6 @@ struct wsa_macro_priv {
 	u16 swr_clk_users;
 	bool dapm_mclk_enable;
 	bool reset_swr;
-	bool dev_up;
 	unsigned int vi_feed_value;
 	struct mutex mclk_lock;
 	struct mutex swr_clk_lock;
@@ -769,14 +768,6 @@ static int wsa_macro_mclk_enable(struct wsa_macro_priv *wsa_priv,
 
 	mutex_lock(&wsa_priv->mclk_lock);
 	if (mclk_enable) {
-		if (!wsa_priv->dev_up) {
-			dev_dbg_ratelimited(wsa_priv->dev,
-					    "%s:SSR in progress, exit\n",
-					    __func__);
-			ret = -ENODEV;
-			goto exit;
-		}
-
 		if (wsa_priv->wsa_mclk_users == 0) {
 			ret = bolero_request_clock(wsa_priv->dev,
 					WSA_MACRO, MCLK_MUX0, true);
@@ -897,9 +888,6 @@ static int wsa_macro_event_handler(struct snd_soc_codec *codec, u16 event,
 
 	switch (event) {
 	case BOLERO_MACRO_EVT_SSR_DOWN:
-		mutex_lock(&wsa_priv->mclk_lock);
-		wsa_priv->dev_up = false;
-		mutex_unlock(&wsa_priv->mclk_lock);
 		swrm_wcd_notify(
 			wsa_priv->swr_ctrl_data[0].wsa_swr_pdev,
 			SWR_DEVICE_DOWN, NULL);
@@ -908,9 +896,6 @@ static int wsa_macro_event_handler(struct snd_soc_codec *codec, u16 event,
 			SWR_DEVICE_SSR_DOWN, NULL);
 		break;
 	case BOLERO_MACRO_EVT_SSR_UP:
-		mutex_lock(&wsa_priv->mclk_lock);
-		wsa_priv->dev_up = true;
-		mutex_unlock(&wsa_priv->mclk_lock);
 		/* reset swr after ssr/pdr */
 		wsa_priv->reset_swr = true;
 		swrm_wcd_notify(
@@ -2477,17 +2462,6 @@ static int wsa_swrm_clock(void *handle, bool enable)
 	dev_dbg(wsa_priv->dev, "%s: swrm clock %s\n",
 		__func__, (enable ? "enable" : "disable"));
 	if (enable) {
-		mutex_lock(&wsa_priv->mclk_lock);
-		if (!wsa_priv->dev_up) {
-			dev_dbg_ratelimited(wsa_priv->dev,
-					    "%s:SSR in progress, exit\n",
-					    __func__);
-			ret = -ENODEV;
-			mutex_unlock(&wsa_priv->mclk_lock);
-			goto exit;
-		}
-		mutex_unlock(&wsa_priv->mclk_lock);
-
 		if (wsa_priv->swr_clk_users == 0) {
 			ret = wsa_macro_mclk_enable(wsa_priv, 1, true);
 			if (ret < 0) {
@@ -2770,7 +2744,6 @@ static int wsa_macro_probe(struct platform_device *pdev)
 	}
 	wsa_priv->wsa_io_base = wsa_io_base;
 	wsa_priv->reset_swr = true;
-	wsa_priv->dev_up = true;
 	INIT_WORK(&wsa_priv->wsa_macro_add_child_devices_work,
 		  wsa_macro_add_child_devices);
 	wsa_priv->swr_plat_data.handle = (void *) wsa_priv;

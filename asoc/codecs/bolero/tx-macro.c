@@ -136,7 +136,6 @@ struct tx_macro_priv {
 	int swr_clk_users;
 	bool dapm_mclk_enable;
 	bool reset_swr;
-	bool dev_up;
 	struct clk *tx_core_clk;
 	struct clk *tx_npl_clk;
 	struct mutex mclk_lock;
@@ -205,14 +204,6 @@ static int tx_macro_mclk_enable(struct tx_macro_priv *tx_priv,
 
 	mutex_lock(&tx_priv->mclk_lock);
 	if (mclk_enable) {
-		if (!tx_priv->dev_up) {
-			dev_dbg_ratelimited(tx_priv->dev,
-					    "%s:SSR in progress, exit\n",
-					    __func__);
-			ret = -ENODEV;
-			goto exit;
-		}
-
 		if (tx_priv->tx_mclk_users == 0) {
 			ret = bolero_request_clock(tx_priv->dev,
 					TX_MACRO, MCLK_MUX0, true);
@@ -331,9 +322,6 @@ static int tx_macro_event_handler(struct snd_soc_codec *codec, u16 event,
 
 	switch (event) {
 	case BOLERO_MACRO_EVT_SSR_DOWN:
-		mutex_lock(&tx_priv->mclk_lock);
-		tx_priv->dev_up = false;
-		mutex_unlock(&tx_priv->mclk_lock);
 		swrm_wcd_notify(
 			tx_priv->swr_ctrl_data[0].tx_swr_pdev,
 			SWR_DEVICE_DOWN, NULL);
@@ -342,9 +330,6 @@ static int tx_macro_event_handler(struct snd_soc_codec *codec, u16 event,
 			SWR_DEVICE_SSR_DOWN, NULL);
 		break;
 	case BOLERO_MACRO_EVT_SSR_UP:
-		mutex_lock(&tx_priv->mclk_lock);
-		tx_priv->dev_up = true;
-		mutex_unlock(&tx_priv->mclk_lock);
 		/* reset swr after ssr/pdr */
 		tx_priv->reset_swr = true;
 		swrm_wcd_notify(
@@ -1423,17 +1408,6 @@ static int tx_macro_swrm_clock(void *handle, bool enable)
 	dev_dbg(tx_priv->dev, "%s: swrm clock %s\n",
 		__func__, (enable ? "enable" : "disable"));
 	if (enable) {
-		mutex_lock(&tx_priv->mclk_lock);
-		if (!tx_priv->dev_up) {
-			dev_dbg_ratelimited(tx_priv->dev,
-					    "%s:SSR in progress, exit\n",
-					    __func__);
-			ret = -ENODEV;
-			mutex_unlock(&tx_priv->mclk_lock);
-			goto exit;
-		}
-		mutex_unlock(&tx_priv->mclk_lock);
-
 		if (tx_priv->swr_clk_users == 0) {
 			ret = tx_macro_mclk_enable(tx_priv, 1);
 			if (ret < 0) {
@@ -1800,7 +1774,6 @@ static int tx_macro_probe(struct platform_device *pdev)
 			return -EINVAL;
 	}
 	tx_priv->reset_swr = true;
-	tx_priv->dev_up = true;
 	INIT_WORK(&tx_priv->tx_macro_add_child_devices_work,
 		  tx_macro_add_child_devices);
 	tx_priv->swr_plat_data.handle = (void *) tx_priv;

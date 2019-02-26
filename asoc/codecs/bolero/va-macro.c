@@ -98,7 +98,6 @@ struct va_macro_priv {
 	struct device *dev;
 	bool dec_active[VA_MACRO_NUM_DECIMATORS];
 	bool va_without_decimation;
-	bool dev_up;
 	struct clk *va_core_clk;
 	struct mutex mclk_lock;
 	struct snd_soc_codec *codec;
@@ -155,14 +154,6 @@ static int va_macro_mclk_enable(struct va_macro_priv *va_priv,
 
 	mutex_lock(&va_priv->mclk_lock);
 	if (mclk_enable) {
-		if (!va_priv->dev_up) {
-			dev_dbg_ratelimited(va_priv->dev,
-					    "%s:SSR in progress, exit\n",
-					    __func__);
-			ret = -ENODEV;
-			goto exit;
-		}
-
 		if (va_priv->va_mclk_users == 0) {
 			ret = bolero_request_clock(va_priv->dev,
 						VA_MACRO, MCLK_MUX0, true);
@@ -225,16 +216,6 @@ static int va_macro_event_handler(struct snd_soc_codec *codec, u16 event,
 		return -EINVAL;
 
 	switch (event) {
-	case BOLERO_MACRO_EVT_SSR_DOWN:
-		mutex_lock(&va_priv->mclk_lock);
-		va_priv->dev_up = false;
-		mutex_unlock(&va_priv->mclk_lock);
-		break;
-	case BOLERO_MACRO_EVT_SSR_UP:
-		mutex_lock(&va_priv->mclk_lock);
-		va_priv->dev_up = true;
-		mutex_unlock(&va_priv->mclk_lock);
-		break;
 	case BOLERO_MACRO_EVT_WAIT_VA_CLK_RESET:
 		while ((va_priv->va_mclk_users != 0) && (retry_cnt != 0)) {
 			dev_dbg_ratelimited(va_dev, "%s:retry_cnt: %d\n",
@@ -1637,7 +1618,6 @@ static int va_macro_probe(struct platform_device *pdev)
 		}
 	}
 
-	va_priv->dev_up = true;
 	mutex_init(&va_priv->mclk_lock);
 	dev_set_drvdata(&pdev->dev, va_priv);
 	va_macro_init_ops(&ops, va_io_base, va_without_decimation);
