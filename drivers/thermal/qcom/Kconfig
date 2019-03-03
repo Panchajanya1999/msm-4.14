@@ -134,3 +134,17 @@ config QTI_RPM_SMD_COOLING_DEVICE
 	  railway at predefined voltage corner using RPM hardware.
 
 	  If you want this support, you should say Y here.
+
+config MSM_THERMAL_SIMPLE
+	bool "Simple solution to monitor temperature and limit CPU frequency"
+	default n
+	help
+	  When properly configured, this driver monitors temperatures from a
+	  specified sensor and reduces the CPU's max frequency in response to
+	  the temperature crossing specified thermal zones. The temperature sensor
+	  use must be a specified ADC channel on a given VADC device, hence this
+	  driver's dependency on the chipset being an MSM product.
+
+	  This driver can only be configured via the device tree; it cannot be
+	  configured at runtime. Configuration instructions can be found in the
+	  accompanying documentation.
