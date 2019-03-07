@@ -39,14 +39,7 @@ case "$KBUILD_VERBOSE" in
 esac
 
 # We need access to CONFIG_ symbols
-case "${KCONFIG_CONFIG}" in
-*/*)
-	. "${KCONFIG_CONFIG}"
-	;;
-*)
-	# Force using a file from the current directory
-	. "./${KCONFIG_CONFIG}"
-esac
+. include/config/auto.conf
 
 # In case it doesn't exist yet...
 if [ -e "$cur_ksyms_file" ]; then touch "$cur_ksyms_file"; fi
