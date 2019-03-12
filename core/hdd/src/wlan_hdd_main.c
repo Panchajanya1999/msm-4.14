@@ -5630,6 +5630,9 @@ QDF_STATUS hdd_stop_adapter_ext(struct hdd_context *hdd_ctx,
 			clear_bit(ACS_PENDING, &adapter->event_flags);
 		}
 		wlan_hdd_scan_abort(adapter);
+		/* Diassociate with all the peers before stop ap post */
+		if (test_bit(SOFTAP_BSS_STARTED, &adapter->event_flags))
+			wlan_hdd_del_station(adapter);
 		/* Flush IPA exception path packets */
 		sap_config = &adapter->session.ap.sap_config;
 		if (sap_config)
@@ -14337,6 +14340,10 @@ static int hdd_update_scan_config(struct hdd_context *hdd_ctx)
 	scan_cfg.enable_mac_spoofing = cfg->enable_mac_spoofing;
 	scan_cfg.sta_miracast_mcc_rest_time =
 				cfg->sta_miracast_mcc_rest_time_val;
+	scan_cfg.sta_scan_burst_duration = cfg->sta_scan_burst_duration;
+	scan_cfg.p2p_scan_burst_duration = cfg->p2p_scan_burst_duration;
+	scan_cfg.go_scan_burst_duration = cfg->go_scan_burst_duration;
+	scan_cfg.ap_scan_burst_duration = cfg->ap_scan_burst_duration;
 
 	hdd_update_pno_config(&scan_cfg.pno_cfg, cfg);
 	hdd_update_ie_whitelist_attr(&scan_cfg.ie_whitelist, cfg);
