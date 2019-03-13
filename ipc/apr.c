@@ -67,7 +67,7 @@ struct apr_private {
 };
 
 static struct apr_private *apr_priv;
-static bool apr_cf_debug = true;
+static bool apr_cf_debug;
 
 #ifdef CONFIG_DEBUG_FS
 static struct dentry *debugfs_apr_debug;
@@ -293,8 +293,8 @@ static const struct snd_event_ops apr_ssr_ops = {
 
 static void apr_adsp_down(unsigned long opcode)
 {
-	snd_event_notify(apr_priv->dev, SND_EVENT_DOWN);
 	pr_info("%s: Q6 is Down\n", __func__);
+	snd_event_notify(apr_priv->dev, SND_EVENT_DOWN);
 	apr_set_q6_state(APR_SUBSYS_DOWN);
 	dispatch_event(opcode, APR_DEST_QDSP6);
 }
