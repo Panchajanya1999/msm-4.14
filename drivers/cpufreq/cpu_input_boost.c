@@ -12,6 +12,7 @@
 #include <linux/kthread.h>
 #include <linux/moduleparam.h>
 #include <linux/slab.h>
+#include <uapi/linux/sched/types.h>
 
 static unsigned int input_boost_freq_lp = CONFIG_INPUT_BOOST_FREQ_LP;
 static unsigned int input_boost_freq_hp = CONFIG_INPUT_BOOST_FREQ_PERF;
