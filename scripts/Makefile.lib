@@ -277,6 +277,13 @@ DTC_FLAGS += -Wno-unit_address_vs_reg \
 	-Wno-unit_address_format \
 	-Wno-pci_bridge \
 	-Wno-pci_device_bus_num \
+	-Wno-clocks_property \
+	-Wno-cooling_device_property \
+	-Wno-gpios_property \
+	-Wno-graph_port \
+	-Wno-io_channels_property \
+	-Wno-pwms_property \
+	-Wno-thermal_sensors_property \
 	-Wno-pci_device_reg
 endif
 
