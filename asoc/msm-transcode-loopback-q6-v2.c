@@ -1,4 +1,4 @@
-/* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -424,7 +424,7 @@ static int msm_transcode_loopback_set_params(struct snd_compr_stream *cstream,
 
 	q6_state = apr_get_q6_state();
 	if (q6_state == APR_SUBSYS_DOWN) {
-		pr_debug("%s,adsp is down\n", __func__);
+		pr_debug("%s: adsp is down\n", __func__);
 		return -ENETRESET;
 	}
 	mutex_lock(&trans->lock);

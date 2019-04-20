@@ -691,7 +691,7 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 
 	q6_state = apr_get_q6_state();
 	if (q6_state == APR_SUBSYS_DOWN) {
-		pr_debug("%s,adsp is down\n", __func__);
+		pr_debug("%s: adsp is down\n", __func__);
 		return -ENETRESET;
 	}
 	prtd = kzalloc(sizeof(struct msm_audio), GFP_KERNEL);

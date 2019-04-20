@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1613,7 +1613,7 @@ static int msm_compr_playback_open(struct snd_compr_stream *cstream)
 
 	q6_state = apr_get_q6_state();
 	if (q6_state == APR_SUBSYS_DOWN) {
-		pr_debug("%s,adsp is down\n", __func__);
+		pr_debug("%s: adsp is down\n", __func__);
 		return -ENETRESET;
 	}
 	prtd = kzalloc(sizeof(struct msm_compr_audio), GFP_KERNEL);
@@ -1716,7 +1716,7 @@ static int msm_compr_capture_open(struct snd_compr_stream *cstream)
 
 	q6_state = apr_get_q6_state();
 	if (q6_state == APR_SUBSYS_DOWN) {
-		pr_debug("%s,adsp is down\n", __func__);
+		pr_debug("%s: adsp is down\n", __func__);
 		return -ENETRESET;
 	}
 	prtd = kzalloc(sizeof(struct msm_compr_audio), GFP_KERNEL);
