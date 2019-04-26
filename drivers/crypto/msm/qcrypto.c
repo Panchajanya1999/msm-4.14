@@ -422,7 +422,7 @@ struct qcrypto_cipher_ctx {
 
 	u8 ccm4309_nonce[QCRYPTO_CCM4309_NONCE_LEN];
 
-	struct crypto_skcipher *cipher_aes192_fb;
+	struct crypto_sync_skcipher *cipher_aes192_fb;
 
 	struct crypto_ahash *ahash_aead_aes192_fb;
 };
@@ -983,8 +983,8 @@ static int _qcrypto_cra_aes_ablkcipher_init(struct crypto_tfm *tfm)
 		ctx->cipher_aes192_fb = NULL;
 		return _qcrypto_cra_ablkcipher_init(tfm);
 	}
-	ctx->cipher_aes192_fb = crypto_alloc_skcipher(name, 0,
-			CRYPTO_ALG_ASYNC | CRYPTO_ALG_NEED_FALLBACK);
+	ctx->cipher_aes192_fb = crypto_alloc_sync_skcipher(name, 0,
+			CRYPTO_ALG_NEED_FALLBACK);
 	if (IS_ERR(ctx->cipher_aes192_fb)) {
 		pr_err("Error allocating fallback algo %s\n", name);
 		ret = PTR_ERR(ctx->cipher_aes192_fb);
@@ -1060,7 +1060,7 @@ static int _qcrypto_cra_aead_aes_sha1_init(struct crypto_aead *tfm)
 	ctx->cipher_aes192_fb = NULL;
 	ctx->ahash_aead_aes192_fb = NULL;
 	if (!cp->ce_support.aes_key_192) {
-		ctx->cipher_aes192_fb = crypto_alloc_skcipher(
+		ctx->cipher_aes192_fb = crypto_alloc_sync_skcipher(
 							"cbc(aes)", 0, 0);
 		if (IS_ERR(ctx->cipher_aes192_fb)) {
 			ctx->cipher_aes192_fb = NULL;
@@ -1069,7 +1069,7 @@ static int _qcrypto_cra_aead_aes_sha1_init(struct crypto_aead *tfm)
 							"hmac(sha1)", 0, 0);
 			if (IS_ERR(ctx->ahash_aead_aes192_fb)) {
 				ctx->ahash_aead_aes192_fb = NULL;
-				crypto_free_skcipher(ctx->cipher_aes192_fb);
+				crypto_free_sync_skcipher(ctx->cipher_aes192_fb);
 				ctx->cipher_aes192_fb = NULL;
 			}
 		}
@@ -1091,7 +1091,7 @@ static int _qcrypto_cra_aead_aes_sha256_init(struct crypto_aead *tfm)
 	ctx->cipher_aes192_fb = NULL;
 	ctx->ahash_aead_aes192_fb = NULL;
 	if (!cp->ce_support.aes_key_192) {
-		ctx->cipher_aes192_fb = crypto_alloc_skcipher(
+		ctx->cipher_aes192_fb = crypto_alloc_sync_skcipher(
 							"cbc(aes)", 0, 0);
 		if (IS_ERR(ctx->cipher_aes192_fb)) {
 			ctx->cipher_aes192_fb = NULL;
@@ -1100,7 +1100,7 @@ static int _qcrypto_cra_aead_aes_sha256_init(struct crypto_aead *tfm)
 							"hmac(sha256)", 0, 0);
 			if (IS_ERR(ctx->ahash_aead_aes192_fb)) {
 				ctx->ahash_aead_aes192_fb = NULL;
-				crypto_free_skcipher(ctx->cipher_aes192_fb);
+				crypto_free_sync_skcipher(ctx->cipher_aes192_fb);
 				ctx->cipher_aes192_fb = NULL;
 			}
 		}
@@ -1123,7 +1123,7 @@ static void _qcrypto_cra_aes_ablkcipher_exit(struct crypto_tfm *tfm)
 
 	_qcrypto_cra_ablkcipher_exit(tfm);
 	if (ctx->cipher_aes192_fb)
-		crypto_free_skcipher(ctx->cipher_aes192_fb);
+		crypto_free_sync_skcipher(ctx->cipher_aes192_fb);
 	ctx->cipher_aes192_fb = NULL;
 }
 
@@ -1142,7 +1142,7 @@ static void _qcrypto_cra_aead_aes_exit(struct crypto_aead *tfm)
 	if (!list_empty(&ctx->rsp_queue))
 		pr_err("_qcrypto__cra_aead_exit: requests still outstanding");
 	if (ctx->cipher_aes192_fb)
-		crypto_free_skcipher(ctx->cipher_aes192_fb);
+		crypto_free_sync_skcipher(ctx->cipher_aes192_fb);
 	if (ctx->ahash_aead_aes192_fb)
 		crypto_free_ahash(ctx->ahash_aead_aes192_fb);
 	ctx->cipher_aes192_fb = NULL;
@@ -1425,10 +1425,10 @@ static int _qcrypto_setkey_aes_192_fallback(struct crypto_ablkcipher *cipher,
 	int ret;
 
 	ctx->enc_key_len = AES_KEYSIZE_192;
-	ctx->cipher_aes192_fb->base.crt_flags &= ~CRYPTO_TFM_REQ_MASK;
-	ctx->cipher_aes192_fb->base.crt_flags |=
+	ctx->cipher_aes192_fb->base.base.crt_flags &= ~CRYPTO_TFM_REQ_MASK;
+	ctx->cipher_aes192_fb->base.base.crt_flags |=
 			(cipher->base.crt_flags & CRYPTO_TFM_REQ_MASK);
-	ret = crypto_skcipher_setkey(ctx->cipher_aes192_fb, key,
+	ret = crypto_sync_skcipher_setkey(ctx->cipher_aes192_fb, key,
 			AES_KEYSIZE_192);
 	if (ret) {
 		tfm->crt_flags &= ~CRYPTO_TFM_RES_MASK;
@@ -2484,8 +2484,8 @@ static int _qcrypto_enc_aes_192_fallback(struct ablkcipher_request *req)
 	struct qcrypto_cipher_ctx *ctx = crypto_tfm_ctx(req->base.tfm);
 	int err;
 
-	SKCIPHER_REQUEST_ON_STACK(subreq, ctx->cipher_aes192_fb);
-	skcipher_request_set_tfm(subreq, ctx->cipher_aes192_fb);
+	SYNC_SKCIPHER_REQUEST_ON_STACK(subreq, ctx->cipher_aes192_fb);
+	skcipher_request_set_sync_tfm(subreq, ctx->cipher_aes192_fb);
 	skcipher_request_set_callback(subreq, req->base.flags,
 					NULL, NULL);
 	skcipher_request_set_crypt(subreq, req->src, req->dst,
@@ -2500,8 +2500,8 @@ static int _qcrypto_dec_aes_192_fallback(struct ablkcipher_request *req)
 	struct qcrypto_cipher_ctx *ctx = crypto_tfm_ctx(req->base.tfm);
 	int err;
 
-	SKCIPHER_REQUEST_ON_STACK(subreq, ctx->cipher_aes192_fb);
-	skcipher_request_set_tfm(subreq, ctx->cipher_aes192_fb);
+	SYNC_SKCIPHER_REQUEST_ON_STACK(subreq, ctx->cipher_aes192_fb);
+	skcipher_request_set_sync_tfm(subreq, ctx->cipher_aes192_fb);
 	skcipher_request_set_callback(subreq, req->base.flags,
 					NULL, NULL);
 	skcipher_request_set_crypt(subreq, req->src, req->dst,
@@ -3095,8 +3095,8 @@ static int _qcrypto_aead_setkey(struct crypto_aead *tfm, const u8 *key,
 					ctx->auth_key, ctx->auth_key_len);
 		if (ret)
 			goto badkey;
-		crypto_skcipher_clear_flags(ctx->cipher_aes192_fb, ~0);
-		ret = crypto_skcipher_setkey(ctx->cipher_aes192_fb,
+		crypto_sync_skcipher_clear_flags(ctx->cipher_aes192_fb, ~0);
+		ret = crypto_sync_skcipher_setkey(ctx->cipher_aes192_fb,
 					ctx->enc_key, ctx->enc_key_len);
 		if (ret)
 			goto badkey;
@@ -3233,7 +3233,7 @@ static void _aead_aes_fb_stage1_ahash_complete(
 
 	/* compare icv */
 	if (err == 0) {
-		unsigned char tmp[ctx->authsize];
+		unsigned char tmp[SHA1_DIGEST_SIZE];
 
 		scatterwalk_map_and_copy(tmp, rctx->fb_aes_src,
 			req->cryptlen - ctx->authsize, ctx->authsize, 0);
@@ -3293,7 +3293,7 @@ static int _qcrypto_aead_aes_192_fallback(struct aead_request *req,
 	struct scatterlist *src, *dst;
 
 	rctx->fb_aes_iv = NULL;
-	aes_req = skcipher_request_alloc(ctx->cipher_aes192_fb, GFP_KERNEL);
+	aes_req = skcipher_request_alloc(&ctx->cipher_aes192_fb->base, GFP_KERNEL);
 	if (!aes_req)
 		return -ENOMEM;
 	ahash_req = ahash_request_alloc(ctx->ahash_aead_aes192_fb, GFP_KERNEL);
@@ -3362,7 +3362,7 @@ static int _qcrypto_aead_aes_192_fallback(struct aead_request *req,
 
 		rc = crypto_ahash_digest(ahash_req);
 		if (rc == 0) {
-			unsigned char tmp[ctx->authsize];
+			unsigned char tmp[SHA1_DIGEST_SIZE];
 
 			/* compare icv */
 			scatterwalk_map_and_copy(tmp,
