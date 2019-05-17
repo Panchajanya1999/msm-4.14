@@ -225,6 +225,12 @@ config GENERIC_HWEIGHT
 config GENERIC_CSUM
         def_bool y
 
+config THERMAL_SWITCH
+    default n
+        bool "Support themral config switch"
+	    help
+	        Support themral config switch.
+
 config GENERIC_CALIBRATE_DELAY
 	def_bool y
 
