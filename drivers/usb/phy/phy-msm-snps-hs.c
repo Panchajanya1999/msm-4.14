@@ -869,6 +869,7 @@ static int msm_hsphy_probe(struct platform_device *pdev)
 		goto err_ret;
 	}
 
+	msm_hsphy_enable_power(phy, true);
 	mutex_init(&phy->phy_lock);
 	platform_set_drvdata(pdev, phy);
 
@@ -892,6 +893,7 @@ static int msm_hsphy_probe(struct platform_device *pdev)
 	}
 
 	msm_hsphy_create_debugfs(phy);
+	msm_hsphy_enable_power(phy, false);
 
 	return 0;
 

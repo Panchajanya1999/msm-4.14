@@ -4598,6 +4598,7 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 			work = 1;
 		} else {
 			dwc3_msm_gadget_vbus_draw(mdwc, 0);
+			mdwc->max_power = 0;
 			dev_dbg(mdwc->dev, "Cable disconnected\n");
 		}
 		break;
