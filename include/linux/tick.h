@@ -134,6 +134,7 @@ static inline void tick_nohz_idle_stop_tick_protected(void)
 	local_irq_enable();
 }
 
+extern unsigned long tick_nohz_get_idle_calls_cpu(int cpu);
 #else /* !CONFIG_NO_HZ_COMMON */
 #define tick_nohz_enabled (0)
 static inline int tick_nohz_tick_stopped(void) { return 0; }
