@@ -19,6 +19,8 @@
 #include "dsi_pwr.h"
 #include "dsi_parser.h"
 
+extern bool enable_gesture_mode;
+
 /*
  * dsi_pwr_parse_supply_node() - parse power supply node from root device node
  */
@@ -137,6 +139,12 @@ static int dsi_pwr_enable_vregs(struct dsi_regulator_info *regs, bool enable)
 
 	if (enable) {
 		for (i = 0; i < regs->count; i++) {
+			if( (enable_gesture_mode) &&
+				( (strcmp(regs->vregs[i].vreg_name,"lab")==0) ||
+				(strcmp(regs->vregs[i].vreg_name,"ibb")==0) ||
+				(strcmp(regs->vregs[i].vreg_name,"vddio")==0) ) ) {
+				continue;
+			}
 			vreg = &regs->vregs[i];
 			if (vreg->pre_on_sleep)
 				msleep(vreg->pre_on_sleep);
@@ -172,6 +180,12 @@ static int dsi_pwr_enable_vregs(struct dsi_regulator_info *regs, bool enable)
 		}
 	} else {
 		for (i = (regs->count - 1); i >= 0; i--) {
+			if( (enable_gesture_mode) &&
+				((strcmp(regs->vregs[i].vreg_name,"lab")==0) ||
+				(strcmp(regs->vregs[i].vreg_name,"ibb")==0) ||
+				(strcmp(regs->vregs[i].vreg_name,"vddio")==0) ) ) {
+				continue;
+			}
 			if (regs->vregs[i].pre_off_sleep)
 				msleep(regs->vregs[i].pre_off_sleep);
 

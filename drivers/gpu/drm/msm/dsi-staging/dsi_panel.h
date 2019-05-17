@@ -292,6 +292,8 @@ int dsi_panel_pre_disable(struct dsi_panel *panel);
 
 int dsi_panel_disable(struct dsi_panel *panel);
 
+int dsi_panel_set_feature(struct dsi_panel *panel,enum dsi_cmd_set_type type);
+
 int dsi_panel_unprepare(struct dsi_panel *panel);
 
 int dsi_panel_post_unprepare(struct dsi_panel *panel);

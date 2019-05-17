@@ -44,6 +44,9 @@
 #define DEFAULT_PANEL_PREFILL_LINES	25
 #define TICKS_IN_MICRO_SECOND		1000000
 
+int fp_dsi_enable;
+extern bool enable_gesture_mode;
+extern char g_lcd_id[128];
 enum dsi_dsc_ratio_type {
 	DSC_8BPC_8BPP,
 	DSC_10BPC_8BPP,
@@ -478,8 +481,10 @@ static int dsi_panel_power_off(struct dsi_panel *panel)
 	if (gpio_is_valid(panel->reset_config.disp_en_gpio))
 		gpio_set_value(panel->reset_config.disp_en_gpio, 0);
 
-	if (gpio_is_valid(panel->reset_config.reset_gpio))
-		gpio_set_value(panel->reset_config.reset_gpio, 0);
+	if (!enable_gesture_mode) {
+		if (gpio_is_valid(panel->reset_config.reset_gpio))
+			gpio_set_value(panel->reset_config.reset_gpio, 0);
+	}
 
 	if (gpio_is_valid(panel->reset_config.lcd_mode_sel_gpio))
 		gpio_set_value(panel->reset_config.lcd_mode_sel_gpio, 0);
@@ -493,6 +498,7 @@ static int dsi_panel_power_off(struct dsi_panel *panel)
 	rc = dsi_pwr_enable_regulator(&panel->power_info, false);
 	if (rc)
 		pr_err("[%s] failed to enable vregs, rc=%d\n", panel->name, rc);
+	fp_dsi_enable=1;
 
 	return rc;
 }
@@ -1686,6 +1692,14 @@ const char *cmd_set_prop_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-pre-off-command",
 	"qcom,mdss-dsi-off-command",
 	"qcom,mdss-dsi-post-off-command",
+        "qcom,mdss-dsi-ce-on-command",
+        "qcom,mdss-dsi-ce-off-command",
+        "qcom,mdss-dsi-srgb-on-command",
+        "qcom,mdss-dsi-srgb-off-command",
+        "qcom,mdss-dsi-cabc-on-command",
+        "qcom,mdss-dsi-cabc-off-command",
+	"qcom,mdss-dsi-cabc_movie-on-command",
+	"qcom,mdss-dsi-cabc_still-on-command",
 	"qcom,mdss-dsi-pre-res-switch",
 	"qcom,mdss-dsi-res-switch",
 	"qcom,mdss-dsi-post-res-switch",
@@ -1712,6 +1726,14 @@ const char *cmd_set_state_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-pre-off-command-state",
 	"qcom,mdss-dsi-off-command-state",
 	"qcom,mdss-dsi-post-off-command-state",
+        "qcom,mdss-dsi-ce-on-command-state",
+        "qcom,mdss-dsi-ce-off-command-state",
+        "qcom,mdss-dsi-srgb-on-command-state",
+        "qcom,mdss-dsi-srgb-off-command-state",
+        "qcom,mdss-dsi-cabc-on-command-state",
+        "qcom,mdss-dsi-cabc-off-command-state",
+	"qcom,mdss-dsi-cabc_movie-on-command-state",
+	"qcom,mdss-dsi-cabc_still-on-command-state",
 	"qcom,mdss-dsi-pre-res-switch-state",
 	"qcom,mdss-dsi-res-switch-state",
 	"qcom,mdss-dsi-post-res-switch-state",
@@ -3187,6 +3209,35 @@ end:
 	utils->node = panel->panel_of_node;
 }
 
+static ssize_t msm_fb_lcd_name(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+   ssize_t ret = 0;
+   sprintf(buf, "%s\n", g_lcd_id);
+   ret = strlen(buf) + 1;
+   return ret;
+}
+
+static DEVICE_ATTR(lcd_name,0664,msm_fb_lcd_name,NULL);
+static struct kobject *msm_lcd_name;
+static int msm_lcd_name_create_sysfs(void){
+   int ret;
+   msm_lcd_name=kobject_create_and_add("android_lcd",NULL);
+
+   if(msm_lcd_name==NULL){
+     pr_info("msm_lcd_name_create_sysfs_ failed\n");
+     ret=-ENOMEM;
+     return ret;
+   }
+   ret=sysfs_create_file(msm_lcd_name,&dev_attr_lcd_name.attr);
+   if(ret){
+    pr_info("%s failed \n",__func__);
+    kobject_del(msm_lcd_name);
+   }
+   return 0;
+}
+
+
 struct dsi_panel *dsi_panel_get(struct device *parent,
 				struct device_node *of_node,
 				struct device_node *parser_node,
@@ -3223,6 +3274,8 @@ struct dsi_panel *dsi_panel_get(struct device *parent,
 	if (panel_physical_type && !strcmp(panel_physical_type, "oled"))
 		panel->panel_type = DSI_DISPLAY_PANEL_TYPE_OLED;
 
+	strcpy(g_lcd_id,panel->name);
+	msm_lcd_name_create_sysfs();
 	rc = dsi_panel_parse_host_config(panel);
 	if (rc) {
 		pr_err("failed to parse host configuration, rc=%d\n", rc);
@@ -4198,4 +4251,28 @@ int dsi_panel_post_unprepare(struct dsi_panel *panel)
 error:
 	mutex_unlock(&panel->panel_lock);
 	return rc;
+}
+
+int dsi_panel_set_feature(struct dsi_panel *panel,enum dsi_cmd_set_type type)
+{
+       int rc = 0;
+
+       if (!panel) {
+               pr_err("Invalid params\n");
+               return -EINVAL;
+       }
+       pr_info("xinj:%s type=%d\n",__func__,type);
+	if (!panel->panel_initialized) {
+               pr_err("xinj: con't set cmds type=%d\n",type);
+               return -EINVAL;
+	}
+       mutex_lock(&panel->panel_lock);
+
+       rc = dsi_panel_tx_cmd_set(panel, type);
+       if (rc) {
+               pr_err("[%s] failed to send DSI_CMD_SET_FEATURE_ON/OFF cmds, rc=%d,type=%d\n",
+                      panel->name, rc,type);
+       }
+       mutex_unlock(&panel->panel_lock);
+       return rc;
 }
