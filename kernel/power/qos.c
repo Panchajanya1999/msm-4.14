@@ -352,10 +352,6 @@ int pm_qos_update_target(struct pm_qos_constraints *c, struct plist_node *node,
 	pm_qos_set_value(c, curr_value);
 	pm_qos_set_value_for_cpus(c, &cpus);
 
-	spin_unlock_irqrestore(&pm_qos_lock, flags);
-
-	trace_pm_qos_update_target(action, prev_value, curr_value);
-
 	/*
 	 * if cpu mask bits are set, call the notifier call chain
 	 * to update the new qos restriction for the cores
@@ -369,6 +365,10 @@ int pm_qos_update_target(struct pm_qos_constraints *c, struct plist_node *node,
 	} else {
 		ret = 0;
 	}
+	spin_unlock(&pm_qos_lock);
+
+	trace_pm_qos_update_target(action, prev_value, curr_value);
+
 	return ret;
 }
 
