@@ -31,7 +31,7 @@
 #include "wcd-mbhc-v2.h"
 #include "pdata.h"
 
-#define WCD_MBHC_ADC_HS_THRESHOLD_MV    1700
+#define WCD_MBHC_ADC_HS_THRESHOLD_MV    2550
 #define WCD_MBHC_ADC_HPH_THRESHOLD_MV   75
 #define WCD_MBHC_ADC_MICBIAS_MV         1800
 #define WCD_MBHC_FAKE_INS_RETRY         4
