@@ -94,6 +94,7 @@ struct wcd937x_priv {
 	struct snd_info_entry *variant_entry;
 	int ana_clk_count;
 	struct mutex ana_tx_clk_lock;
+	int ear_rx_path;
 };
 
 struct wcd937x_micbias_setting {
