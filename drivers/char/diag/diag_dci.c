@@ -1629,7 +1629,7 @@ static int diag_send_dci_pkt(struct diag_cmd_reg_t *entry,
 #ifdef CONFIG_DIAGFWD_BRIDGE_CODE
 unsigned char *dci_get_buffer_from_bridge(int token)
 {
-	uint8_t retries = 0, max_retries = 3;
+	uint8_t retries = 0, max_retries = 50;
 	unsigned char *buf = NULL;
 
 	do {
@@ -2301,8 +2301,8 @@ struct diag_dci_client_tbl *dci_lookup_client_entry_pid(int tgid)
 		pid_struct = find_get_pid(entry->tgid);
 		if (!pid_struct) {
 			DIAG_LOG(DIAG_DEBUG_DCI,
-				"diag: valid pid doesn't exist for pid = %d\n",
-				entry->tgid);
+			"diag: Exited pid (%d) doesn't match dci client of pid (%d)\n",
+			tgid, entry->tgid);
 			continue;
 		}
 		task_s = get_pid_task(pid_struct, PIDTYPE_PID);
@@ -2567,7 +2567,7 @@ static int dci_fill_log_mask(unsigned char *dest_ptr, unsigned char *src_ptr)
 	int header_len = sizeof(struct diag_ctrl_log_mask);
 
 	header.cmd_type = DIAG_CTRL_MSG_LOG_MASK;
-	header.num_items = DCI_MAX_ITEMS_PER_LOG_CODE;
+	header.num_items = LOG_SIZE_TO_ITEMS(DCI_MAX_ITEMS_PER_LOG_CODE);
 	header.data_len = 11 + DCI_MAX_ITEMS_PER_LOG_CODE;
 	header.stream_id = DCI_MASK_STREAM;
 	header.status = 3;

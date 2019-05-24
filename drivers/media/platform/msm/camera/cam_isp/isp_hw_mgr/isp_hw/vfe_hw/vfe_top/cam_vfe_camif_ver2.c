@@ -1,4 +1,4 @@
-/* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -328,7 +328,7 @@ static int cam_vfe_camif_reg_dump(
 
 	for (i = 0xE0C; i <= 0xE3C; i += 4) {
 		val = cam_io_r_mb(camif_priv->mem_base + i);
-		CAM_DBG(CAM_ISP, "offset 0x%x val 0x%x", i, val);
+		CAM_INFO(CAM_ISP, "offset 0x%x val 0x%x", i, val);
 	}
 
 	for (wm_idx = 0; wm_idx <= 23; wm_idx++) {
@@ -589,7 +589,8 @@ static int cam_vfe_camif_handle_irq_bottom_half(void *handler_priv,
 		}
 		break;
 	case CAM_ISP_HW_EVENT_ERROR:
-		if (irq_status1 & camif_priv->reg_data->error_irq_mask1) {
+		if (irq_status1 & camif_priv->reg_data->error_irq_mask1 &&
+			payload->enable_reg_dump) {
 			CAM_DBG(CAM_ISP, "Received ERROR\n");
 			ret = CAM_ISP_HW_ERROR_OVERFLOW;
 			cam_vfe_camif_reg_dump(camif_node->res_priv);

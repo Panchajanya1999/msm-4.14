@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -131,12 +131,10 @@ static void dp_catalog_aux_clear_hw_interrupts_v420(struct dp_catalog_aux *aux)
 }
 
 static void dp_catalog_panel_config_msa_v420(struct dp_catalog_panel *panel,
-					u32 rate, u32 stream_rate_khz,
-					bool fixed_nvid)
+					u32 rate, u32 stream_rate_khz)
 {
 	u32 pixel_m, pixel_n;
 	u32 mvid, nvid, reg_off = 0, mvid_off = 0, nvid_off = 0;
-	u64 mvid_calc;
 	u32 const nvid_fixed = 0x8000;
 	u32 const link_rate_hbr2 = 540000;
 	u32 const link_rate_hbr3 = 810000;
@@ -154,56 +152,38 @@ static void dp_catalog_panel_config_msa_v420(struct dp_catalog_panel *panel,
 	}
 
 	catalog = dp_catalog_get_priv_v420(panel);
-	if (fixed_nvid) {
-		pr_debug("use fixed NVID=0x%x\n", nvid_fixed);
-		nvid = nvid_fixed;
+	io_data = catalog->io->dp_mmss_cc;
 
-		pr_debug("link rate=%dkbps, stream_rate_khz=%uKhz",
-			rate, stream_rate_khz);
+	if (panel->stream_id == DP_STREAM_1)
+		reg_off = MMSS_DP_PIXEL1_M_V420 - MMSS_DP_PIXEL_M_V420;
 
-		/*
-		 * For intermediate results, use 64 bit arithmetic to avoid
-		 * loss of precision.
-		 */
-		mvid_calc = (u64) stream_rate_khz * nvid;
-		mvid_calc = div_u64(mvid_calc, rate);
+	pixel_m = dp_read(catalog->exe_mode, io_data,
+			MMSS_DP_PIXEL_M_V420 + reg_off);
+	pixel_n = dp_read(catalog->exe_mode, io_data,
+			MMSS_DP_PIXEL_N_V420 + reg_off);
+	pr_debug("pixel_m=0x%x, pixel_n=0x%x\n", pixel_m, pixel_n);
 
-		/*
-		 * truncate back to 32 bits as this final divided value will
-		 * always be within the range of a 32 bit unsigned int.
-		 */
-		mvid = (u32) mvid_calc;
+	mvid = (pixel_m & 0xFFFF) * 5;
+	nvid = (0xFFFF & (~pixel_n)) + (pixel_m & 0xFFFF);
 
-		if (panel->widebus_en) {
-			mvid <<= 1;
-			nvid <<= 1;
-		}
-	} else {
-		io_data = catalog->io->dp_mmss_cc;
+	if (nvid < nvid_fixed) {
+		u32 temp;
 
-		if (panel->stream_id == DP_STREAM_1)
-			reg_off = MMSS_DP_PIXEL1_M_V420 - MMSS_DP_PIXEL_M_V420;
-
-		pixel_m = dp_read(catalog->exe_mode, io_data,
-				MMSS_DP_PIXEL_M_V420 + reg_off);
-		pixel_n = dp_read(catalog->exe_mode, io_data,
-				MMSS_DP_PIXEL_N_V420 + reg_off);
-		pr_debug("pixel_m=0x%x, pixel_n=0x%x\n", pixel_m, pixel_n);
-
-		mvid = (pixel_m & 0xFFFF) * 5;
-		nvid = (0xFFFF & (~pixel_n)) + (pixel_m & 0xFFFF);
-
-		pr_debug("rate = %d\n", rate);
-
-		if (panel->widebus_en)
-			mvid <<= 1;
-
-		if (link_rate_hbr2 == rate)
-			nvid *= 2;
-
-		if (link_rate_hbr3 == rate)
-			nvid *= 3;
+		temp = (nvid_fixed / nvid) * nvid;
+		mvid = (nvid_fixed / nvid) * mvid;
+		nvid = temp;
 	}
+
+	pr_debug("rate = %d\n", rate);
+
+	if (panel->widebus_en)
+		mvid <<= 1;
+
+	if (link_rate_hbr2 == rate)
+		nvid *= 2;
+
+	if (link_rate_hbr3 == rate)
+		nvid *= 3;
 
 	io_data = catalog->io->dp_link;
 
@@ -295,6 +275,30 @@ static void dp_catalog_ctrl_update_vx_px_v420(struct dp_catalog_ctrl *ctrl,
 	}
 }
 
+static void dp_catalog_ctrl_lane_pnswap_v420(struct dp_catalog_ctrl *ctrl,
+						u8 ln_pnswap)
+{
+	struct dp_catalog_private_v420 *catalog;
+	struct dp_io_data *io_data;
+	u32 cfg0, cfg1;
+
+	catalog = dp_catalog_get_priv_v420(ctrl);
+
+	cfg0 = 0x0a;
+	cfg1 = 0x0a;
+
+	cfg0 |= ((ln_pnswap >> 0) & 0x1) << 0;
+	cfg0 |= ((ln_pnswap >> 1) & 0x1) << 2;
+	cfg1 |= ((ln_pnswap >> 2) & 0x1) << 0;
+	cfg1 |= ((ln_pnswap >> 3) & 0x1) << 2;
+
+	io_data = catalog->io->dp_ln_tx0;
+	dp_write(catalog->exe_mode, io_data, TXn_TX_POL_INV_V420, cfg0);
+
+	io_data = catalog->io->dp_ln_tx1;
+	dp_write(catalog->exe_mode, io_data, TXn_TX_POL_INV_V420, cfg1);
+}
+
 static void dp_catalog_put_v420(struct dp_catalog *catalog)
 {
 	struct dp_catalog_private_v420 *catalog_priv;
@@ -345,6 +349,7 @@ int dp_catalog_get_v420(struct device *dev, struct dp_catalog *catalog,
 	catalog->panel.config_msa  = dp_catalog_panel_config_msa_v420;
 	catalog->ctrl.phy_lane_cfg = dp_catalog_ctrl_phy_lane_cfg_v420;
 	catalog->ctrl.update_vx_px = dp_catalog_ctrl_update_vx_px_v420;
+	catalog->ctrl.lane_pnswap = dp_catalog_ctrl_lane_pnswap_v420;
 
 	/* Set the default execution mode to hardware mode */
 	dp_catalog_set_exe_mode_v420(catalog, "hw");

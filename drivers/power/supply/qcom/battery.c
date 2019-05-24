@@ -1,4 +1,4 @@
-/* Copyright (c) 2017-2018 The Linux Foundation. All rights reserved.
+/* Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -32,6 +32,7 @@
 #define DRV_MAJOR_VERSION	1
 #define DRV_MINOR_VERSION	0
 
+#define BATT_PROFILE_VOTER		"BATT_PROFILE_VOTER"
 #define CHG_STATE_VOTER			"CHG_STATE_VOTER"
 #define TAPER_STEPPER_VOTER		"TAPER_STEPPER_VOTER"
 #define TAPER_END_VOTER			"TAPER_END_VOTER"
@@ -318,7 +319,8 @@ static ssize_t slave_pct_store(struct class *c, struct class_attribute *attr,
 	vote(chip->pl_disable_votable, ICL_LIMIT_VOTER, disable, 0);
 	rerun_election(chip->fcc_votable);
 	rerun_election(chip->fv_votable);
-	split_settled(chip);
+	if (IS_USBIN(chip->pl_mode))
+		split_settled(chip);
 
 	return count;
 }
@@ -576,11 +578,12 @@ static void pl_taper_work(struct work_struct *work)
 						pl_taper_work);
 	union power_supply_propval pval = {0, };
 	int rc;
-	int eff_fcc_ua;
-	int total_fcc_ua, master_fcc_ua, slave_fcc_ua = 0;
+	int fcc_ua, total_fcc_ua, master_fcc_ua, slave_fcc_ua = 0;
 
 	chip->taper_entry_fv = get_effective_result(chip->fv_votable);
 	chip->taper_work_running = true;
+	fcc_ua = get_client_vote(chip->fcc_votable, BATT_PROFILE_VOTER);
+	vote(chip->fcc_votable, TAPER_STEPPER_VOTER, true, fcc_ua);
 	while (true) {
 		if (get_effective_result(chip->pl_disable_votable)) {
 			/*
@@ -601,6 +604,25 @@ static void pl_taper_work(struct work_struct *work)
 			goto done;
 		}
 
+		/*
+		 * Due to reduction of float voltage in JEITA condition taper
+		 * charging can be initiated at a lower FV. On removal of JEITA
+		 * condition, FV readjusts itself. However, once taper charging
+		 * is initiated, it doesn't exits until parallel chaging is
+		 * disabled due to which FCC doesn't scale back to its original
+		 * value, leading to slow charging thereafter.
+		 * Check if FV increases in comparison to FV at which taper
+		 * charging was initiated, and if yes, exit taper charging.
+		 */
+		if (get_effective_result(chip->fv_votable) >
+						chip->taper_entry_fv) {
+			pl_dbg(chip, PR_PARALLEL, "Float voltage increased. Exiting taper\n");
+			goto done;
+		} else {
+			chip->taper_entry_fv =
+					get_effective_result(chip->fv_votable);
+		}
+
 		rc = power_supply_get_property(chip->batt_psy,
 				       POWER_SUPPLY_PROP_CHARGE_TYPE, &pval);
 		if (rc < 0) {
@@ -610,42 +632,26 @@ static void pl_taper_work(struct work_struct *work)
 
 		chip->charge_type = pval.intval;
 		if (pval.intval == POWER_SUPPLY_CHARGE_TYPE_TAPER) {
-			eff_fcc_ua = get_effective_result(chip->fcc_votable);
-			if (eff_fcc_ua < 0) {
+			fcc_ua = get_client_vote(chip->fcc_votable,
+					TAPER_STEPPER_VOTER);
+			if (fcc_ua < 0) {
 				pr_err("Couldn't get fcc, exiting taper work\n");
 				goto done;
 			}
-			eff_fcc_ua = eff_fcc_ua - TAPER_REDUCTION_UA;
-			if (eff_fcc_ua < 0) {
+			fcc_ua -= TAPER_REDUCTION_UA;
+			if (fcc_ua < 0) {
 				pr_err("Can't reduce FCC any more\n");
 				goto done;
 			}
 
 			pl_dbg(chip, PR_PARALLEL, "master is taper charging; reducing FCC to %dua\n",
-					eff_fcc_ua);
+					fcc_ua);
 			vote(chip->fcc_votable, TAPER_STEPPER_VOTER,
-					true, eff_fcc_ua);
+					true, fcc_ua);
 		} else {
-			/*
-			 * Due to reduction of float voltage in JEITA condition
-			 * taper charging can be initiated at a lower FV. On
-			 * removal of JEITA condition, FV readjusts itself.
-			 * However, once taper charging is initiated, it doesn't
-			 * exits until parallel chaging is disabled due to which
-			 * FCC doesn't scale back to its original value, leading
-			 * to slow charging thereafter.
-			 * Check if FV increases in comparison to FV at which
-			 * taper charging was initiated, and if yes, exit taper
-			 * charging.
-			 */
-			if (get_effective_result(chip->fv_votable) >
-						chip->taper_entry_fv) {
-				pl_dbg(chip, PR_PARALLEL, "Float voltage increased. Exiting taper\n");
-				goto done;
-			} else {
-				pl_dbg(chip, PR_PARALLEL, "master is fast charging; waiting for next taper\n");
-			}
+			pl_dbg(chip, PR_PARALLEL, "master is fast charging; waiting for next taper\n");
 		}
+
 		/* wait for the charger state to deglitch after FCC change */
 		msleep(PL_TAPER_WORK_DELAY_MS);
 	}

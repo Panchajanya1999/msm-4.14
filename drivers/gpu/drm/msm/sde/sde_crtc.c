@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2019 The Linux Foundation. All rights reserved.
  * Copyright (C) 2013 Red Hat
  * Author: Rob Clark <robdclark@gmail.com>
  *
@@ -927,13 +927,34 @@ static bool sde_crtc_mode_fixup(struct drm_crtc *crtc,
 	SDE_DEBUG("\n");
 
 	if ((msm_is_mode_seamless(adjusted_mode) ||
-			msm_is_mode_seamless_vrr(adjusted_mode)) &&
-		(!crtc->enabled)) {
+	     (msm_is_mode_seamless_vrr(adjusted_mode) ||
+	      msm_is_mode_seamless_dyn_clk(adjusted_mode))) &&
+	    (!crtc->enabled)) {
 		SDE_ERROR("crtc state prevents seamless transition\n");
 		return false;
 	}
 
 	return true;
+}
+
+static int _sde_crtc_get_ctlstart_timeout(struct drm_crtc *crtc)
+{
+	struct drm_encoder *encoder;
+	int rc = 0;
+
+	if (!crtc || !crtc->dev)
+		return 0;
+
+	list_for_each_entry(encoder,
+			&crtc->dev->mode_config.encoder_list, head) {
+		if (encoder->crtc != crtc)
+			continue;
+
+		if (sde_encoder_get_intf_mode(encoder) == INTF_MODE_CMD)
+			rc += sde_encoder_get_ctlstart_timeout_state(encoder);
+	}
+
+	return rc;
 }
 
 static void _sde_crtc_setup_blend_cfg(struct sde_crtc_mixer *mixer,
@@ -3614,7 +3635,13 @@ static void sde_crtc_atomic_begin(struct drm_crtc *crtc,
 	if (unlikely(!sde_crtc->num_mixers))
 		goto end;
 
-	_sde_crtc_blend_setup(crtc, old_state, true);
+	if (_sde_crtc_get_ctlstart_timeout(crtc)) {
+		_sde_crtc_blend_setup(crtc, old_state, false);
+		SDE_ERROR("border fill only commit after ctlstart timeout\n");
+	} else {
+		_sde_crtc_blend_setup(crtc, old_state, true);
+	}
+
 	_sde_crtc_dest_scaler_setup(crtc);
 
 	/* cancel the idle notify delayed work */
@@ -4804,7 +4831,9 @@ static void sde_crtc_enable(struct drm_crtc *crtc,
 
 	/* return early if crtc is already enabled */
 	if (sde_crtc->enabled) {
-		if (msm_is_mode_seamless_dms(&crtc->state->adjusted_mode))
+		if (msm_is_mode_seamless_dms(&crtc->state->adjusted_mode) ||
+		msm_is_mode_seamless_dyn_clk(&crtc->state->adjusted_mode))
+
 			SDE_DEBUG("%s extra crtc enable expected during DMS\n",
 					sde_crtc->name);
 		else
@@ -5628,28 +5657,18 @@ static int _sde_crtc_get_output_fence(struct drm_crtc *crtc,
 {
 	struct sde_crtc *sde_crtc;
 	struct sde_crtc_state *cstate;
-	uint32_t offset, i;
-	struct drm_connector_state *old_conn_state, *new_conn_state;
-	struct drm_connector *conn;
-	struct sde_connector *sde_conn = NULL;
-	struct msm_display_info disp_info;
+	uint32_t offset;
 	bool is_vid = false;
+	struct drm_encoder *encoder;
 
 	sde_crtc = to_sde_crtc(crtc);
 	cstate = to_sde_crtc_state(state);
 
-	for_each_oldnew_connector_in_state(state->state, conn, old_conn_state,
-							new_conn_state, i) {
-		if (!new_conn_state || new_conn_state->crtc != crtc)
-			continue;
-
-		sde_conn = to_sde_connector(new_conn_state->connector);
-		if (sde_conn->display && sde_conn->ops.get_info) {
-			sde_conn->ops.get_info(conn, &disp_info,
-							sde_conn->display);
-			is_vid |= disp_info.capabilities &
-						MSM_DISPLAY_CAP_VID_MODE;
-		}
+	drm_for_each_encoder_mask(encoder, crtc->dev, state->encoder_mask) {
+		is_vid |= sde_encoder_check_mode(encoder,
+						MSM_DISPLAY_CAP_VID_MODE);
+		if (is_vid)
+			break;
 	}
 
 	offset = sde_crtc_get_property(cstate, CRTC_PROP_OUTPUT_FENCE_OFFSET);

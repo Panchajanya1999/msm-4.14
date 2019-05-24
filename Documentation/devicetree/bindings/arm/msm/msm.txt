@@ -44,6 +44,9 @@ SoCs:
 - SM8150
   compatible = "qcom,sm8150"
 
+- SM8150P
+  compatible = "qcom,sm8150p"
+
 - SDMSHRIKE
   compatible = "qcom,sdmshrike"
 
@@ -76,8 +79,8 @@ Generic board variants:
 - MTP device:
   compatible = "qcom,mtp"
 
-- IDP device:
-  compatible = "qcom,idp"
+- ATP device:
+  compatible = "qcom,atp"
 
 - FLUID device:
   compatible = "qcom,fluid"
@@ -188,8 +191,10 @@ compatible = "qcom,sdxprairie-mtp"
 compatible = "qcom,sdxprairie-cdp"
 compatible = "qcom,sdmmagpie-rumi"
 compatible = "qcom,sdmmagpie-idp"
+compatible = "qcom,sdmmagpie-atp"
 compatible = "qcom,sdmmagpie-qrd"
 compatible = "qcom,sdmmagpiep-idp"
+compatible = "qcom,sdmmagpiep-atp"
 compatible = "qcom,sdmmagpiep"
 compatible = "qcom,sdmmagpiep-qrd"
 compatible = "qcom,trinket-rumi"

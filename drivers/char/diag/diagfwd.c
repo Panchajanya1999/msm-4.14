@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1006,8 +1006,8 @@ int diag_process_apps_pkt(unsigned char *buf, int len, int pid)
 	entry.cmd_code_lo = (uint16_t)(*(uint16_t *)temp);
 	temp += sizeof(uint16_t);
 
-	pr_debug("diag: In %s, received cmd %02x %02x %02x\n",
-		 __func__, entry.cmd_code, entry.subsys_id, entry.cmd_code_hi);
+	DIAG_LOG(DIAG_DEBUG_CMD_INFO, "diag: received cmd %02x %02x %02x\n",
+		 entry.cmd_code, entry.subsys_id, entry.cmd_code_hi);
 
 	if (*buf == DIAG_CMD_LOG_ON_DMND && driver->log_on_demand_support &&
 	    driver->feature[PERIPHERAL_MODEM].rcvd_feature_mask) {
@@ -1783,9 +1783,11 @@ static int diagfwd_mux_write_done(unsigned char *buf, int len, int buf_ctxt,
 			diagfwd_write_done(peripheral, type, num);
 			diag_ws_on_copy(DIAG_WS_MUX);
 		} else if (peripheral == APPS_DATA) {
+			spin_lock_irqsave(&driver->diagmem_lock, flags);
 			diagmem_free(driver, (unsigned char *)buf,
 				     POOL_TYPE_HDLC);
 			buf = NULL;
+			spin_unlock_irqrestore(&driver->diagmem_lock, flags);
 		} else {
 			pr_err_ratelimited("diag: Invalid peripheral %d in %s, type: %d\n",
 					   peripheral, __func__, type);

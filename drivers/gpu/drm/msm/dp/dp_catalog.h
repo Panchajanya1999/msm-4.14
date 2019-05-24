@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -102,13 +102,13 @@ struct dp_catalog_ctrl {
 	void (*config_ctrl)(struct dp_catalog_ctrl *ctrl, u8 ln_cnt);
 	void (*lane_mapping)(struct dp_catalog_ctrl *ctrl, bool flipped,
 				char *lane_map);
+	void (*lane_pnswap)(struct dp_catalog_ctrl *ctrl, u8 ln_pnswap);
 	void (*mainlink_ctrl)(struct dp_catalog_ctrl *ctrl, bool enable);
 	void (*set_pattern)(struct dp_catalog_ctrl *ctrl, u32 pattern);
 	void (*reset)(struct dp_catalog_ctrl *ctrl);
 	void (*usb_reset)(struct dp_catalog_ctrl *ctrl, bool flip);
 	bool (*mainlink_ready)(struct dp_catalog_ctrl *ctrl);
 	void (*enable_irq)(struct dp_catalog_ctrl *ctrl, bool enable);
-	void (*hpd_config)(struct dp_catalog_ctrl *ctrl, bool enable);
 	void (*phy_reset)(struct dp_catalog_ctrl *ctrl);
 	void (*phy_lane_cfg)(struct dp_catalog_ctrl *ctrl, bool flipped,
 				u8 lane_cnt);
@@ -129,6 +129,12 @@ struct dp_catalog_ctrl {
 	void (*channel_dealloc)(struct dp_catalog_ctrl *ctrl,
 			u32 ch, u32 ch_start_timeslot, u32 tot_ch_cnt);
 	void (*fec_config)(struct dp_catalog_ctrl *ctrl, bool enable);
+	void (*mainlink_levels)(struct dp_catalog_ctrl *ctrl, u8 lane_cnt);
+};
+
+struct dp_catalog_hpd {
+	void (*config_hpd)(struct dp_catalog_hpd *hpd, bool en);
+	u32 (*get_interrupt)(struct dp_catalog_hpd *hpd);
 };
 
 #define HEADER_BYTE_2_BIT	 0
@@ -167,7 +173,6 @@ struct dp_catalog_audio {
 	void (*config_sdp)(struct dp_catalog_audio *audio);
 	void (*set_header)(struct dp_catalog_audio *audio);
 	void (*get_header)(struct dp_catalog_audio *audio);
-	void (*safe_to_exit_level)(struct dp_catalog_audio *audio);
 };
 
 struct dp_dsc_cfg_data {
@@ -227,7 +232,7 @@ struct dp_catalog_panel {
 	void (*config_spd)(struct dp_catalog_panel *panel);
 	void (*config_misc)(struct dp_catalog_panel *panel);
 	void (*config_msa)(struct dp_catalog_panel *panel,
-			u32 rate, u32 stream_rate_khz, bool fixed_nvid);
+			u32 rate, u32 stream_rate_khz);
 	void (*update_transfer_unit)(struct dp_catalog_panel *panel);
 	void (*config_ctrl)(struct dp_catalog_panel *panel, u32 cfg);
 	void (*config_dto)(struct dp_catalog_panel *panel, bool ack);
@@ -249,6 +254,7 @@ struct dp_catalog {
 	struct dp_catalog_audio audio;
 	struct dp_catalog_panel panel;
 	struct dp_catalog_priv priv;
+	struct dp_catalog_hpd hpd;
 
 	void (*set_exe_mode)(struct dp_catalog *dp_catalog, char *mode);
 	int (*get_reg_dump)(struct dp_catalog *dp_catalog,

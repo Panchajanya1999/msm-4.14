@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -123,11 +123,25 @@ static int dp_power_pinctrl_set(struct dp_power_private *power, bool active)
 
 	parser = power->parser;
 
-	if (parser->no_aux_switch)
+	if (IS_ERR_OR_NULL(parser->pinctrl.pin) || power->dp_power.sim_mode)
 		return 0;
 
-	if (IS_ERR_OR_NULL(parser->pinctrl.pin))
-		return PTR_ERR(parser->pinctrl.pin);
+	if (parser->no_aux_switch && parser->lphw_hpd) {
+		pin_state = active ? parser->pinctrl.state_hpd_ctrl
+				: parser->pinctrl.state_hpd_tlmm;
+		if (!IS_ERR_OR_NULL(pin_state)) {
+			rc = pinctrl_select_state(parser->pinctrl.pin,
+				pin_state);
+			if (rc) {
+				pr_err("cannot direct hpd line to %s\n",
+					active ? "ctrl" : "tlmm");
+				return rc;
+			}
+		}
+	}
+
+	if (parser->no_aux_switch)
+		return 0;
 
 	pin_state = active ? parser->pinctrl.state_active
 				: parser->pinctrl.state_suspend;

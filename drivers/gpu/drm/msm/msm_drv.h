@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
  * Copyright (C) 2013 Red Hat
  * Author: Rob Clark <robdclark@gmail.com>
  *
@@ -74,11 +74,11 @@ struct msm_gem_vma;
 #define TEARDOWN_DEADLOCK_RETRY_MAX 5
 
 struct msm_file_private {
-	/* currently we don't do anything useful with this.. but when
-	 * per-context address spaces are supported we'd keep track of
-	 * the context's page-tables here.
-	 */
-	int dummy;
+	/* update the refcount when user driver calls power_ctrl IOCTL */
+	unsigned short enable_refcnt;
+
+	/* protects enable_refcnt */
+	struct mutex power_lock;
 };
 
 enum msm_mdp_plane_property {
@@ -237,6 +237,7 @@ enum msm_display_compression_ratio {
  * @MSM_DISPLAY_CAP_EDID:               EDID supported
  * @MSM_DISPLAY_ESD_ENABLED:            ESD feature enabled
  * @MSM_DISPLAY_CAP_MST_MODE:           Display with MST support
+ * @MSM_DISPLAY_SPLIT_LINK:             Split Link enabled
  */
 enum msm_display_caps {
 	MSM_DISPLAY_CAP_VID_MODE	= BIT(0),
@@ -245,6 +246,7 @@ enum msm_display_caps {
 	MSM_DISPLAY_CAP_EDID		= BIT(3),
 	MSM_DISPLAY_ESD_ENABLED		= BIT(4),
 	MSM_DISPLAY_CAP_MST_MODE	= BIT(5),
+	MSM_DISPLAY_SPLIT_LINK		= BIT(6),
 };
 
 /**

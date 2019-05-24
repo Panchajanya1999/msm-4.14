@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -92,6 +92,8 @@ struct dp_dsc_caps {
 
 struct dp_audio;
 
+#define DP_PANEL_CAPS_DSC	BIT(0)
+
 struct dp_panel {
 	/* dpcd raw data */
 	u8 dpcd[DP_RECEIVER_CAP_SIZE + 1];
@@ -116,11 +118,13 @@ struct dp_panel {
 	 * Client sets the stream id value using set_stream_id interface.
 	 */
 	enum dp_stream_id stream_id;
+	int vcpi;
 
 	u32 channel_start_slot;
 	u32 channel_total_slots;
 	u32 pbn;
 
+	u32 tot_dsc_blks_in_use;
 	/* DRM connector assosiated with this panel */
 	struct drm_connector *connector;
 
@@ -158,7 +162,7 @@ struct dp_panel {
 
 	int (*set_stream_info)(struct dp_panel *dp_panel,
 			enum dp_stream_id stream_id, u32 ch_start_slot,
-			u32 ch_tot_slots, u32 pbn);
+			u32 ch_tot_slots, u32 pbn, int vcpi);
 
 	int (*read_sink_status)(struct dp_panel *dp_panel, u8 *sts, u32 size);
 	int (*update_edid)(struct dp_panel *dp_panel, struct edid *edid);

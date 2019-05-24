@@ -1837,17 +1837,8 @@ void scheduler_ipi(void)
 	 */
 	preempt_fold_need_resched();
 
-	if (llist_empty(&this_rq()->wake_list) && !got_nohz_idle_kick()
-		&& !got_boost_kick())
+	if (llist_empty(&this_rq()->wake_list) && !got_nohz_idle_kick())
 		return;
-
-	if (got_boost_kick()) {
-		struct rq *rq = cpu_rq(cpu);
-
-		if (rq->curr->sched_class == &fair_sched_class)
-			check_for_migration(rq, rq->curr);
-		clear_boost_kick(cpu);
-	}
 
 	/*
 	 * Not all reschedule IPI handlers call irq_enter/irq_exit, since
@@ -4908,9 +4899,8 @@ out_put_task:
 }
 
 char sched_lib_name[LIB_PATH_LENGTH];
-unsigned int sched_lib_mask_check;
 unsigned int sched_lib_mask_force;
-static inline bool is_sched_lib_based_app(pid_t pid)
+bool is_sched_lib_based_app(pid_t pid)
 {
 	const char *name = NULL;
 	struct vm_area_struct *vma;
@@ -4962,19 +4952,6 @@ put_task_struct:
 	return found;
 }
 
-long msm_sched_setaffinity(pid_t pid, struct cpumask *new_mask)
-{
-	if (sched_lib_mask_check != 0 && sched_lib_mask_force != 0 &&
-		(cpumask_bits(new_mask)[0] == sched_lib_mask_check) &&
-		is_sched_lib_based_app(pid)) {
-
-		cpumask_t forced_mask = { {sched_lib_mask_force} };
-
-		cpumask_copy(new_mask, &forced_mask);
-	}
-	return sched_setaffinity(pid, new_mask);
-}
-
 static int get_user_cpu_mask(unsigned long __user *user_mask_ptr, unsigned len,
 			     struct cpumask *new_mask)
 {
@@ -5005,7 +4982,7 @@ SYSCALL_DEFINE3(sched_setaffinity, pid_t, pid, unsigned int, len,
 
 	retval = get_user_cpu_mask(user_mask_ptr, len, new_mask);
 	if (retval == 0)
-		retval = msm_sched_setaffinity(pid, new_mask);
+		retval = sched_setaffinity(pid, new_mask);
 	free_cpumask_var(new_mask);
 	return retval;
 }
@@ -6215,6 +6192,7 @@ int sched_cpu_activate(unsigned int cpu)
 	rq_unlock_irqrestore(rq, &rf);
 
 	update_max_interval();
+	walt_update_min_max_capacity();
 
 	return 0;
 }
@@ -6242,6 +6220,7 @@ int sched_cpu_deactivate(unsigned int cpu)
 		return ret;
 	}
 	sched_domains_numa_masks_clear(cpu);
+	walt_update_min_max_capacity();
 	return 0;
 }
 
@@ -6903,8 +6882,8 @@ static void sched_update_down_migrate_values(int cap_margin_levels,
 	}
 }
 
-static int sched_update_updown_migrate_values(unsigned int *data,
-					int cap_margin_levels, int ret)
+static void sched_update_updown_migrate_values(unsigned int *data,
+					      int cap_margin_levels)
 {
 	int i, cpu;
 	static const struct cpumask *cluster_cpus[MAX_CLUSTERS];
@@ -6916,15 +6895,10 @@ static int sched_update_updown_migrate_values(unsigned int *data,
 	}
 
 	if (data == &sysctl_sched_capacity_margin_up[0])
-		sched_update_up_migrate_values(cap_margin_levels,
-							cluster_cpus);
-	else if (data == &sysctl_sched_capacity_margin_down[0])
-		sched_update_down_migrate_values(cap_margin_levels,
-							cluster_cpus);
+		sched_update_up_migrate_values(cap_margin_levels, cluster_cpus);
 	else
-		ret = -EINVAL;
-
-	return ret;
+		sched_update_down_migrate_values(cap_margin_levels,
+						 cluster_cpus);
 }
 
 int sched_updown_migrate_handler(struct ctl_table *table, int write,
@@ -6950,6 +6924,16 @@ int sched_updown_migrate_handler(struct ctl_table *table, int write,
 		goto unlock_mutex;
 	}
 
+	if (!write) {
+		ret = proc_douintvec_capacity(table, write, buffer, lenp, ppos);
+		goto unlock_mutex;
+	}
+
+	/*
+	 * Cache the old values so that they can be restored
+	 * if either the write fails (for example out of range values)
+	 * or the downmigrate and upmigrate are not in sync.
+	 */
 	old_val = kzalloc(table->maxlen, GFP_KERNEL);
 	if (!old_val) {
 		ret = -ENOMEM;
@@ -6960,19 +6944,22 @@ int sched_updown_migrate_handler(struct ctl_table *table, int write,
 
 	ret = proc_douintvec_capacity(table, write, buffer, lenp, ppos);
 
-	if (!ret && write) {
-		for (i = 0; i < cap_margin_levels; i++) {
-			if (sysctl_sched_capacity_margin_up[i] >
-					sysctl_sched_capacity_margin_down[i]) {
-				memcpy(data, old_val, table->maxlen);
-				ret = -EINVAL;
-				goto free_old_val;
-			}
-		}
-
-		ret = sched_update_updown_migrate_values(data,
-						cap_margin_levels, ret);
+	if (ret) {
+		memcpy(data, old_val, table->maxlen);
+		goto free_old_val;
 	}
+
+	for (i = 0; i < cap_margin_levels; i++) {
+		if (sysctl_sched_capacity_margin_up[i] >
+				sysctl_sched_capacity_margin_down[i]) {
+			memcpy(data, old_val, table->maxlen);
+			ret = -EINVAL;
+			goto free_old_val;
+		}
+	}
+
+	sched_update_updown_migrate_values(data, cap_margin_levels);
+
 free_old_val:
 	kfree(old_val);
 unlock_mutex:

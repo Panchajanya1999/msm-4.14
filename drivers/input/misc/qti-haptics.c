@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -737,6 +737,10 @@ static irqreturn_t qti_haptics_play_irq_handler(int irq, void *data)
 	int rc;
 
 	dev_dbg(chip->dev, "play_irq triggered\n");
+
+	if (effect == NULL)
+		goto handled;
+
 	if (play->playing_pos == effect->pattern_length) {
 		dev_dbg(chip->dev, "waveform playing done\n");
 		if (chip->play_irq_en) {
@@ -1099,8 +1103,11 @@ static int qti_haptics_hw_init(struct qti_hap_chip *chip)
 	 * Skip configurations below for ERM actuator
 	 * as they're only for LRA actuators
 	 */
-	if (config->act_type == ACT_ERM)
-		return 0;
+	if (config->act_type == ACT_ERM) {
+		/* Disable AUTO_RES for ERM */
+		rc = qti_haptics_lra_auto_res_enable(chip, false);
+		return rc;
+	}
 
 	addr = REG_HAP_CFG2;
 	val = config->lra_shape;

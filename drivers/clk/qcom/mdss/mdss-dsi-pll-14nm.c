@@ -1,4 +1,4 @@
-/* Copyright (c) 2015-2016,2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-2016,2018-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -80,6 +80,7 @@ static struct dsi_pll_vco_clk dsi0pll_vco_clk = {
 			.name = "dsi0pll_vco_clk_14nm",
 			.parent_names = (const char *[]){ "bi_tcxo" },
 			.num_parents = 1,
+			.flags = CLK_GET_RATE_NOCACHE,
 			.ops = &clk_ops_dsi_vco,
 		},
 };
@@ -92,6 +93,7 @@ static struct dsi_pll_vco_clk dsi0pll_shadow_vco_clk = {
 			.name = "dsi0pll_shadow_vco_clk_14nm",
 			.parent_names = (const char *[]){ "bi_tcxo" },
 			.num_parents = 1,
+			.flags = CLK_GET_RATE_NOCACHE,
 			.ops = &clk_ops_shadow_dsi_vco,
 		},
 };
@@ -106,6 +108,7 @@ static struct dsi_pll_vco_clk dsi1pll_vco_clk = {
 			.name = "dsi1pll_vco_clk_14nm",
 			.parent_names = (const char *[]){ "bi_tcxo" },
 			.num_parents = 1,
+			.flags = CLK_GET_RATE_NOCACHE,
 			.ops = &clk_ops_dsi_vco,
 		},
 };
@@ -120,6 +123,7 @@ static struct dsi_pll_vco_clk dsi1pll_shadow_vco_clk = {
 			.name = "dsi1pll_shadow_vco_clk_14nm",
 			.parent_names = (const char *[]){ "bi_tcxo" },
 			.num_parents = 1,
+			.flags = CLK_GET_RATE_NOCACHE,
 			.ops = &clk_ops_shadow_dsi_vco,
 		},
 };
@@ -324,7 +328,8 @@ static struct clk_regmap_mux dsi0pll_pixel_clk_mux = {
 				(const char *[]){ "dsi0pll_pixel_clk_src",
 					"dsi0pll_shadow_pixel_clk_src"},
 			.num_parents = 2,
-			.flags = (CLK_GET_RATE_NOCACHE | CLK_SET_RATE_PARENT),
+			.flags = (CLK_GET_RATE_NOCACHE | CLK_SET_RATE_PARENT |
+					CLK_SET_RATE_NO_REPARENT),
 			.ops = &clk_regmap_mux_closest_ops,
 		},
 	},
@@ -342,7 +347,8 @@ static struct clk_regmap_mux dsi1pll_pixel_clk_mux = {
 				(const char *[]){ "dsi1pll_pixel_clk_src",
 					"dsi1pll_shadow_pixel_clk_src"},
 			.num_parents = 2,
-			.flags = (CLK_GET_RATE_NOCACHE | CLK_SET_RATE_PARENT),
+			.flags = (CLK_GET_RATE_NOCACHE | CLK_SET_RATE_PARENT |
+					CLK_SET_RATE_NO_REPARENT),
 			.ops = &clk_regmap_mux_closest_ops,
 		},
 	},
@@ -415,7 +421,8 @@ static struct clk_regmap_mux dsi0pll_byte_clk_mux = {
 					"dsi0pll_shadow_byte_clk_src"},
 			.num_parents = 2,
 			.ops = &clk_regmap_mux_closest_ops,
-			.flags = (CLK_GET_RATE_NOCACHE | CLK_SET_RATE_PARENT),
+			.flags = (CLK_GET_RATE_NOCACHE | CLK_SET_RATE_PARENT |
+					CLK_SET_RATE_NO_REPARENT),
 		},
 	},
 };
@@ -433,7 +440,8 @@ static struct clk_regmap_mux dsi1pll_byte_clk_mux = {
 					"dsi1pll_shadow_byte_clk_src"},
 			.num_parents = 2,
 			.ops = &clk_regmap_mux_closest_ops,
-			.flags = (CLK_GET_RATE_NOCACHE | CLK_SET_RATE_PARENT),
+			.flags = (CLK_GET_RATE_NOCACHE | CLK_SET_RATE_PARENT |
+					CLK_SET_RATE_NO_REPARENT),
 		},
 	},
 };

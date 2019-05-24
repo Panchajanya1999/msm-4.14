@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -2617,6 +2617,19 @@ static int ipa3_q6_set_ex_path_to_apps(void)
 	return retval;
 }
 
+/*
+ * ipa3_update_ssr_state() - updating current SSR state
+ * @is_ssr:	[in] Current SSR state
+ */
+
+void ipa3_update_ssr_state(bool is_ssr)
+{
+	if (is_ssr)
+		atomic_set(&ipa3_ctx->is_ssr, 1);
+	else
+		atomic_set(&ipa3_ctx->is_ssr, 0);
+}
+
 /**
  * ipa3_q6_pre_shutdown_cleanup() - A cleanup for all Q6 related configuration
  *                    in IPA HW. This is performed in case of SSR.
@@ -2630,7 +2643,9 @@ void ipa3_q6_pre_shutdown_cleanup(void)
 
 	IPA_ACTIVE_CLIENTS_INC_SIMPLE();
 
-	ipa3_q6_pipe_delay(true);
+	ipa3_update_ssr_state(true);
+	if (!ipa3_ctx->ipa_endp_delay_wa)
+		ipa3_q6_pipe_delay(true);
 	ipa3_q6_avoid_holb();
 	if (ipa3_ctx->ipa_config_is_mhi)
 		ipa3_set_reset_client_cons_pipe_sus_holb(true,
@@ -2654,12 +2669,20 @@ void ipa3_q6_pre_shutdown_cleanup(void)
 	/* Remove delay from Q6 PRODs to avoid pending descriptors
 	 * on pipe reset procedure
 	 */
-	ipa3_q6_pipe_delay(false);
-	ipa3_set_reset_client_prod_pipe_delay(true,
-		IPA_CLIENT_USB_PROD);
-	if (ipa3_ctx->ipa_config_is_mhi)
+	if (!ipa3_ctx->ipa_endp_delay_wa) {
+		ipa3_q6_pipe_delay(false);
 		ipa3_set_reset_client_prod_pipe_delay(true,
-		IPA_CLIENT_MHI_PROD);
+			IPA_CLIENT_USB_PROD);
+		if (ipa3_ctx->ipa_config_is_mhi)
+			ipa3_set_reset_client_prod_pipe_delay(true,
+				IPA_CLIENT_MHI_PROD);
+	} else {
+		ipa3_start_stop_client_prod_gsi_chnl(IPA_CLIENT_USB_PROD,
+						false);
+		if (ipa3_ctx->ipa_config_is_mhi)
+			ipa3_start_stop_client_prod_gsi_chnl(
+					IPA_CLIENT_MHI_PROD, false);
+	}
 
 	IPA_ACTIVE_CLIENTS_DEC_SIMPLE();
 	IPADBG_LOW("Exit with success\n");
@@ -2717,6 +2740,32 @@ void ipa3_q6_post_shutdown_cleanup(void)
 				 */
 			}
 		}
+
+	IPA_ACTIVE_CLIENTS_DEC_SIMPLE();
+	IPADBG_LOW("Exit with success\n");
+}
+
+/*
+ * ipa3_client_prod_post_shutdown_cleanup () - As part of this function
+ * set end point delay client producer pipes and starting corresponding
+ * gsi channels
+ */
+
+void ipa3_client_prod_post_shutdown_cleanup(void)
+{
+	IPADBG_LOW("ENTER\n");
+
+	IPA_ACTIVE_CLIENTS_INC_SIMPLE();
+
+	ipa3_set_reset_client_prod_pipe_delay(true,
+				IPA_CLIENT_USB_PROD);
+	ipa3_start_stop_client_prod_gsi_chnl(IPA_CLIENT_USB_PROD, true);
+
+	if (ipa3_ctx->ipa_config_is_mhi) {
+		ipa3_set_reset_client_prod_pipe_delay(true,
+						IPA_CLIENT_MHI_PROD);
+		ipa3_start_stop_client_prod_gsi_chnl(IPA_CLIENT_MHI_PROD, true);
+	}
 
 	IPA_ACTIVE_CLIENTS_DEC_SIMPLE();
 	IPADBG_LOW("Exit with success\n");
@@ -3716,6 +3765,9 @@ void ipa3_disable_clks(void)
 
 	ipa3_ctx->ctrl->ipa3_disable_clks();
 
+	if (ipa3_ctx->use_ipa_pm)
+		ipa_pm_set_clock_index(0);
+
 	if (msm_bus_scale_client_update_request(ipa3_ctx->ipa_bus_hdl, 0))
 		WARN(1, "bus scaling failed");
 	atomic_set(&ipa3_ctx->ipa_clk_vote, 0);
@@ -3875,10 +3927,19 @@ void ipa3_inc_client_enable_clks(struct ipa_active_client_logging_info *id)
 	}
 
 	ipa3_enable_clks();
-	atomic_inc(&ipa3_ctx->ipa3_active_clients.cnt);
 	IPADBG_LOW("active clients = %d\n",
 		atomic_read(&ipa3_ctx->ipa3_active_clients.cnt));
 	ipa3_suspend_apps_pipes(false);
+	atomic_inc(&ipa3_ctx->ipa3_active_clients.cnt);
+	if (!ipa3_uc_state_check() &&
+		(ipa3_ctx->ipa_hw_type >= IPA_HW_v4_1)) {
+		ipa3_read_mailbox_17(IPA_PC_RESTORE_CONTEXT_STATUS_SUCCESS);
+		/* assert if intset = 0 */
+		if (ipa3_ctx->gsi_chk_intset_value == 0) {
+			IPAERR("expected 1, value: 0\n");
+			ipa_assert();
+		}
+	}
 	mutex_unlock(&ipa3_ctx->ipa3_active_clients.mutex);
 }
 
@@ -5021,6 +5082,7 @@ static void ipa3_load_ipa_fw(struct work_struct *work)
 
 	if (result) {
 		IPAERR("IPA FW loading process has failed\n");
+		ipa_assert();
 		return;
 	}
 	pr_info("IPA FW loaded successfully\n");
@@ -5289,6 +5351,9 @@ static int ipa3_pre_init(const struct ipa3_plat_drv_res *resource_p,
 	ipa3_ctx->ipa_config_is_mhi = resource_p->ipa_mhi_dynamic_config;
 	ipa3_ctx->mhi_evid_limits[0] = resource_p->mhi_evid_limits[0];
 	ipa3_ctx->mhi_evid_limits[1] = resource_p->mhi_evid_limits[1];
+	ipa3_ctx->uc_mailbox17_chk = 0;
+	ipa3_ctx->uc_mailbox17_mismatch = 0;
+	ipa3_ctx->ipa_endp_delay_wa = resource_p->ipa_endp_delay_wa;
 
 	WARN(ipa3_ctx->ipa3_hw_mode != IPA_HW_MODE_NORMAL,
 		"Non NORMAL IPA HW mode, is this emulation platform ?");
@@ -5891,6 +5956,7 @@ static int get_ipa_dts_configuration(struct platform_device *pdev,
 	ipa_drv_res->mhi_evid_limits[0] = IPA_MHI_GSI_EVENT_RING_ID_START;
 	ipa_drv_res->mhi_evid_limits[1] = IPA_MHI_GSI_EVENT_RING_ID_END;
 	ipa_drv_res->ipa_fltrt_not_hashable = false;
+	ipa_drv_res->ipa_endp_delay_wa = false;
 
 	/* Get IPA HW Version */
 	result = of_property_read_u32(pdev->dev.of_node, "qcom,ipa-hw-ver",
@@ -5966,6 +6032,12 @@ static int get_ipa_dts_configuration(struct platform_device *pdev,
 			"qcom,ipa-wdi2_over_gsi");
 	IPADBG(": WDI-2.0 over gsi= %s\n",
 			ipa_drv_res->ipa_wdi2_over_gsi
+			? "True" : "False");
+	ipa_drv_res->ipa_endp_delay_wa =
+			of_property_read_bool(pdev->dev.of_node,
+			"qcom,ipa-endp-delay-wa");
+	IPADBG(": endppoint delay wa = %s\n",
+			ipa_drv_res->ipa_endp_delay_wa
 			? "True" : "False");
 
 	ipa_drv_res->ipa_wdi2 =
@@ -6311,6 +6383,12 @@ static int ipa_smmu_uc_cb_probe(struct device *dev)
 	int fast = 1;
 	int ret;
 	u32 iova_ap_mapping[2];
+	/* G_RD_CNTR register */
+	u32 a1 = 0x0C220000;
+	u32 a2 = 0x4000;
+	unsigned long iova_p;
+	phys_addr_t pa_p;
+	u32 size_p;
 
 	IPADBG("UC CB PROBE sub pdev=%pK\n", dev);
 
@@ -6409,6 +6487,18 @@ static int ipa_smmu_uc_cb_probe(struct device *dev)
 		arm_iommu_release_mapping(cb->mapping);
 		cb->valid = false;
 		return ret;
+	}
+
+	/* map G_RD_CNTR for uc*/
+	IPA_SMMU_ROUND_TO_PAGE(a1, a1, a2,
+		iova_p, pa_p, size_p);
+
+	if (ipa3_ctx->ipa_hw_type == IPA_HW_v4_1) {
+		IPADBG("mapping 0x%lx to 0x%pa size %d\n",
+			iova_p, &pa_p, size_p);
+		ipa3_iommu_map(cb->mapping->domain,
+			iova_p, pa_p, size_p,
+			IOMMU_READ | IOMMU_WRITE | IOMMU_MMIO);
 	}
 
 	cb->next_addr = cb->va_end;
@@ -6590,6 +6680,7 @@ static int ipa_smmu_ap_cb_probe(struct device *dev)
 
 	smmu_info.present[IPA_SMMU_CB_AP] = true;
 	ipa3_ctx->pdev = dev;
+	cb->next_addr = cb->va_end;
 
 	return 0;
 }
@@ -7005,7 +7096,9 @@ void ipa_pc_qmp_enable(void)
 		ret = PTR_ERR(ipa3_ctx->mbox);
 		if (ret != -EPROBE_DEFER)
 			IPAERR("mailbox channel request failed, ret=%d\n", ret);
-		goto cleanup;
+
+		ipa3_ctx->mbox = NULL;
+		return;
 	}
 
 	/* prepare the QMP packet to send */
@@ -7020,8 +7113,10 @@ void ipa_pc_qmp_enable(void)
 	}
 
 cleanup:
-	ipa3_ctx->mbox = NULL;
-	mbox_free_channel(ipa3_ctx->mbox);
+	if (ipa3_ctx->mbox) {
+		mbox_free_channel(ipa3_ctx->mbox);
+		ipa3_ctx->mbox = NULL;
+	}
 }
 
 /**************************************************************

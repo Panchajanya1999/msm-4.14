@@ -145,28 +145,37 @@ endif
 ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
 	dtbo-$(CONFIG_ARCH_SDMMAGPIE) += \
 		sdmmagpie-idp-overlay.dtbo \
+		sdmmagpie-atp-overlay.dtbo \
 		sdmmagpie-rumi-overlay.dtbo \
 		sdmmagpie-qrd-overlay.dtbo \
 		sdmmagpiep-idp-overlay.dtbo \
+		sdmmagpiep-atp-overlay.dtbo \
 		sdmmagpiep-qrd-overlay.dtbo \
 		sdmmagpie-external-codec-idp-overlay.dtbo \
-		sdmmagpie-usbc-idp-overlay.dtbo
+		sdmmagpie-usbc-idp-overlay.dtbo \
+		sdmmagpie-dual-display-idp-overlay.dtbo
 
 sdmmagpie-idp-overlay.dtbo-base := sdmmagpie.dtb
+sdmmagpie-atp-overlay.dtbo-base := sdmmagpie.dtb
 sdmmagpie-rumi-overlay.dtbo-base := sdmmagpie.dtb
 sdmmagpie-qrd-overlay.dtbo-base := sdmmagpie.dtb
 sdmmagpiep-idp-overlay.dtbo-base := sdmmagpiep.dtb
+sdmmagpiep-atp-overlay.dtbo-base := sdmmagpiep.dtb
 sdmmagpiep-qrd-overlay.dtbo-base := sdmmagpiep.dtb
 sdmmagpie-external-codec-idp-overlay.dtbo-base := sdmmagpie.dtb
 sdmmagpie-usbc-idp-overlay.dtbo-base := sdmmagpie.dtb
+sdmmagpie-dual-display-idp-overlay.dtbo-base := sdmmagpie.dtb
 else
 dtb-$(CONFIG_ARCH_SDMMAGPIE)	+= sdmmagpie-rumi.dtb \
 	sdmmagpie-idp.dtb \
+	sdmmagpie-atp.dtb \
 	sdmmagpie-qrd.dtb \
 	sdmmagpiep-idp.dtb \
+	sdmmagpiep-atp.dtb \
 	sdmmagpiep-qrd.dtb \
 	sdmmagpie-external-codec-idp.dtb \
-	sdmmagpie-usbc-idp.dtb
+	sdmmagpie-usbc-idp.dtb \
+	sdmmagpie-dual-display-idp.dtb
 endif
 
 ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)

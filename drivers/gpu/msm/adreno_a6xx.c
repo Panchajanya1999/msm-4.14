@@ -1,4 +1,4 @@
-/* Copyright (c)2017-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c)2017-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -329,9 +329,6 @@ static const struct kgsl_hwcg_reg a612_hwcg_regs[] = {
 	{A6XX_RBBM_CLOCK_HYST_GPC, 0x04104004},
 	{A6XX_RBBM_CLOCK_HYST_HLSQ, 0x00000000},
 	{A6XX_RBBM_CLOCK_CNTL_UCHE, 0x22222222},
-	{A6XX_RBBM_CLOCK_CNTL2_UCHE, 0x22222222},
-	{A6XX_RBBM_CLOCK_CNTL3_UCHE, 0x22222222},
-	{A6XX_RBBM_CLOCK_CNTL4_UCHE, 0x00222222},
 	{A6XX_RBBM_CLOCK_HYST_UCHE, 0x00000004},
 	{A6XX_RBBM_CLOCK_DELAY_UCHE, 0x00000002},
 	{A6XX_RBBM_ISDB_CNT, 0x00000182},
@@ -916,9 +913,9 @@ static void a6xx_start(struct adreno_device *adreno_dev)
 	kgsl_regwrite(device, A6XX_UCHE_MODE_CNTL, (glbl_inv << 29) |
 						(mal << 23) | (bit << 21));
 
-	/* Set hang detection threshold to 0x3FFFFF * 16 cycles */
+	/* Set hang detection threshold to 0xCFFFFF * 16 cycles */
 	kgsl_regwrite(device, A6XX_RBBM_INTERFACE_HANG_INT_CNTL,
-					(1 << 30) | 0x3fffff);
+					(1 << 30) | 0xcfffff);
 
 	kgsl_regwrite(device, A6XX_UCHE_CLIENT_PF, 1);
 
@@ -2683,12 +2680,21 @@ static void a6xx_efuse_speed_bin(struct adreno_device *adreno_dev)
 	adreno_dev->speed_bin = (val & speed_bin[1]) >> speed_bin[2];
 }
 
+static void a6xx_efuse_power_features(struct adreno_device *adreno_dev)
+{
+	a6xx_efuse_speed_bin(adreno_dev);
+
+	if (!adreno_dev->speed_bin)
+		clear_bit(ADRENO_LM_CTRL, &adreno_dev->pwrctrl_flag);
+}
+
 static const struct {
 	int (*check)(struct adreno_device *adreno_dev);
 	void (*func)(struct adreno_device *adreno_dev);
 } a6xx_efuse_funcs[] = {
 	{ adreno_is_a615_family, a6xx_efuse_speed_bin },
 	{ adreno_is_a612, a6xx_efuse_speed_bin },
+	{ adreno_is_a640, a6xx_efuse_power_features },
 };
 
 static void a6xx_check_features(struct adreno_device *adreno_dev)
@@ -3026,4 +3032,5 @@ struct adreno_gpudev adreno_a6xx_gpudev = {
 	.perfcounter_init = a6xx_perfcounter_init,
 	.perfcounter_update = a6xx_perfcounter_update,
 	.coresight = {&a6xx_coresight, &a6xx_coresight_cx},
+	.snapshot_preemption = a6xx_snapshot_preemption,
 };

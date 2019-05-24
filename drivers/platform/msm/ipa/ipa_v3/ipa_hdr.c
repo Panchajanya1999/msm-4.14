@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -62,7 +62,7 @@ static int ipa3_generate_hdr_hw_tbl(struct ipa_mem_buffer *mem)
 }
 
 static int ipa3_hdr_proc_ctx_to_hw_format(struct ipa_mem_buffer *mem,
-	u32 hdr_base_addr)
+	u64 hdr_base_addr)
 {
 	struct ipa3_hdr_proc_ctx_entry *entry;
 	int ret;
@@ -100,7 +100,8 @@ static int ipa3_hdr_proc_ctx_to_hw_format(struct ipa_mem_buffer *mem,
 				entry->hdr->phys_base,
 				hdr_base_addr,
 				entry->hdr->offset_entry,
-				entry->l2tp_params);
+				entry->l2tp_params,
+				ipa3_ctx->use_64_bit_dma_mask);
 		if (ret)
 			return ret;
 	}
@@ -117,10 +118,10 @@ static int ipa3_hdr_proc_ctx_to_hw_format(struct ipa_mem_buffer *mem,
  *
  * Returns:	0 on success, negative on failure
  */
-static int ipa3_generate_hdr_proc_ctx_hw_tbl(u32 hdr_sys_addr,
+static int ipa3_generate_hdr_proc_ctx_hw_tbl(u64 hdr_sys_addr,
 	struct ipa_mem_buffer *mem, struct ipa_mem_buffer *aligned_mem)
 {
-	u32 hdr_base_addr;
+	u64 hdr_base_addr;
 
 	mem->size = (ipa3_ctx->hdr_proc_ctx_tbl.end) ? : 4;
 

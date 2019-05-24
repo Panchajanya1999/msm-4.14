@@ -151,6 +151,13 @@
 
 	iommu-map = <0x0 &apps_smmu 0x1e00 0x1>,
 		<0x100 &apps_smmu 0x1e7f 0x1>;
+
+	qcom,msm-bus,name = "pcie1";
+	qcom,msm-bus,num-cases = <2>;
+	qcom,msm-bus,num-paths = <1>;
+	qcom,msm-bus,vectors-KBps =
+		<100 512 0 0>,
+		<100 512 4500000 0>;
 };
 
 &soc {
@@ -247,6 +254,7 @@
 			qcom,instance-id = <100>;
 			qcom,qmi-sensor-names = "pa",
 						"pa_1",
+						"pa_2",
 						"qfe_pa0",
 						"qfe_wtr0",
 						"modem_tsens",
@@ -267,6 +275,7 @@
 		polling-delay = <0>;
 		thermal-governor = "user_space";
 		thermal-sensors = <&qmi_sensor 0>;
+		wake-capable-sensor;
 		trips {
 			active-config0 {
 				temperature = <125000>;
@@ -281,6 +290,7 @@
 		polling-delay = <0>;
 		thermal-governor = "user_space";
 		thermal-sensors = <&qmi_sensor 1>;
+		wake-capable-sensor;
 		trips {
 			active-config0 {
 				temperature = <125000>;
@@ -295,6 +305,7 @@
 		polling-delay = <0>;
 		thermal-governor = "user_space";
 		thermal-sensors = <&qmi_sensor 100>;
+		wake-capable-sensor;
 		trips {
 			active-config0 {
 				temperature = <125000>;
@@ -309,20 +320,7 @@
 		polling-delay = <0>;
 		thermal-governor = "user_space";
 		thermal-sensors = <&qmi_sensor 101>;
-		trips {
-			active-config0 {
-				temperature = <125000>;
-				hysteresis = <1000>;
-				type = "passive";
-			};
-		};
-	};
-
-	modem1-qfe-pa-usr {
-		polling-delay-passive = <0>;
-		polling-delay = <0>;
-		thermal-governor = "user_space";
-		thermal-sensors = <&qmi_sensor 102>;
+		wake-capable-sensor;
 		trips {
 			active-config0 {
 				temperature = <125000>;
@@ -336,7 +334,8 @@
 		polling-delay-passive = <0>;
 		polling-delay = <0>;
 		thermal-governor = "user_space";
-		thermal-sensors = <&qmi_sensor 103>;
+		thermal-sensors = <&qmi_sensor 104>;
+		wake-capable-sensor;
 		trips {
 			active-config0 {
 				temperature = <125000>;
@@ -350,7 +349,8 @@
 		polling-delay-passive = <0>;
 		polling-delay = <0>;
 		thermal-governor = "user_space";
-		thermal-sensors = <&qmi_sensor 104>;
+		thermal-sensors = <&qmi_sensor 105>;
+		wake-capable-sensor;
 		trips {
 			active-config0 {
 				temperature = <125000>;
@@ -364,7 +364,8 @@
 		polling-delay-passive = <0>;
 		polling-delay = <0>;
 		thermal-governor = "user_space";
-		thermal-sensors = <&qmi_sensor 105>;
+		thermal-sensors = <&qmi_sensor 106>;
+		wake-capable-sensor;
 		trips {
 			active-config0 {
 				temperature = <125000>;
@@ -378,7 +379,8 @@
 		polling-delay-passive = <0>;
 		polling-delay = <0>;
 		thermal-governor = "user_space";
-		thermal-sensors = <&qmi_sensor 106>;
+		thermal-sensors = <&qmi_sensor 107>;
+		wake-capable-sensor;
 		trips {
 			active-config0 {
 				temperature = <125000>;
@@ -392,7 +394,8 @@
 		polling-delay-passive = <0>;
 		polling-delay = <0>;
 		thermal-governor = "user_space";
-		thermal-sensors = <&qmi_sensor 107>;
+		thermal-sensors = <&qmi_sensor 108>;
+		wake-capable-sensor;
 		trips {
 			active-config0 {
 				temperature = <125000>;
@@ -406,7 +409,8 @@
 		polling-delay-passive = <0>;
 		polling-delay = <0>;
 		thermal-governor = "user_space";
-		thermal-sensors = <&qmi_sensor 108>;
+		thermal-sensors = <&qmi_sensor 109>;
+		wake-capable-sensor;
 		trips {
 			active-config0 {
 				temperature = <125000>;
@@ -420,7 +424,8 @@
 		polling-delay-passive = <0>;
 		polling-delay = <0>;
 		thermal-governor = "user_space";
-		thermal-sensors = <&qmi_sensor 109>;
+		thermal-sensors = <&qmi_sensor 110>;
+		wake-capable-sensor;
 		trips {
 			active-config0 {
 				temperature = <125000>;
@@ -434,7 +439,8 @@
 		polling-delay-passive = <0>;
 		polling-delay = <0>;
 		thermal-governor = "user_space";
-		thermal-sensors = <&qmi_sensor 110>;
+		thermal-sensors = <&qmi_sensor 111>;
+		wake-capable-sensor;
 		trips {
 			active-config0 {
 				temperature = <125000>;
@@ -448,12 +454,45 @@
 		polling-delay-passive = <0>;
 		polling-delay = <0>;
 		thermal-governor = "user_space";
-		thermal-sensors = <&qmi_sensor 111>;
+		thermal-sensors = <&qmi_sensor 112>;
+		wake-capable-sensor;
 		trips {
 			active-config0 {
 				temperature = <125000>;
 				hysteresis = <1000>;
 				type = "passive";
+			};
+		};
+	};
+
+	modem1-pa2-usr {
+		polling-delay-passive = <0>;
+		polling-delay = <0>;
+		thermal-governor = "user_space";
+		thermal-sensors = <&qmi_sensor 102>;
+		wake-capable-sensor;
+		trips {
+			active-config0 {
+				temperature = <125000>;
+				hysteresis = <1000>;
+				type = "passive";
+			};
+		};
+	};
+
+	soc {
+		trips {
+			soc_trip1: soc-trip1 {
+				temperature = <20>;
+				hysteresis = <0>;
+				type = "passive";
+			};
+		};
+		cooling-maps {
+			soc_modem {
+				trip = <&soc_trip1>;
+				cooling-device =
+					<&modem1_proc 3 3>;
 			};
 		};
 	};

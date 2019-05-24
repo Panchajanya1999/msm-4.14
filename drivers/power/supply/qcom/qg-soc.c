@@ -1,4 +1,4 @@
-/* Copyright (c) 2018 The Linux Foundation. All rights reserved.
+/* Copyright (c) 2018-2019 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -118,6 +118,8 @@ static void get_next_update_time(struct qpnp_qg *chip)
 
 static bool is_scaling_required(struct qpnp_qg *chip)
 {
+	bool input_present = is_input_present(chip);
+
 	if (!chip->profile_loaded)
 		return false;
 
@@ -134,8 +136,14 @@ static bool is_scaling_required(struct qpnp_qg *chip)
 		return false;
 
 
-	if (chip->catch_up_soc > chip->msoc && !is_usb_present(chip))
-		/* USB is not present and SOC has increased */
+	if (chip->catch_up_soc > chip->msoc && !input_present)
+		/* input is not present and SOC has increased */
+		return false;
+
+	if (chip->catch_up_soc > chip->msoc && input_present &&
+			(chip->charge_status != POWER_SUPPLY_STATUS_CHARGING &&
+			chip->charge_status != POWER_SUPPLY_STATUS_FULL))
+		/* USB is present, but not charging */
 		return false;
 
 	return true;
@@ -169,11 +177,11 @@ static bool maint_soc_timeout(struct qpnp_qg *chip)
 static void update_msoc(struct qpnp_qg *chip)
 {
 	int rc = 0, sdam_soc, batt_temp = 0,  batt_soc_32bit = 0;
-	bool usb_present = is_usb_present(chip);
+	bool input_present = is_input_present(chip);
 
 	if (chip->catch_up_soc > chip->msoc) {
 		/* SOC increased */
-		if (usb_present) /* Increment if USB is present */
+		if (input_present) /* Increment if input is present */
 			chip->msoc += chip->dt.delta_soc;
 	} else if (chip->catch_up_soc < chip->msoc) {
 		/* SOC dropped */
@@ -213,14 +221,14 @@ static void update_msoc(struct qpnp_qg *chip)
 						QG_SOC_FULL);
 			cap_learning_update(chip->cl, batt_temp, batt_soc_32bit,
 					chip->charge_status, chip->charge_done,
-					usb_present, false);
+					input_present, false);
 		}
 	}
 
 	cycle_count_update(chip->counter,
 			DIV_ROUND_CLOSEST(chip->msoc * 255, 100),
 			chip->charge_status, chip->charge_done,
-			usb_present);
+			input_present);
 
 	qg_dbg(chip, QG_DEBUG_SOC,
 		"SOC scale: Update maint_soc=%d msoc=%d catch_up_soc=%d delta_soc=%d\n",

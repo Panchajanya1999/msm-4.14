@@ -1,4 +1,4 @@
-/* Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -84,10 +84,14 @@ void rmnet_set_skb_proto(struct sk_buff *skb)
 EXPORT_SYMBOL(rmnet_set_skb_proto);
 
 /* Shs hook handler */
-
 int (*rmnet_shs_skb_entry)(struct sk_buff *skb,
 			   struct rmnet_port *port) __rcu __read_mostly;
 EXPORT_SYMBOL(rmnet_shs_skb_entry);
+
+/* Shs hook handler for work queue*/
+int (*rmnet_shs_skb_entry_wq)(struct sk_buff *skb,
+			      struct rmnet_port *port) __rcu __read_mostly;
+EXPORT_SYMBOL(rmnet_shs_skb_entry_wq);
 
 /* Generic handler */
 
@@ -131,6 +135,59 @@ rmnet_deliver_skb(struct sk_buff *skb, struct rmnet_port *port)
 }
 EXPORT_SYMBOL(rmnet_deliver_skb);
 
+/* Important to note, port cannot be used here if it has gone stale */
+void
+rmnet_deliver_skb_wq(struct sk_buff *skb, struct rmnet_port *port,
+		     enum rmnet_packet_context ctx)
+{
+	int (*rmnet_shs_stamp)(struct sk_buff *skb, struct rmnet_port *port);
+	struct rmnet_priv *priv = netdev_priv(skb->dev);
+
+	trace_rmnet_low(RMNET_MODULE, RMNET_DLVR_SKB, 0xDEF, 0xDEF,
+			0xDEF, 0xDEF, (void *)skb, NULL);
+	skb_reset_transport_header(skb);
+	skb_reset_network_header(skb);
+	rmnet_vnd_rx_fixup(skb->dev, skb->len);
+
+	skb->pkt_type = PACKET_HOST;
+	skb_set_mac_header(skb, 0);
+
+	/* packets coming from work queue context due to packet flush timer
+	 * must go through the special workqueue path in SHS driver
+	 */
+	rmnet_shs_stamp = (!ctx) ? rcu_dereference(rmnet_shs_skb_entry) :
+				   rcu_dereference(rmnet_shs_skb_entry_wq);
+	if (rmnet_shs_stamp) {
+		rmnet_shs_stamp(skb, port);
+		return;
+	}
+
+	if (ctx == RMNET_NET_RX_CTX) {
+		if (port->data_format & RMNET_INGRESS_FORMAT_DL_MARKER) {
+			if (!rmnet_check_skb_can_gro(skb) &&
+			    port->dl_marker_flush >= 0) {
+				struct napi_struct *napi =
+					get_current_napi_context();
+				napi_gro_receive(napi, skb);
+				port->dl_marker_flush++;
+			} else {
+				netif_receive_skb(skb);
+			}
+		} else {
+			if (!rmnet_check_skb_can_gro(skb))
+				gro_cells_receive(&priv->gro_cells, skb);
+			else
+				netif_receive_skb(skb);
+		}
+	} else {
+		if ((port->data_format & RMNET_INGRESS_FORMAT_DL_MARKER) &&
+		    port->dl_marker_flush >= 0)
+			port->dl_marker_flush++;
+		gro_cells_receive(&priv->gro_cells, skb);
+	}
+}
+EXPORT_SYMBOL(rmnet_deliver_skb_wq);
+
 /* MAP handler */
 
 static void
@@ -142,6 +199,7 @@ __rmnet_map_ingress_handler(struct sk_buff *skb,
 	u8 mux_id;
 
 	if (RMNET_MAP_GET_CD_BIT(skb)) {
+		qmi_rmnet_set_dl_msg_active(port);
 		if (port->data_format & RMNET_INGRESS_FORMAT_DL_MARKER) {
 			if (!rmnet_map_flow_command(skb, port, false))
 				return;
@@ -253,9 +311,6 @@ static int rmnet_map_egress_handler(struct sk_buff *skb,
 		if (pskb_expand_head(skb, required_headroom, 0, GFP_ATOMIC))
 			return -ENOMEM;
 	}
-
-	if (port->data_format & RMNET_INGRESS_FORMAT_PS)
-		qmi_rmnet_work_maybe_restart(port);
 
 	if (port->data_format & RMNET_FLAGS_EGRESS_MAP_CKSUMV4)
 		rmnet_map_checksum_uplink_packet(skb, orig_dev);

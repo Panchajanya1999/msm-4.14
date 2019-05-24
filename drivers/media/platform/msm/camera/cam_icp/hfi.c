@@ -1,4 +1,4 @@
-/* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -43,7 +43,7 @@
 #define HFI_MAX_POLL_TRY 5
 
 #define HFI_MAX_PC_POLL_TRY 150
-#define HFI_POLL_TRY_SLEEP 2
+#define HFI_POLL_TRY_SLEEP 1
 
 static struct hfi_info *g_hfi;
 unsigned int g_icp_mmu_hdl;
@@ -526,7 +526,8 @@ void cam_hfi_disable_cpu(void __iomem *icp_base)
 		 * and Host can the proceed. No interrupt is expected from FW
 		 * at this time.
 		 */
-		msleep_interruptible(HFI_POLL_TRY_SLEEP);
+		usleep_range(HFI_POLL_TRY_SLEEP * 1000,
+			(HFI_POLL_TRY_SLEEP * 1000) + 1000);
 		try++;
 	}
 
@@ -632,6 +633,10 @@ int cam_hfi_resume(struct hfi_mem_info *hfi_mem,
 		icp_base + HFI_REG_QDSS_IOVA);
 	cam_io_w_mb((uint32_t)hfi_mem->qdss.len,
 		icp_base + HFI_REG_QDSS_IOVA_SIZE);
+	cam_io_w_mb((uint32_t)hfi_mem->io_mem.iova,
+		icp_base + HFI_REG_IO_REGION_IOVA);
+	cam_io_w_mb((uint32_t)hfi_mem->io_mem.len,
+		icp_base + HFI_REG_IO_REGION_SIZE);
 
 	return rc;
 }
@@ -820,6 +825,10 @@ int cam_hfi_init(uint8_t event_driven_mode, struct hfi_mem_info *hfi_mem,
 		icp_base + HFI_REG_QDSS_IOVA);
 	cam_io_w_mb((uint32_t)hfi_mem->qdss.len,
 		icp_base + HFI_REG_QDSS_IOVA_SIZE);
+	cam_io_w_mb((uint32_t)hfi_mem->io_mem.iova,
+		icp_base + HFI_REG_IO_REGION_IOVA);
+	cam_io_w_mb((uint32_t)hfi_mem->io_mem.len,
+		icp_base + HFI_REG_IO_REGION_SIZE);
 
 	hw_version = cam_io_r(icp_base + HFI_REG_A5_HW_VERSION);
 

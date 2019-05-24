@@ -49,6 +49,7 @@ enum ion_heap_ids {
 #define ION_QSECOM_TA_HEAP_ID		19
 #define ION_AUDIO_HEAP_ID		28
 #define ION_CAMERA_HEAP_ID		20
+#define ION_USER_CONTIG_HEAP_ID		26
 /**
  * Flags to be used when allocating from the secure heap for
  * content protection
@@ -68,7 +69,7 @@ enum ion_heap_ids {
 #define ION_FLAG_CP_CDSP		ION_BIT(29)
 #define ION_FLAG_CP_SPSS_HLOS_SHARED	ION_BIT(30)
 
-#define ION_FLAGS_CP_MASK	0x7FFF0000
+#define ION_FLAGS_CP_MASK	0x6FFE0000
 
 /**
  * Flag to allow non continguous allocation of memory from secure

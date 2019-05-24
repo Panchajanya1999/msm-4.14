@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -79,6 +79,16 @@
 #define IPA_MAX_NUM_REQ_CACHE 10
 
 #define NAPI_WEIGHT 60
+
+/* Bit pattern for SW to identify in middle of PC saving */
+#define PC_SAVE_CONTEXT_SAVE_ENTERED            0xDEAFDEAF
+/* Bit pattern for SW to identify that PC saving completed */
+#define PC_SAVE_CONTEXT_STATUS_SUCCESS          0xFADEFADE
+/* Bit pattern for SW to identify PC restoration is ongoing */
+#define PC_RESTORE_CONTEXT_ENTERED              0xFACEFACE
+/*Bit pattern for SW to identify PC restoration completed */
+#define PC_RESTORE_CONTEXT_STATUS_SUCCESS       0xCAFECAFE
+
 
 #define IPADBG(fmt, args...) \
 	do { \
@@ -801,8 +811,6 @@ struct ipa3_ep_context {
 	u32 eot_in_poll_err;
 	bool ep_delay_set;
 
-	int (*client_lock_unlock)(bool is_lock);
-
 	/* sys MUST be the last element of this struct */
 	struct ipa3_sys_context *sys;
 };
@@ -843,6 +851,13 @@ enum ipa3_sys_pipe_policy {
 	IPA_POLICY_INTR_MODE,
 	IPA_POLICY_NOINTR_MODE,
 	IPA_POLICY_INTR_POLL_MODE,
+};
+
+enum uc_state {
+	IPA_PC_SAVE_CONTEXT_SAVE_ENTERED,
+	IPA_PC_SAVE_CONTEXT_STATUS_SUCCESS,
+	IPA_PC_RESTORE_CONTEXT_ENTERED,
+	IPA_PC_RESTORE_CONTEXT_STATUS_SUCCESS,
 };
 
 struct ipa3_repl_ctx {
@@ -1105,6 +1120,7 @@ struct ipa3_nat_ipv6ct_common_mem {
  * @index_table_expansion_addr: index expansion table address
  * @public_ip_addr: ip address of nat table
  * @pdn_mem: pdn config table SW cache memory structure
+ * @is_tmp_mem_allocated: indicate if tmp mem has been allocated
  */
 struct ipa3_nat_mem {
 	struct ipa3_nat_ipv6ct_common_mem dev;
@@ -1112,6 +1128,7 @@ struct ipa3_nat_mem {
 	char *index_table_expansion_addr;
 	u32 public_ip_addr;
 	struct ipa_mem_buffer pdn_mem;
+	bool is_tmp_mem_allocated;
 };
 
 /**
@@ -1411,6 +1428,12 @@ enum ipa_smmu_cb_type {
 	IPA_SMMU_CB_MAX
 };
 
+enum ipa_client_cb_type {
+	IPA_USB_CLNT,
+	IPA_MHI_CLNT,
+	IPA_MAX_CLNT
+};
+
 /**
  * struct ipa3_char_device_context - IPA character device
  * @class: pointer to the struct class
@@ -1591,6 +1614,7 @@ struct ipa3_context {
 	bool modem_cfg_emb_pipe_flt;
 	bool ipa_wdi2;
 	bool ipa_wdi2_over_gsi;
+	bool ipa_endp_delay_wa;
 	bool ipa_fltrt_not_hashable;
 	bool use_64_bit_dma_mask;
 	/* featurize if memory footprint becomes a concern */
@@ -1657,6 +1681,13 @@ struct ipa3_context {
 	struct mbox_client mbox_client;
 	struct mbox_chan *mbox;
 	atomic_t ipa_clk_vote;
+	int gsi_chk_intset_value;
+	int uc_mailbox17_chk;
+	int uc_mailbox17_mismatch;
+	int (*client_lock_unlock[IPA_MAX_CLNT])(bool is_lock);
+	atomic_t is_ssr;
+	bool (*get_teth_port_state[IPA_MAX_CLNT])(void);
+	struct ipa_mem_buffer uc_dma_addr;
 };
 
 struct ipa3_plat_drv_res {
@@ -1694,6 +1725,7 @@ struct ipa3_plat_drv_res {
 	bool use_ipa_pm;
 	struct ipa_pm_init_params pm_init;
 	bool wdi_over_pcie;
+	bool ipa_endp_delay_wa;
 };
 
 /**
@@ -1971,10 +2003,17 @@ int ipa3_xdci_connect(u32 clnt_hdl);
 int ipa3_xdci_disconnect(u32 clnt_hdl, bool should_force_clear, u32 qmi_req_id);
 
 void ipa3_xdci_ep_delay_rm(u32 clnt_hdl);
-void ipa3_register_lock_unlock_callback(int (*client_cb)(bool), u32 ipa_ep_idx);
-void ipa3_deregister_lock_unlock_callback(u32 ipa_ep_idx);
+void ipa3_register_client_callback(int (*client_cb)(bool),
+		bool (*teth_port_state)(void),
+		enum ipa_client_type client_type);
+void ipa3_deregister_client_callback(enum ipa_client_type client_type);
 int ipa3_set_reset_client_prod_pipe_delay(bool set_reset,
 		enum ipa_client_type client);
+int ipa3_start_stop_client_prod_gsi_chnl(enum ipa_client_type client,
+		bool start_chnl);
+void ipa3_client_prod_post_shutdown_cleanup(void);
+
+
 int ipa3_set_reset_client_cons_pipe_sus_holb(bool set_reset,
 		enum ipa_client_type client);
 
@@ -2481,6 +2520,7 @@ int ipa3_tag_process(struct ipa3_desc *desc, int num_descs,
 
 void ipa3_q6_pre_shutdown_cleanup(void);
 void ipa3_q6_post_shutdown_cleanup(void);
+void ipa3_update_ssr_state(bool is_ssr);
 int ipa3_init_q6_smem(void);
 
 int ipa3_mhi_handle_ipa_config_req(struct ipa_config_req_msg_v01 *config_req);
@@ -2491,6 +2531,7 @@ int ipa3_uc_interface_init(void);
 int ipa3_uc_is_gsi_channel_empty(enum ipa_client_type ipa_client);
 int ipa3_uc_state_check(void);
 int ipa3_uc_loaded_check(void);
+void ipa3_uc_map_cntr_reg_notify(void);
 int ipa3_uc_register_ready_cb(struct notifier_block *nb);
 int ipa3_uc_unregister_ready_cb(struct notifier_block *nb);
 int ipa3_uc_send_cmd(u32 cmd, u32 opcode, u32 expected_status,
@@ -2640,6 +2681,8 @@ int ipa3_ntn_init(void);
 int ipa3_get_ntn_stats(struct Ipa3HwStatsNTNInfoData_t *stats);
 struct dentry *ipa_debugfs_get_root(void);
 bool ipa3_is_msm_device(void);
+void ipa3_read_mailbox_17(enum uc_state state);
+
 struct device *ipa3_get_pdev(void);
 void ipa3_enable_dcd(void);
 void ipa3_disable_prefetch(enum ipa_client_type client);

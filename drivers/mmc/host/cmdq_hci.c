@@ -1020,10 +1020,10 @@ irqreturn_t cmdq_irq(struct mmc_host *mmc, int err)
 			else
 				mrq->cmd->error = err;
 			/*
-			 * Get ADMA descriptor memory in case of ADMA
+			 * Get ADMA descriptor memory in case of real ADMA
 			 * error for debug.
 			 */
-			if (err == -EIO)
+			if (err == -EIO && !err_inject)
 				cmdq_dump_adma_mem(cq_host);
 			goto skip_cqterri;
 		}
@@ -1145,9 +1145,9 @@ skip_cqterri:
 		}
 
 		if (err_inject && err == -ETIMEDOUT)
-			goto out;
+			goto hac;
 		cmdq_finish_data(mmc, tag);
-		goto out;
+		goto hac;
 	} else {
 		cmdq_writel(cq_host, status, CQIS);
 	}
@@ -1156,7 +1156,7 @@ skip_cqterri:
 		/* read CQTCN and complete the request */
 		comp_status = cmdq_readl(cq_host, CQTCN);
 		if (!comp_status)
-			goto out;
+			goto hac;
 		/*
 		 * The CQTCN must be cleared before notifying req completion
 		 * to upper layers to avoid missing completion notification
@@ -1183,7 +1183,7 @@ skip_cqterri:
 			}
 		}
 	}
-
+hac:
 	if (status & CQIS_HAC) {
 		if (cq_host->ops->post_cqe_halt)
 			cq_host->ops->post_cqe_halt(mmc);
@@ -1194,7 +1194,6 @@ skip_cqterri:
 		complete(&cq_host->halt_comp);
 	}
 
-out:
 	return IRQ_HANDLED;
 }
 EXPORT_SYMBOL(cmdq_irq);

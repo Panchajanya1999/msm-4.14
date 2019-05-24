@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -48,6 +48,10 @@
 #define CALLBACK_BUF_SIZE	(DIAG_MAX_REQ_SIZE + CALLBACK_HDR_SIZE)
 
 #define MAX_SSID_PER_RANGE	200
+
+#define NUM_CHANNEL_BUFFERS		2
+#define BUF_1_INDEX		0
+#define BUF_2_INDEX		1
 
 #define ALL_PROC		-1
 
@@ -261,9 +265,19 @@ do {						\
 
 #define DIAG_TS_SIZE	50
 
+#ifdef CONFIG_MHI_BUS
+#define DIAG_MDM_BUF_SIZE	4096
+#else
 #define DIAG_MDM_BUF_SIZE	2048
+#endif
+
+/* The Maximum request size is 4k + DCI header + footer (6 bytes) */
+#ifdef CONFIG_MHI_BUS
+#define DIAG_MDM_DCI_BUF_SIZE	(4096 + 6)
+#else
 /* The Maximum request size is 2k + DCI header + footer (6 bytes) */
 #define DIAG_MDM_DCI_BUF_SIZE	(2048 + 6)
+#endif
 
 #define DIAG_LOCAL_PROC	0
 
@@ -602,6 +616,7 @@ struct diagchar_dev {
 	unsigned int poolsize_hdlc;
 	unsigned int poolsize_dci;
 	unsigned int poolsize_user;
+	spinlock_t diagmem_lock;
 	/* Buffers for masks */
 	struct mutex diag_cntl_mutex;
 	/* Members for Sending response */

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -123,7 +123,7 @@ static void dp_bridge_pre_enable(struct drm_bridge *drm_bridge)
 	}
 
 	/* for SST force stream id, start slot and total slots to 0 */
-	dp->set_stream_info(dp, bridge->dp_panel, 0, 0, 0, 0);
+	dp->set_stream_info(dp, bridge->dp_panel, 0, 0, 0, 0, 0);
 
 	rc = dp->enable(dp, bridge->dp_panel);
 	if (rc) {
@@ -375,8 +375,10 @@ int dp_connector_get_mode_info(struct drm_connector *connector,
 	struct sde_connector *sde_conn;
 	struct dp_panel *dp_panel;
 	struct dp_display_mode dp_mode;
+	struct dp_display *dp_disp = display;
 
-	if (!drm_mode || !mode_info || !max_mixer_width || !connector) {
+	if (!drm_mode || !mode_info || !max_mixer_width || !connector ||
+			!display) {
 		pr_err("invalid params\n");
 		return -EINVAL;
 	}
@@ -397,8 +399,9 @@ int dp_connector_get_mode_info(struct drm_connector *connector,
 
 	mode_info->wide_bus_en = dp_panel->widebus_en;
 
-	if (dp_panel->dsc_en) {
-		dp_panel->convert_to_dp_mode(dp_panel, drm_mode, &dp_mode);
+	dp_disp->convert_to_dp_mode(dp_disp, dp_panel, drm_mode, &dp_mode);
+
+	if (dp_mode.timing.comp_info.comp_ratio) {
 		memcpy(&mode_info->comp_info,
 			&dp_mode.timing.comp_info,
 			sizeof(mode_info->comp_info));

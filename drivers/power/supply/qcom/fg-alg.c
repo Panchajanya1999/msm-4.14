@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -370,17 +370,68 @@ static void cap_learning_post_process(struct cap_learning *cl)
 }
 
 /**
+ * cap_wt_learning_process_full_data -
+ * @cl: Capacity learning object
+ * @delta_batt_soc_pct: percentage change in battery State of Charge
+ * @batt_soc_msb: MSB of battery State of Charge
+ *
+ * Calculates the final learnt capacity when
+ * weighted capacity learning is enabled.
+ *
+ */
+static int cap_wt_learning_process_full_data(struct cap_learning *cl,
+					int delta_batt_soc_pct,
+					int batt_soc_msb)
+{
+	int64_t del_cap_uah, total_cap_uah,
+		res_cap_uah, wt_learnt_cap_uah;
+	int delta_batt_soc_msb, res_batt_soc_msb;
+
+	/* If the delta is < 10%, then skip processing full data */
+	if (delta_batt_soc_pct < cl->dt.min_delta_batt_soc) {
+		pr_debug("batt_soc_delta_pct: %d\n", delta_batt_soc_pct);
+		return -ERANGE;
+	}
+
+	delta_batt_soc_msb = batt_soc_msb - cl->init_batt_soc_msb;
+	res_batt_soc_msb = FULL_SOC_RAW - batt_soc_msb;
+	/* Learnt Capacity from end Battery SOC MSB to FULL_SOC_RAW */
+	res_cap_uah = div64_s64(cl->learned_cap_uah *
+				res_batt_soc_msb, FULL_SOC_RAW);
+	total_cap_uah = cl->init_cap_uah + cl->delta_cap_uah + res_cap_uah;
+	/*
+	 * difference in capacity learnt in this
+	 * charge cycle and previous learnt capacity
+	 */
+	del_cap_uah = total_cap_uah - cl->learned_cap_uah;
+	/* Applying weight based on change in battery SOC MSB */
+	wt_learnt_cap_uah = div64_s64(del_cap_uah * delta_batt_soc_msb,
+					FULL_SOC_RAW);
+	cl->final_cap_uah = cl->learned_cap_uah + wt_learnt_cap_uah;
+
+	pr_debug("wt_learnt_cap_uah=%lld, del_cap_uah=%lld\n",
+			wt_learnt_cap_uah, del_cap_uah);
+	pr_debug("init_cap_uah=%lld, total_cap_uah=%lld, res_cap_uah=%lld, delta_cap_uah=%lld\n",
+			cl->init_cap_uah, cl->final_cap_uah,
+			res_cap_uah, cl->delta_cap_uah);
+	return 0;
+}
+
+/**
  * cap_learning_process_full_data -
  * @cl: Capacity learning object
+ * @batt_soc_msb: Most significant byte of Battery State of Charge
  *
  * Processes the coulomb counter during charge termination and calculates the
  * delta w.r.to the coulomb counter obtained earlier when the learning begun.
  *
  */
-static int cap_learning_process_full_data(struct cap_learning *cl)
+static int cap_learning_process_full_data(struct cap_learning *cl,
+					int batt_soc_msb)
 {
-	int rc, cc_soc_sw, cc_soc_delta_pct;
-	int64_t delta_cap_uah;
+	int rc, cc_soc_sw, cc_soc_delta_pct, delta_batt_soc_pct, batt_soc_pct,
+		cc_soc_fraction;
+	int64_t cc_soc_cap_uah, cc_soc_fraction_uah;
 
 	rc = cl->get_cc_soc(cl->data, &cc_soc_sw);
 	if (rc < 0) {
@@ -388,9 +439,23 @@ static int cap_learning_process_full_data(struct cap_learning *cl)
 		return rc;
 	}
 
+	batt_soc_pct = DIV_ROUND_CLOSEST(batt_soc_msb * 100, FULL_SOC_RAW);
+	delta_batt_soc_pct = batt_soc_pct - cl->init_batt_soc;
 	cc_soc_delta_pct =
-		div64_s64((int64_t)(cc_soc_sw - cl->init_cc_soc_sw) * 100,
-			cl->cc_soc_max);
+		div_s64_rem((int64_t)(cc_soc_sw - cl->init_cc_soc_sw) * 100,
+				cl->cc_soc_max, &cc_soc_fraction);
+	cc_soc_fraction_uah = div64_s64(cl->learned_cap_uah *
+				cc_soc_fraction, (int64_t)cl->cc_soc_max * 100);
+	cc_soc_cap_uah = div64_s64(cl->learned_cap_uah * cc_soc_delta_pct, 100);
+	cl->delta_cap_uah = cc_soc_cap_uah + cc_soc_fraction_uah;
+	pr_debug("cc_soc_delta_pct=%d, cc_soc_cap_uah=%lld, cc_soc_fraction_uah=%lld\n",
+			cc_soc_delta_pct, cc_soc_cap_uah, cc_soc_fraction_uah);
+
+	if (cl->dt.cl_wt_enable) {
+		rc = cap_wt_learning_process_full_data(cl, delta_batt_soc_pct,
+							batt_soc_msb);
+		return rc;
+	}
 
 	/* If the delta is < 50%, then skip processing full data */
 	if (cc_soc_delta_pct < 50) {
@@ -398,8 +463,7 @@ static int cap_learning_process_full_data(struct cap_learning *cl)
 		return -ERANGE;
 	}
 
-	delta_cap_uah = div64_s64(cl->learned_cap_uah * cc_soc_delta_pct, 100);
-	cl->final_cap_uah = cl->init_cap_uah + delta_cap_uah;
+	cl->final_cap_uah = cl->init_cap_uah + cl->delta_cap_uah;
 	pr_debug("Current cc_soc=%d cc_soc_delta_pct=%d total_cap_uah=%lld\n",
 		cc_soc_sw, cc_soc_delta_pct, cl->final_cap_uah);
 	return 0;
@@ -422,11 +486,13 @@ static int cap_learning_begin(struct cap_learning *cl, u32 batt_soc)
 	batt_soc_msb = batt_soc >> 24;
 	batt_soc_pct = DIV_ROUND_CLOSEST(batt_soc_msb * 100, FULL_SOC_RAW);
 
-	if (batt_soc_pct > cl->dt.max_start_soc ||
-			batt_soc_pct < cl->dt.min_start_soc) {
-		pr_debug("Battery SOC %d is high/low, not starting\n",
-			batt_soc_pct);
-		return -EINVAL;
+	if (!cl->dt.cl_wt_enable) {
+		if (batt_soc_pct > cl->dt.max_start_soc ||
+				batt_soc_pct < cl->dt.min_start_soc) {
+			pr_debug("Battery SOC %d is high/low, not starting\n",
+					batt_soc_pct);
+			return -EINVAL;
+		}
 	}
 
 	cl->init_cap_uah = div64_s64(cl->learned_cap_uah * batt_soc_msb,
@@ -451,6 +517,8 @@ static int cap_learning_begin(struct cap_learning *cl, u32 batt_soc)
 	}
 
 	cl->init_cc_soc_sw = cc_soc_sw;
+	cl->init_batt_soc = batt_soc_pct;
+	cl->init_batt_soc_msb = batt_soc_msb;
 	pr_debug("Capacity learning started @ battery SOC %d init_cc_soc_sw:%d\n",
 		batt_soc_msb, cl->init_cc_soc_sw);
 out:
@@ -460,18 +528,19 @@ out:
 /**
  * cap_learning_done -
  * @cl: Capacity learning object
+ * @batt_soc_msb: Most significant byte of battery State of Charge
  *
  * Top level function for getting coulomb counter and post processing the
  * data once the capacity learning is complete after charge termination.
  *
  */
-static int cap_learning_done(struct cap_learning *cl)
+static int cap_learning_done(struct cap_learning *cl, int batt_soc_msb)
 {
 	int rc;
 
-	rc = cap_learning_process_full_data(cl);
+	rc = cap_learning_process_full_data(cl, batt_soc_msb);
 	if (rc < 0) {
-		pr_err("Error in processing cap learning full data, rc=%d\n",
+		pr_debug("Error in processing cap learning full data, rc=%d\n",
 			rc);
 		goto out;
 	}
@@ -488,6 +557,30 @@ static int cap_learning_done(struct cap_learning *cl)
 	cap_learning_post_process(cl);
 out:
 	return rc;
+}
+
+/**
+ * cap_wt_learning_update -
+ * @cl: Capacity learning object
+ * @batt_soc_msb: Most significant byte of battery State of Charge
+ * @input_present: Indicator for input presence
+ *
+ * Called by cap_learning_update when weighted learning is enabled
+ *
+ */
+static void cap_wt_learning_update(struct cap_learning *cl, int batt_soc_msb,
+					bool input_present)
+{
+	int rc;
+
+	if (!input_present) {
+		rc = cap_learning_done(cl, batt_soc_msb);
+		if (rc < 0)
+			pr_debug("Error in completing capacity learning, rc=%d\n",
+				rc);
+		cl->active = false;
+		cl->init_cap_uah = 0;
+	}
 }
 
 /**
@@ -526,6 +619,10 @@ void cap_learning_update(struct cap_learning *cl, int batt_temp,
 	pr_debug("Charge_status: %d active: %d batt_soc: %d\n",
 		charge_status, cl->active, batt_soc_msb);
 
+	if (cl->active && cl->dt.cl_wt_enable)
+		cap_wt_learning_update(cl, batt_soc_msb,
+					input_present);
+
 	/* Initialize the starting point of learning capacity */
 	if (!cl->active) {
 		if (charge_status == POWER_SUPPLY_STATUS_CHARGING) {
@@ -538,7 +635,7 @@ void cap_learning_update(struct cap_learning *cl, int batt_temp,
 		}
 	} else {
 		if (charge_done) {
-			rc = cap_learning_done(cl);
+			rc = cap_learning_done(cl, batt_soc_msb);
 			if (rc < 0)
 				pr_err("Error in completing capacity learning, rc=%d\n",
 					rc);
@@ -547,17 +644,17 @@ void cap_learning_update(struct cap_learning *cl, int batt_temp,
 			cl->init_cap_uah = 0;
 		}
 
-		if (charge_status == POWER_SUPPLY_STATUS_DISCHARGING) {
-			if (!input_present) {
-				pr_debug("Capacity learning aborted @ battery SOC %d\n",
-					 batt_soc_msb);
-				cl->active = false;
-				cl->init_cap_uah = 0;
-				prime_cc = true;
-			}
+		if (charge_status == POWER_SUPPLY_STATUS_DISCHARGING &&
+				!input_present) {
+			pr_debug("Capacity learning aborted @ battery SOC %d\n",
+				 batt_soc_msb);
+			cl->active = false;
+			cl->init_cap_uah = 0;
+			prime_cc = true;
 		}
 
-		if (charge_status == POWER_SUPPLY_STATUS_NOT_CHARGING) {
+		if (charge_status == POWER_SUPPLY_STATUS_NOT_CHARGING &&
+				!cl->dt.cl_wt_enable) {
 			if (qnovo_en && input_present) {
 				/*
 				 * Don't abort the capacity learning when qnovo
@@ -796,6 +893,36 @@ static int ttf_lerp(const struct ttf_pt *pts, size_t tablesize,
 	return -EINVAL;
 }
 
+static int get_step_chg_current_window(struct ttf *ttf)
+{
+	struct range_data *step_chg_cfg = ttf->step_chg_cfg;
+	int i, rc, curr_window, vbatt;
+
+	if (ttf->mode == TTF_MODE_V_STEP_CHG) {
+		rc =  ttf->get_ttf_param(ttf->data, TTF_VBAT, &vbatt);
+		if (rc < 0) {
+			pr_err("failed to get battery voltage, rc=%d\n", rc);
+			return rc;
+		}
+	} else {
+		rc = ttf->get_ttf_param(ttf->data, TTF_OCV, &vbatt);
+		if (rc < 0) {
+			pr_err("failed to get battery OCV, rc=%d\n", rc);
+			return rc;
+		}
+	}
+
+	curr_window = ttf->step_chg_num_params - 1;
+	for (i = 0; i < ttf->step_chg_num_params; i++) {
+		if (is_between(step_chg_cfg[i].low_threshold,
+			       step_chg_cfg[i].high_threshold,
+			       vbatt))
+			curr_window = i;
+	}
+
+	return curr_window;
+}
+
 static int get_time_to_full_locked(struct ttf *ttf, int *val)
 {
 	struct step_chg_data *step_chg_data = ttf->step_chg_data;
@@ -806,7 +933,7 @@ static int get_time_to_full_locked(struct ttf *ttf, int *val)
 		ibatt_this_step, t_predicted_this_step, ttf_slope,
 		t_predicted_cv, t_predicted = 0, charge_type = 0, i_step,
 		float_volt_uv = 0;
-	int vbatt_now, multiplier, curr_window = 0, pbatt_avg;
+	int multiplier, curr_window = 0, pbatt_avg;
 	bool power_approx = false;
 	s64 delta_ms;
 
@@ -898,6 +1025,7 @@ static int get_time_to_full_locked(struct ttf *ttf, int *val)
 	switch (ttf->mode) {
 	case TTF_MODE_NORMAL:
 	case TTF_MODE_V_STEP_CHG:
+	case TTF_MODE_OCV_STEP_CHG:
 		i_cc2cv = ibatt_avg * vbatt_avg /
 			max(MILLI_UNIT, float_volt_uv / MILLI_UNIT);
 		break;
@@ -955,23 +1083,15 @@ static int get_time_to_full_locked(struct ttf *ttf, int *val)
 		}
 		break;
 	case TTF_MODE_V_STEP_CHG:
+	case TTF_MODE_OCV_STEP_CHG:
 		if (!step_chg_data || !step_chg_cfg)
 			break;
 
 		pbatt_avg = vbatt_avg * ibatt_avg;
-
-		rc =  ttf->get_ttf_param(ttf->data, TTF_VBAT, &vbatt_now);
-		if (rc < 0) {
-			pr_err("failed to get battery voltage, rc=%d\n", rc);
-			return rc;
-		}
-
-		curr_window = ttf->step_chg_num_params - 1;
-		for (i = 0; i < ttf->step_chg_num_params; i++) {
-			if (is_between(step_chg_cfg[i].low_threshold,
-					step_chg_cfg[i].high_threshold,
-					vbatt_now))
-				curr_window = i;
+		curr_window = get_step_chg_current_window(ttf);
+		if (curr_window < 0) {
+			pr_err("Failed to get step charging window\n");
+			return curr_window;
 		}
 
 		pr_debug("TTF: curr_window: %d pbatt_avg: %d\n", curr_window,
@@ -1003,8 +1123,13 @@ static int get_time_to_full_locked(struct ttf *ttf, int *val)
 							MILLI_UNIT);
 			}
 
-			step_chg_data[i].ocv = step_chg_cfg[i].high_threshold -
-						(rbatt * i_step);
+			if (ttf->mode == TTF_MODE_V_STEP_CHG)
+				step_chg_data[i].ocv =
+					step_chg_cfg[i].high_threshold -
+					(rbatt * i_step);
+			else
+				step_chg_data[i].ocv =
+					step_chg_cfg[i].high_threshold;
 
 			/* Calculate SOC for each window */
 			step_chg_data[i].soc = (float_volt_uv -
@@ -1047,7 +1172,11 @@ static int get_time_to_full_locked(struct ttf *ttf, int *val)
 cv_estimate:
 	pr_debug("TTF: t_predicted_cc=%d\n", t_predicted);
 
-	iterm = max(100, abs(iterm) + ttf->iterm_delta);
+	if (charge_type == POWER_SUPPLY_CHARGE_TYPE_TAPER)
+		iterm = max(100, abs(iterm));
+	else
+		iterm = max(100, abs(iterm) + ttf->iterm_delta);
+
 	pr_debug("TTF: iterm=%d\n", iterm);
 
 	if (charge_type == POWER_SUPPLY_CHARGE_TYPE_TAPER)
@@ -1121,11 +1250,12 @@ int ttf_get_time_to_full(struct ttf *ttf, int *val)
 	return rc;
 }
 
+#define DELTA_TTF_IBATT_UA      500000
 static void ttf_work(struct work_struct *work)
 {
 	struct ttf *ttf = container_of(work,
 				struct ttf, ttf_work.work);
-	int rc, ibatt_now, vbatt_now, ttf_now, charge_status;
+	int rc, ibatt_now, vbatt_now, ttf_now, charge_status, ibatt_avg;
 	ktime_t ktime_now;
 
 	mutex_lock(&ttf->lock);
@@ -1154,6 +1284,24 @@ static void ttf_work(struct work_struct *work)
 	ttf_circ_buf_add(&ttf->vbatt, vbatt_now);
 
 	if (charge_status == POWER_SUPPLY_STATUS_CHARGING) {
+		rc = ttf_circ_buf_median(&ttf->ibatt, &ibatt_avg);
+		if (rc < 0) {
+			pr_err("failed to get IBATT AVG rc=%d\n", rc);
+			goto end_work;
+		}
+
+		/*
+		 * While Charging, if Ibatt_now differ from Ibatt_avg by 500mA,
+		 * clear Ibatt buffer and refill with settled Ibatt values, to
+		 * calculate accurate TTF
+		 */
+		if (ibatt_now < 0 && (abs(ibatt_now -
+					ibatt_avg) >= DELTA_TTF_IBATT_UA)) {
+			pr_debug("Clear Ibatt buffer, Ibatt_avg=%d Ibatt_now=%d\n",
+					ibatt_avg, ibatt_now);
+			ttf_circ_buf_clr(&ttf->ibatt);
+		}
+
 		rc = get_time_to_full_locked(ttf, &ttf_now);
 		if (rc < 0) {
 			pr_err("failed to get ttf, rc=%d\n", rc);

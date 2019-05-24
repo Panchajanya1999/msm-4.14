@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -164,6 +164,7 @@ struct rmnet_ipa3_context {
 	struct ipa_tether_device_info
 		tether_device
 		[IPACM_MAX_CLIENT_DEVICE_TYPES];
+	atomic_t ap_suspend;
 };
 
 static struct rmnet_ipa3_context *rmnet_ipa3_ctx;
@@ -1104,6 +1105,7 @@ static int ipa3_wwan_xmit(struct sk_buff *skb, struct net_device *dev)
 	int ret = 0;
 	bool qmap_check;
 	struct ipa3_wwan_private *wwan_ptr = netdev_priv(dev);
+	unsigned long flags;
 
 	if (skb->protocol != htons(ETH_P_MAP)) {
 		IPAWANDBG_LOW
@@ -1115,14 +1117,27 @@ static int ipa3_wwan_xmit(struct sk_buff *skb, struct net_device *dev)
 	}
 
 	qmap_check = RMNET_MAP_GET_CD_BIT(skb);
+	spin_lock_irqsave(&wwan_ptr->lock, flags);
+	/* There can be a race between enabling the wake queue and
+	 * suspend in progress. Check if suspend is pending and
+	 * return from here itself.
+	 */
+	if (atomic_read(&rmnet_ipa3_ctx->ap_suspend)) {
+		netif_stop_queue(dev);
+		spin_unlock_irqrestore(&wwan_ptr->lock, flags);
+		return NETDEV_TX_BUSY;
+	}
 	if (netif_queue_stopped(dev)) {
 		if (qmap_check &&
 			atomic_read(&wwan_ptr->outstanding_pkts) <
 					outstanding_high_ctl) {
-			pr_err("[%s]Queue stop, send ctrl pkts\n", dev->name);
+			IPAWANERR("[%s]Queue stop, send ctrl pkts\n",
+							dev->name);
 			goto send;
 		} else {
-			pr_err("[%s]fatal: %s stopped\n", dev->name, __func__);
+			IPAWANERR("[%s]fatal: %s stopped\n", dev->name,
+							__func__);
+			spin_unlock_irqrestore(&wwan_ptr->lock, flags);
 			return NETDEV_TX_BUSY;
 		}
 	}
@@ -1137,6 +1152,7 @@ static int ipa3_wwan_xmit(struct sk_buff *skb, struct net_device *dev)
 				netif_queue_stopped(dev));
 			IPAWANDBG_LOW("qmap_chk(%d)\n", qmap_check);
 			netif_stop_queue(dev);
+			spin_unlock_irqrestore(&wwan_ptr->lock, flags);
 			return NETDEV_TX_BUSY;
 		}
 	}
@@ -1153,13 +1169,15 @@ send:
 	}
 	if (ret == -EINPROGRESS) {
 		netif_stop_queue(dev);
+		spin_unlock_irqrestore(&wwan_ptr->lock, flags);
 		return NETDEV_TX_BUSY;
 	}
 	if (ret) {
-		pr_err("[%s] fatal: ipa rm timer request resource failed %d\n",
+		IPAWANERR("[%s] fatal: ipa rm timer req resource failed %d\n",
 		       dev->name, ret);
 		dev_kfree_skb_any(skb);
 		dev->stats.tx_dropped++;
+		spin_unlock_irqrestore(&wwan_ptr->lock, flags);
 		return -EFAULT;
 	}
 	/* IPA_RM checking end */
@@ -1188,6 +1206,7 @@ out:
 				IPA_RM_RESOURCE_WWAN_0_PROD);
 		}
 	}
+	spin_unlock_irqrestore(&wwan_ptr->lock, flags);
 	return ret;
 }
 
@@ -2160,6 +2179,7 @@ static void ipa3_wake_tx_queue(struct work_struct *work)
 {
 	if (IPA_NETDEV()) {
 		__netif_tx_lock_bh(netdev_get_tx_queue(IPA_NETDEV(), 0));
+		IPAWANDBG("Waking up the workqueue.\n");
 		netif_wake_queue(IPA_NETDEV());
 		__netif_tx_unlock_bh(netdev_get_tx_queue(IPA_NETDEV(), 0));
 	}
@@ -2571,6 +2591,8 @@ static int ipa3_wwan_probe(struct platform_device *pdev)
 		ipa3_proxy_clk_unvote();
 	}
 	atomic_set(&rmnet_ipa3_ctx->is_ssr, 0);
+	atomic_set(&rmnet_ipa3_ctx->ap_suspend, 0);
+	ipa3_update_ssr_state(false);
 
 	IPAWANERR("rmnet_ipa completed initialization\n");
 	return 0;
@@ -2674,6 +2696,7 @@ static int rmnet_ipa_ap_suspend(struct device *dev)
 	struct net_device *netdev = IPA_NETDEV();
 	struct ipa3_wwan_private *wwan_ptr;
 	int ret;
+	unsigned long flags;
 
 	IPAWANDBG("Enter...\n");
 
@@ -2683,26 +2706,37 @@ static int rmnet_ipa_ap_suspend(struct device *dev)
 		goto bail;
 	}
 
-	netif_tx_lock_bh(netdev);
 	wwan_ptr = netdev_priv(netdev);
 	if (wwan_ptr == NULL) {
 		IPAWANERR("wwan_ptr is NULL.\n");
 		ret = 0;
-		netif_tx_unlock_bh(netdev);
 		goto bail;
 	}
 
+	/*
+	 * Rmnert supend and xmit are executing at the same time, In those
+	 * scenarios observing the data was processed when IPA clock are off.
+	 * Added changes to synchronize rmnet supend and xmit.
+	 */
+	atomic_set(&rmnet_ipa3_ctx->ap_suspend, 1);
+	spin_lock_irqsave(&wwan_ptr->lock, flags);
 	/* Do not allow A7 to suspend in case there are outstanding packets */
 	if (atomic_read(&wwan_ptr->outstanding_pkts) != 0) {
 		IPAWANDBG("Outstanding packets, postponing AP suspend.\n");
 		ret = -EAGAIN;
-		netif_tx_unlock_bh(netdev);
+		atomic_set(&rmnet_ipa3_ctx->ap_suspend, 0);
+		spin_unlock_irqrestore(&wwan_ptr->lock, flags);
 		goto bail;
 	}
 
 	/* Make sure that there is no Tx operation ongoing */
 	netif_stop_queue(netdev);
-	netif_tx_unlock_bh(netdev);
+	/* Stoppig Watch dog timer when pipe was in suspend state */
+	if (del_timer(&netdev->watchdog_timer))
+		dev_put(netdev);
+	spin_unlock_irqrestore(&wwan_ptr->lock, flags);
+
+	IPAWANDBG("De-activating the PM/RM resource.\n");
 	if (ipa3_ctx->use_ipa_pm)
 		ipa_pm_deactivate_sync(rmnet_ipa3_ctx->pm_hdl);
 	else
@@ -2728,8 +2762,14 @@ static int rmnet_ipa_ap_resume(struct device *dev)
 	struct net_device *netdev = IPA_NETDEV();
 
 	IPAWANDBG("Enter...\n");
-	if (netdev)
+	/* Clear the suspend in progress flag. */
+	atomic_set(&rmnet_ipa3_ctx->ap_suspend, 0);
+	if (netdev) {
 		netif_wake_queue(netdev);
+		/* Starting Watch dog timer, pipe was changes to resume state */
+		if (netif_running(netdev) && netdev->watchdog_timeo <= 0)
+			__netdev_watchdog_up(netdev);
+	}
 	IPAWANDBG("Exit\n");
 
 	return 0;
@@ -2819,6 +2859,10 @@ static int ipa3_ssr_notifier_cb(struct notifier_block *this,
 		if (atomic_read(&rmnet_ipa3_ctx->is_ssr) &&
 			ipa3_ctx->ipa_hw_type < IPA_HW_v4_0)
 			ipa3_q6_post_shutdown_cleanup();
+
+		if (ipa3_ctx->ipa_endp_delay_wa)
+			ipa3_client_prod_post_shutdown_cleanup();
+
 		IPAWANINFO("IPA AFTER_SHUTDOWN handling is complete\n");
 		break;
 	case SUBSYS_BEFORE_POWERUP:
@@ -3381,6 +3425,7 @@ static int rmnet_ipa3_query_tethering_stats_hw(
 {
 	int rc = 0;
 	struct ipa_quota_stats_all *con_stats;
+	struct ipa_quota_stats  *client;
 
 	/* qet HW-stats */
 	rc = ipa_get_teth_stats();
@@ -3459,6 +3504,24 @@ static int rmnet_ipa3_query_tethering_stats_hw(
 	data->ipv6_tx_bytes =
 		con_stats->client[IPA_CLIENT_Q6_WAN_CONS].num_ipv6_bytes;
 
+	/* usb UL stats on cv2 */
+	client = &con_stats->client[IPA_CLIENT_Q6_LTE_WIFI_AGGR_CONS];
+	IPAWANDBG("usb (cv2): v4_tx_p(%d) b(%lld) v6_tx_p(%d) b(%lld)\n",
+		client->num_ipv4_pkts,
+		client->num_ipv4_bytes,
+		client->num_ipv6_pkts,
+		client->num_ipv6_bytes);
+
+	/* update cv2 USB UL stats */
+	data->ipv4_tx_packets +=
+		client->num_ipv4_pkts;
+	data->ipv6_tx_packets +=
+		client->num_ipv6_pkts;
+	data->ipv4_tx_bytes +=
+		client->num_ipv4_bytes;
+	data->ipv6_tx_bytes +=
+		client->num_ipv6_bytes;
+
 	/* query WLAN UL stats */
 	memset(con_stats, 0, sizeof(struct ipa_quota_stats_all));
 	rc = ipa_query_teth_stats(IPA_CLIENT_WLAN1_PROD, con_stats, reset);
@@ -3483,6 +3546,24 @@ static int rmnet_ipa3_query_tethering_stats_hw(
 		con_stats->client[IPA_CLIENT_Q6_WAN_CONS].num_ipv4_bytes;
 	data->ipv6_tx_bytes +=
 		con_stats->client[IPA_CLIENT_Q6_WAN_CONS].num_ipv6_bytes;
+
+	/* wlan UL stats on cv2 */
+	IPAWANDBG("wlan (cv2): v4_tx_p(%d) b(%lld) v6_tx_p(%d) b(%lld)\n",
+	con_stats->client[IPA_CLIENT_Q6_LTE_WIFI_AGGR_CONS].num_ipv4_pkts,
+	con_stats->client[IPA_CLIENT_Q6_LTE_WIFI_AGGR_CONS].num_ipv4_bytes,
+	con_stats->client[IPA_CLIENT_Q6_LTE_WIFI_AGGR_CONS].num_ipv6_pkts,
+	con_stats->client[IPA_CLIENT_Q6_LTE_WIFI_AGGR_CONS].num_ipv6_bytes);
+
+	/* update cv2 wlan UL stats */
+	client = &con_stats->client[IPA_CLIENT_Q6_LTE_WIFI_AGGR_CONS];
+	data->ipv4_tx_packets +=
+		client->num_ipv4_pkts;
+	data->ipv6_tx_packets +=
+		client->num_ipv6_pkts;
+	data->ipv4_tx_bytes +=
+		client->num_ipv4_bytes;
+	data->ipv6_tx_bytes +=
+		client->num_ipv6_bytes;
 
 	IPAWANDBG("v4_tx_p(%lu) v6_tx_p(%lu) v4_tx_b(%lu) v6_tx_b(%lu)\n",
 		(unsigned long int) data->ipv4_tx_packets,
@@ -4001,6 +4082,15 @@ int rmnet_ipa3_send_lan_client_msg(
 		IPAWANERR("Can't allocate memory for tether_info\n");
 		return -ENOMEM;
 	}
+
+	if (data->client_event != IPA_PER_CLIENT_STATS_CONNECT_EVENT &&
+		data->client_event != IPA_PER_CLIENT_STATS_DISCONNECT_EVENT) {
+		IPAWANERR("Wrong event given. Event:- %d\n",
+			data->client_event);
+		kfree(lan_client);
+		return -EINVAL;
+	}
+	data->lan_client.lanIface[IPA_RESOURCE_NAME_MAX-1] = '\0';
 	memset(&msg_meta, 0, sizeof(struct ipa_msg_meta));
 	memcpy(lan_client, &data->lan_client,
 		sizeof(struct ipa_lan_client_msg));

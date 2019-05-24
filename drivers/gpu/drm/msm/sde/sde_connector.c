@@ -1,4 +1,4 @@
-/* Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1325,14 +1325,14 @@ void sde_connector_commit_reset(struct drm_connector *connector, ktime_t ts)
 static void sde_connector_update_hdr_props(struct drm_connector *connector)
 {
 	struct sde_connector *c_conn = to_sde_connector(connector);
-	struct drm_msm_ext_hdr_properties hdr = {
-		connector->hdr_metadata_type_one,
-		connector->hdr_supported,
-		connector->hdr_eotf,
-		connector->hdr_max_luminance,
-		connector->hdr_avg_luminance,
-		connector->hdr_min_luminance,
-	};
+	struct drm_msm_ext_hdr_properties hdr = {0};
+
+	hdr.hdr_metadata_type_one = connector->hdr_metadata_type_one ? 1 : 0;
+	hdr.hdr_supported = connector->hdr_supported ? 1 : 0;
+	hdr.hdr_eotf = connector->hdr_eotf;
+	hdr.hdr_max_luminance = connector->hdr_max_luminance;
+	hdr.hdr_avg_luminance = connector->hdr_avg_luminance;
+	hdr.hdr_min_luminance = connector->hdr_min_luminance;
 
 	msm_property_set_blob(&c_conn->property_info, &c_conn->blob_ext_hdr,
 			&hdr, sizeof(hdr), CONNECTOR_PROP_EXT_HDR_INFO);
@@ -1848,6 +1848,7 @@ static void _sde_connector_report_panel_dead(struct sde_connector *conn)
 int sde_connector_esd_status(struct drm_connector *conn)
 {
 	struct sde_connector *sde_conn = NULL;
+	struct dsi_display *display;
 	int ret = 0;
 
 	if (!conn)
@@ -1857,10 +1858,17 @@ int sde_connector_esd_status(struct drm_connector *conn)
 	if (!sde_conn || !sde_conn->ops.check_status)
 		return ret;
 
+	display = sde_conn->display;
+
 	/* protect this call with ESD status check call */
 	mutex_lock(&sde_conn->lock);
-	ret = sde_conn->ops.check_status(&sde_conn->base, sde_conn->display,
-								true);
+	if (atomic_read(&(display->panel->esd_recovery_pending))) {
+		SDE_ERROR("ESD recovery already pending\n");
+		mutex_unlock(&sde_conn->lock);
+		return -ETIMEDOUT;
+	}
+	ret = sde_conn->ops.check_status(&sde_conn->base,
+					 sde_conn->display, true);
 	mutex_unlock(&sde_conn->lock);
 
 	if (ret <= 0) {
@@ -1971,6 +1979,9 @@ static int sde_connector_populate_mode_info(struct drm_connector *conn,
 		}
 
 		sde_kms_info_add_keystr(info, "mode_name", mode->name);
+
+		sde_kms_info_add_keyint(info, "bit_clk_rate",
+					mode_info.clk_rate);
 
 		topology_idx = (int)sde_rm_get_topology_name(
 							mode_info.topology);
