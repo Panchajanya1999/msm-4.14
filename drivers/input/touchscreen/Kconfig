@@ -1278,4 +1278,19 @@ config TOUCHSCREEN_SYNAPTICS_DSX
 
 source "drivers/input/touchscreen/synaptics_dsx/Kconfig"
 
+config TOUCHSCREEN_NVT_F7B
+	tristate "novatek touchscreens"
+	help
+	  Say Y here if you have a nvt touchscreen.
+	  nvt controllers are multi touch controllers which can
+	  report 5 touches at a time.
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called nvt.
+
+source "drivers/input/touchscreen/nvt_touch_f7b/Kconfig"
+source "drivers/input/touchscreen/ft8719_touch_f7b/Kconfig"
+
 endif

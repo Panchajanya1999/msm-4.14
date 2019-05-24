@@ -161,12 +161,6 @@
 
 	soc {
 		cooling-maps {
-			soc_cpu6 {
-				trip = <&soc_trip>;
-				cooling-device =
-					<&CPU6 THERMAL_MAX_LIMIT
-						THERMAL_MAX_LIMIT>;
-			};
 			soc_cpu7 {
 				trip = <&soc_trip>;
 				cooling-device =

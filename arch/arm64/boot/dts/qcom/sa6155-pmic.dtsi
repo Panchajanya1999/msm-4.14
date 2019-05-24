@@ -145,6 +145,7 @@
 	/delete-node/ conn-therm;
 	/delete-node/ emmc_ufs-therm;
 	/delete-node/ rf_pa0_therm-therm;
+	/delete-node/ backlight_therm;
 	/delete-node/ camera_flash-therm;
 	/delete-node/ quiet-therm;
 	/delete-node/ quiet-therm-step;
