@@ -1,11 +1,4 @@
 # SPDX-License-Identifier: GPL-2.0
-dtb-$(CONFIG_ARCH_QCOM)	+= apq8016-sbc.dtb
-dtb-$(CONFIG_ARCH_QCOM)	+= apq8096-db820c.dtb
-dtb-$(CONFIG_ARCH_QCOM)	+= ipq8074-hk01.dtb
-dtb-$(CONFIG_ARCH_QCOM)	+= msm8916-mtp.dtb
-dtb-$(CONFIG_ARCH_QCOM)	+= msm8992-bullhead-rev-101.dtb
-dtb-$(CONFIG_ARCH_QCOM)	+= msm8994-angler-rev-101.dtb
-dtb-$(CONFIG_ARCH_QCOM)	+= msm8996-mtp.dtb
 ifeq ($(CONFIG_ARM64),y)
 dtb-$(CONFIG_ARCH_QCS405) += qcs405-rumi.dtb \
 		qcs405-iot-sku1.dtb \
@@ -102,6 +95,18 @@ dtb-$(CONFIG_ARCH_SDMSHRIKE)	+= sdmshrike-rumi.dtb \
 	sdmshrike-cdp.dtb
 endif
 
+ifeq ($(CONFIG_ARCH_XIAOMI_SM6150),y)
+ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
+       dtbo-$(CONFIG_ARCH_SM6150) += \
+               sm6150-idp-overlay.dtbo
+
+sm6150-idp-overlay.dtbo-base := sm6150.dtb
+else
+dtb-$(CONFIG_ARCH_SM6150)      += sm6150-idp.dtb
+endif
+endif
+
+ifeq ($(CONFIG_ARCH_XIAOMI_SM6150),n)
 ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
 	dtbo-$(CONFIG_ARCH_SM6150) += \
 		sm6150-rumi-overlay.dtbo \
@@ -140,6 +145,7 @@ dtb-$(CONFIG_ARCH_SM6150)	+= sm6150-rumi.dtb \
 	sa6155-adp-star.dtb \
 	sa6155p-adp-star.dtb
 
+endif
 endif
 
 ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
