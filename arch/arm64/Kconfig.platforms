@@ -176,6 +176,10 @@ config ARCH_ATOLL
 	  This enables support for the ATOLL chipset. If you do not
 	  wish to build a kernel that runs on this chipset, say 'N' here.
 
+config ARCH_XIAOMI_SM6150
+	bool "Xiaomi sm6150"
+	depends on ARCH_SM6150
+
 config ARCH_QCS405
 	bool "Enable Support for Qualcomm Technologies, Inc. QCS405"
 	depends on ARCH_QCOM
