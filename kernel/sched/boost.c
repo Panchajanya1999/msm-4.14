@@ -271,6 +271,8 @@ int sched_boost_handler(struct ctl_table *table, int write,
 	int ret;
 	unsigned int *data = (unsigned int *)table->data;
 
+	return 0;
+
 	mutex_lock(&boost_mutex);
 
 	ret = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
