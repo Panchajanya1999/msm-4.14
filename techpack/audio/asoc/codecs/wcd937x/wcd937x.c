@@ -2798,10 +2798,6 @@ static int wcd937x_bind(struct device *dev)
 			"HPHL PDM WD INT", wcd937x_wd_handle_irq, NULL);
 	wcd_request_irq(&wcd937x->irq_info, WCD937X_IRQ_AUX_PDM_WD_INT,
 			"AUX PDM WD INT", wcd937x_wd_handle_irq, NULL);
-	/* Enable watchdog interrupt for HPH and AUX */
-	wcd_enable_irq(&wcd937x->irq_info, WCD937X_IRQ_HPHR_PDM_WD_INT);
-	wcd_enable_irq(&wcd937x->irq_info, WCD937X_IRQ_HPHL_PDM_WD_INT);
-	wcd_enable_irq(&wcd937x->irq_info, WCD937X_IRQ_AUX_PDM_WD_INT);
 
 	ret = snd_soc_register_codec(dev, &soc_codec_dev_wcd937x,
 				     NULL, 0);
