@@ -1575,6 +1575,8 @@ cppflags-y +=	-DANI_OS_TYPE_ANDROID=6 \
 		-Wall\
 		-D__linux__
 
+ccflags-y += $(call cc-disable-warning, unused-function,)
+
 cppflags-$(CONFIG_PTT_SOCK_SVC_ENABLE) += -DPTT_SOCK_SVC_ENABLE
 cppflags-$(CONFIG_FEATURE_WLAN_WAPI) += -DFEATURE_WLAN_WAPI
 cppflags-$(CONFIG_FEATURE_WLAN_WAPI) += -DATH_SUPPORT_WAPI

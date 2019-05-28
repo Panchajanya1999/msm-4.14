@@ -27,4 +27,8 @@ config QCA_CLD_DEBUG
 	bool "Debug Qualcomm Atheros CLD WLAN module"
 	default n
 
+config WLAN_DEBUG
+	bool "Also debugging for qcacld driver"
+	default n
+
 endif # QCA_CLD_WLAN

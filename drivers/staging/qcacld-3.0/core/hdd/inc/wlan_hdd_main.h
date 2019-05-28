@@ -319,6 +319,7 @@ enum hdd_driver_flags {
 
 #define WLAN_CHIP_VERSION   "WCNSS"
 
+#ifdef CONFIG_QCA_CLD_DEBUG
 #define hdd_alert(params...) QDF_TRACE_FATAL(QDF_MODULE_ID_HDD, params)
 #define hdd_err(params...) QDF_TRACE_ERROR(QDF_MODULE_ID_HDD, params)
 #define hdd_warn(params...) QDF_TRACE_WARN(QDF_MODULE_ID_HDD, params)
@@ -330,6 +331,20 @@ enum hdd_driver_flags {
 #define hdd_warn_rl(params...) QDF_TRACE_WARN_RL(QDF_MODULE_ID_HDD, params)
 #define hdd_info_rl(params...) QDF_TRACE_INFO_RL(QDF_MODULE_ID_HDD, params)
 #define hdd_debug_rl(params...) QDF_TRACE_DEBUG_RL(QDF_MODULE_ID_HDD, params)
+#else
+#define noop ({ do { } while (0); })
+#define hdd_alert(params...) noop
+#define hdd_err(params...) noop
+#define hdd_warn(params...) noop
+#define hdd_info(params...) noop
+#define hdd_debug(params...) noop
+
+#define hdd_alert_rl(params...) noop
+#define hdd_err_rl(params...) noop
+#define hdd_warn_rl(params...) noop
+#define hdd_info_rl(params...) noop
+#define hdd_debug_rl(params...) noop
+#endif
 
 #define hdd_enter() hdd_debug("enter")
 #define hdd_enter_dev(dev) hdd_debug("enter(%s)", (dev)->name)
