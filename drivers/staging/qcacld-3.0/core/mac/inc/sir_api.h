@@ -6471,10 +6471,12 @@ struct sir_set_tx_rx_aggregation_size {
  * @tx_aggr_sw_retry_threshold_bk: sw retry threshold for BK
  * @tx_aggr_sw_retry_threshold_vi: sw retry threshold for VI
  * @tx_aggr_sw_retry_threshold_vo: sw retry threshold for VO
+ * @tx_aggr_sw_retry_threshold: sw retry threshold
  * @tx_non_aggr_sw_retry_threshold_be: non aggr sw retry threshold for BE
  * @tx_non_aggr_sw_retry_threshold_bk: non aggr sw retry threshold for BK
  * @tx_non_aggr_sw_retry_threshold_vi: non aggr sw retry threshold for VI
  * @tx_non_aggr_sw_retry_threshold_vo: non aggr sw retry threshold for VO
+ * @tx_non_aggr_sw_retry_threshold: non aggr sw retry threshold
  */
 struct sir_set_tx_sw_retry_threshold {
 	uint8_t vdev_id;
@@ -6482,10 +6484,12 @@ struct sir_set_tx_sw_retry_threshold {
 	uint32_t tx_aggr_sw_retry_threshold_bk;
 	uint32_t tx_aggr_sw_retry_threshold_vi;
 	uint32_t tx_aggr_sw_retry_threshold_vo;
+	uint32_t tx_aggr_sw_retry_threshold;
 	uint32_t tx_non_aggr_sw_retry_threshold_be;
 	uint32_t tx_non_aggr_sw_retry_threshold_bk;
 	uint32_t tx_non_aggr_sw_retry_threshold_vi;
 	uint32_t tx_non_aggr_sw_retry_threshold_vo;
+	uint32_t tx_non_aggr_sw_retry_threshold;
 };
 
 /**
@@ -7134,4 +7138,15 @@ struct set_pcl_req {
 	enum band_info band;
 };
 
+#ifdef WLAN_MWS_INFO_DEBUGFS
+/**
+ * struct sir_get_mws_coex_info - Get MWS coex info
+ * @vdev_id: vdev id
+ * @cmd_id: wmi mws-coex command IDs
+ */
+struct sir_get_mws_coex_info {
+	uint32_t vdev_id;
+	uint32_t cmd_id;
+};
+#endif /* WLAN_MWS_INFO_DEBUGFS */
 #endif /* __SIR_API_H */
