@@ -2472,6 +2472,13 @@ typedef struct {
 
     /* 2nd DWORD of HE MAC Capabilities */
     A_UINT32 he_cap_info_ext;
+
+    /*
+     * A variable-length TLV array of wmi_chan_rf_characterization_info will
+     * follow this fixed_param TLV, containing rx characterization info for
+     * primary channels.
+     *   WMI_CHAN_RF_CHARACTERIZATION_INFO wmi_chan_rf_characterization_info[];
+     */
 } wmi_service_ready_ext_event_fixed_param;
 
 typedef enum {
@@ -12475,6 +12482,7 @@ typedef struct {
     A_UINT32 psk_msk_len; /**length of psk_msk*/
     A_UINT32 psk_msk_ext_len; /**length of psk_msk_ext*/
     A_UINT32 psk_msk_ext[ROAM_OFFLOAD_PSK_MSK_BYTES>>2];
+    A_UINT32 adaptive_11r; /* FW needs to perform adaptive 11r roaming */
 } wmi_roam_11r_offload_tlv_param;
 
 /* This TLV will be filled only in case of ESE */
@@ -12531,7 +12539,6 @@ typedef struct {
 #define WMI_ROAM_REASON_INVALID   0x0 /** invalid reason. Do not interpret reason field */
 #define WMI_ROAM_REASON_BETTER_AP 0x1 /** found a better AP */
 #define WMI_ROAM_REASON_BMISS     0x2 /** beacon miss detected */
-#define WMI_ROAM_REASON_DEAUTH    0x2 /** deauth/disassoc received */
 #define WMI_ROAM_REASON_LOW_RSSI  0x3 /** connected AP's low rssi condition detected */
 #define WMI_ROAM_REASON_SUITABLE_AP 0x4 /** found another AP that matches
                                           SSID and Security profile in
@@ -12548,6 +12555,7 @@ typedef struct {
 #define WMI_ROAM_REASON_INVOKE_ROAM_FAIL 0x6
 #define WMI_ROAM_REASON_RSO_STATUS       0x7
 #define WMI_ROAM_REASON_BTM              0x8 /** Roaming because of BTM request received */
+#define WMI_ROAM_REASON_DEAUTH           0x9 /** deauth/disassoc received */
 /* reserved up through 0xF */
 
 /* subnet status: bits 4-5 */
@@ -12596,6 +12604,8 @@ typedef enum
 #define WMI_ROAM_NOTIF_DISCONNECT        0x6 /** indicate that roaming not allowed due BTM req */
 #define WMI_ROAM_NOTIF_SUBNET_CHANGED    0x7 /** indicate that subnet has changed */
 #define WMI_ROAM_NOTIF_SCAN_START        0x8 /** indicate roam scan start, notif_params to be sent as WMI_ROAM_TRIGGER_REASON_ID */
+#define WMI_ROAM_NOTIF_DEAUTH_RECV       0x9 /** indicate deauth received, notif_params to be sent as reason code */
+#define WMI_ROAM_NOTIF_DISASSOC_RECV     0xa /** indicate disassoc received, notif_params to be sent as reason code */
 
 /**whenever RIC request information change, host driver should pass all ric related information to firmware (now only support tsepc)
 * Once, 11r roaming happens, firmware can generate RIC request in reassoc request based on these informations
@@ -24676,6 +24686,12 @@ typedef struct {
     A_UINT32 min_buf_size; /* minimum size in bytes of each buffer in the DMA ring */
     A_UINT32 min_buf_align; /* minimum alignment in bytes of each buffer in the DMA ring */
 } WMI_DMA_RING_CAPABILITIES;
+
+typedef struct {
+    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUCT_ wmi_chan_rf_characterization_info */
+    A_UINT32 freq; /* channel frequency of rf characteristic info (MHz) */
+    A_UINT32 chan_metric; /* 0 = unusable, 1 = worst, 10 = best */
+} WMI_CHAN_RF_CHARACTERIZATION_INFO;
 
 #define WMI_DMA_RING_PADDR_LO_S 0
 #define WMI_DMA_RING_PADDR_LO   0xffffffff
