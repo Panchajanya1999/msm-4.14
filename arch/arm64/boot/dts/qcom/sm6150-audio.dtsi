@@ -50,10 +50,6 @@
 				swr1: rx_swr_master {
 				};
 			};
-			wsa_macro: wsa-macro@62f00000 {
-				swr0: wsa_swr_master {
-				};
-			};
 		};
 	};
 };
