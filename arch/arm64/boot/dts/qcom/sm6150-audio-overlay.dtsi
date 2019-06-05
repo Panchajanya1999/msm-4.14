@@ -510,8 +510,8 @@
 		qcom,cdc-mclk-clk-rate = <24576000>;
 		qcom,cdc-slim-ifd = "tavil-slim-ifd";
 		qcom,cdc-slim-ifd-elemental-addr = [00 00 50 02 17 02];
-		qcom,cdc-dmic-sample-rate = <4800000>;
-		qcom,cdc-mad-dmic-rate = <600000>;
+		qcom,cdc-dmic-sample-rate = <12288000>;
+		qcom,cdc-mad-dmic-rate = <12000000>;
 
 		qcom,wdsp-cmpnt-dev-name = "tavil_codec";
 		qcom,vreg-micb-supply = <&BOB>;
