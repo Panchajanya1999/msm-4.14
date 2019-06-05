@@ -368,7 +368,7 @@
 	clock_audio_wsa_1: wsa_core_clk {
 		compatible = "qcom,audio-ref-clk";
 		qcom,codec-ext-clk-src = <AUDIO_LPASS_MCLK_2>;
-		qcom,codec-lpass-ext-clk-freq = <19200000>;
+		qcom,codec-lpass-ext-clk-freq = <32000000>;
 		qcom,codec-lpass-clk-id = <0x309>;
 		#clock-cells = <1>;
 	};
@@ -376,7 +376,7 @@
 	clock_audio_wsa_2: wsa_npl_clk {
 		compatible = "qcom,audio-ref-clk";
 		qcom,codec-ext-clk-src = <AUDIO_LPASS_MCLK_3>;
-		qcom,codec-lpass-ext-clk-freq = <19200000>;
+		qcom,codec-lpass-ext-clk-freq = <32000000>;
 		qcom,codec-lpass-clk-id = <0x30A>;
 		#clock-cells = <1>;
 	};
@@ -384,7 +384,7 @@
 	clock_audio_va: va_core_clk  {
 		compatible = "qcom,audio-ref-clk";
 		qcom,codec-ext-clk-src = <AUDIO_LPASS_MCLK_1>;
-		qcom,codec-lpass-ext-clk-freq = <19200000>;
+		qcom,codec-lpass-ext-clk-freq = <32000000>;
 		qcom,codec-lpass-clk-id = <0x30B>;
 		#clock-cells = <1>;
 	};
@@ -408,7 +408,7 @@
 	clock_audio_tx_1: tx_core_clk {
 		compatible = "qcom,audio-ref-clk";
 		qcom,codec-ext-clk-src = <AUDIO_LPASS_MCLK_6>;
-		qcom,codec-lpass-ext-clk-freq = <19200000>;
+		qcom,codec-lpass-ext-clk-freq = <32000000>;
 		qcom,codec-lpass-clk-id = <0x30C>;
 		#clock-cells = <1>;
 	};
@@ -416,7 +416,7 @@
 	clock_audio_tx_2: tx_npl_clk {
 		compatible = "qcom,audio-ref-clk";
 		qcom,codec-ext-clk-src = <AUDIO_LPASS_MCLK_7>;
-		qcom,codec-lpass-ext-clk-freq = <19200000>;
+		qcom,codec-lpass-ext-clk-freq = <32000000>;
 		qcom,codec-lpass-clk-id = <0x30D>;
 		#clock-cells = <1>;
 	};
@@ -507,7 +507,7 @@
 		qcom,cdc-micbias3-mv = <1800>;
 		qcom,cdc-micbias4-mv = <1800>;
 
-		qcom,cdc-mclk-clk-rate = <9600000>;
+		qcom,cdc-mclk-clk-rate = <24576000>;
 		qcom,cdc-slim-ifd = "tavil-slim-ifd";
 		qcom,cdc-slim-ifd-elemental-addr = [00 00 50 02 17 02];
 		qcom,cdc-dmic-sample-rate = <4800000>;
