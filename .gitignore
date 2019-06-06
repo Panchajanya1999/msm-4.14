@@ -9,7 +9,7 @@
 #
 # Normal rules (sorted alphabetically)
 #
-.*
+.git
 *.a
 *.bin
 *.bz2
