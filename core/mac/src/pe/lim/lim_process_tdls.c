@@ -2580,7 +2580,10 @@ static QDF_STATUS lim_tdls_setup_add_sta(tpAniSirGlobal pMac,
 	if (pStaDs && pAddStaReq->tdlsAddOper == TDLS_OPER_ADD) {
 		pe_err("TDLS entry for peer: "MAC_ADDRESS_STR " already exist, cannot add new entry",
 			MAC_ADDR_ARRAY(pAddStaReq->peermac.bytes));
-			return QDF_STATUS_E_FAILURE;
+	}
+	if (!pStaDs && pAddStaReq->tdlsAddOper == TDLS_OPER_UPDATE) {
+		pe_err("TDLS update peer is given without peer creation");
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	if (pStaDs && pStaDs->staType != STA_ENTRY_TDLS_PEER) {
@@ -2655,7 +2658,7 @@ static QDF_STATUS lim_tdls_del_sta(tpAniSirGlobal pMac,
 	pStaDs = dph_lookup_hash_entry(pMac, peerMac.bytes, &peerIdx,
 				       &psessionEntry->dph.dphHashTable);
 
-	if (pStaDs) {
+	if (pStaDs && pStaDs->staType == STA_ENTRY_TDLS_PEER) {
 		pe_debug("DEL STA peer MAC: "MAC_ADDRESS_STR,
 			 MAC_ADDR_ARRAY(pStaDs->staAddr));
 
@@ -2666,7 +2669,7 @@ static QDF_STATUS lim_tdls_del_sta(tpAniSirGlobal pMac,
 
 		status = lim_del_sta(pMac, pStaDs, resp_reqd, psessionEntry);
 	} else {
-		pe_debug("DEL STA peer MAC: "MAC_ADDRESS_STR" not found",
+		pe_debug("TDLS peer "MAC_ADDRESS_STR" not found",
 			 MAC_ADDR_ARRAY(peerMac.bytes));
 	}
 
@@ -3203,6 +3206,9 @@ QDF_STATUS lim_delete_tdls_peers(tpAniSirGlobal mac_ctx,
 
 	lim_check_aid_and_delete_peer(mac_ctx, session_entry);
 
+	tgt_tdls_delete_all_peers_indication(mac_ctx->psoc,
+					     session_entry->smeSessionId);
+
 	if (lim_is_roam_synch_in_progress(session_entry))
 		return QDF_STATUS_SUCCESS;
 	/* In case of CSA, Only peers in lim and TDLS component
@@ -3215,9 +3221,6 @@ QDF_STATUS lim_delete_tdls_peers(tpAniSirGlobal mac_ctx,
 						    session_entry->
 						    smeSessionId);
 	}
-
-	tgt_tdls_delete_all_peers_indication(mac_ctx->psoc,
-					     session_entry->smeSessionId);
 
 	/* reset the set_state_disable flag */
 	session_entry->tdls_send_set_state_disable = true;
