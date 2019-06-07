@@ -25,18 +25,18 @@ void __clk_free_clk(struct clk *clk);
 /* Debugfs API to print the enabled clocks */
 #ifdef CONFIG_DEBUG_FS
 void clock_debug_print_enabled(bool print_parent);
+#define WARN_CLK(core, name, cond, fmt, ...) do {		\
+		clk_debug_print_hw(core, NULL);			\
+		WARN(cond, "%s: " fmt, name, ##__VA_ARGS__);	\
+} while (0)
 #else
 static inline
 void clock_debug_print_enabled(bool print_parent)
 {
 }
+#define WARN_CLK(core, name, cond, fmt, ...) pr_debug("%s: WARN", name)
 #endif
 void clk_debug_print_hw(struct clk_core *clk, struct seq_file *f);
-
-#define WARN_CLK(core, name, cond, fmt, ...) do {		\
-		clk_debug_print_hw(core, NULL);			\
-		WARN(cond, "%s: " fmt, name, ##__VA_ARGS__);	\
-} while (0)
 
 #define clock_debug_output(m, c, fmt, ...)		\
 do {							\
