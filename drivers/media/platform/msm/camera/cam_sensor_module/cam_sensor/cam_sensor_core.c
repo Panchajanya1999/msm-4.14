@@ -19,7 +19,6 @@
 #include "cam_common_util.h"
 #include "cam_packet_util.h"
 
-
 static void cam_sensor_update_req_mgr(
 	struct cam_sensor_ctrl_t *s_ctrl,
 	struct cam_packet *csl_packet)
@@ -370,6 +369,8 @@ int32_t cam_sensor_update_slave_info(struct cam_cmd_probe *probe_info,
 	s_ctrl->pipeline_delay =
 		probe_info->reserved;
 
+	s_ctrl->sensordata->camera_id = probe_info->camera_id;
+	s_ctrl->sensordata->sensorName = probe_info->sensorName;
 	s_ctrl->sensor_probe_addr_type =  probe_info->addr_type;
 	s_ctrl->sensor_probe_data_type =  probe_info->data_type;
 	CAM_DBG(CAM_SENSOR,
@@ -646,6 +647,136 @@ int cam_sensor_match_id(struct cam_sensor_ctrl_t *s_ctrl)
 	return rc;
 }
 
+static int msm_sensor_parse_data(struct cam_sensor_ctrl_t *s_ctrl,
+	uint32_t values_addr[7], uint32_t values_data[7], int oem)
+{
+	struct cam_sensor_i2c_reg_setting i2c_reg_settings = {0};
+	struct cam_sensor_i2c_reg_array i2c_reg_array = {0};
+	int rc = 0, i, max_i;
+	/* oem: 0 - Sony, 1 - Samsung, 2 - Omnivision */
+
+	if (oem < 2)
+		max_i = 4;
+	else
+		max_i = 3;
+
+	for (i = 0; i < max_i; i++) {
+		pr_info("oem id: %i, retry: %i, max_retries: %i", oem, i, max_i);
+		if (!oem) {
+			i2c_reg_settings.addr_type = CAMERA_SENSOR_I2C_TYPE_WORD;
+			i2c_reg_settings.data_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
+			if (i == 3)
+				i2c_reg_array.delay = 15;
+			else
+				i2c_reg_array.delay = 1;
+		} else {
+			i2c_reg_settings.addr_type = 2;
+			i2c_reg_settings.data_type = 1;
+			i2c_reg_array.delay = 1;
+		}
+
+		i2c_reg_settings.size = 1;
+		i2c_reg_array.reg_addr = values_addr[i];
+		i2c_reg_array.reg_data = values_data[i];
+		i2c_reg_settings.reg_setting = &i2c_reg_array;
+
+		rc = camera_io_dev_write(&s_ctrl->io_master_info,
+			&i2c_reg_settings);
+		if (rc < 0)
+			CAM_ERR(CAM_SENSOR, "page write failed rc %i", rc);
+	}
+
+	return rc;
+}
+
+static uint16_t msm_sensor_power_up_sony_imx586(struct cam_sensor_ctrl_t *s_ctrl)
+{
+	int rc = 0;
+	uint32_t values_addr[4] = { 0x0136, 0x0137, 0x0A02, 0x0A00 };
+	uint32_t values_data[4] = { 0x18, 0x00, 0x7F, 0x01 };
+
+	rc = msm_sensor_parse_data(s_ctrl, values_addr, values_data, 0);
+	if (rc < 0)
+		goto error;
+
+	return rc;
+error:
+	CAM_ERR(CAM_SENSOR, "xy++ page write failed rc %i", rc);
+	return rc;
+}
+
+static uint16_t msm_sensor_power_up_samsung_5e8(struct cam_sensor_ctrl_t *s_ctrl)
+{
+	int rc = 0;
+	uint32_t values_addr[4] = { 0x0100, 0x0a00, 0x0a02, 0x0a00 };
+	uint32_t values_data[4] = { 0x00, 0x04, 0x00, 0x01 };
+
+	rc = msm_sensor_parse_data(s_ctrl, values_addr, values_data, 1);
+	if (rc < 0)
+		goto error;
+
+	return rc;
+error:
+	CAM_ERR(CAM_SENSOR, "lxl page write failed rc %i", rc);
+	return rc;
+}
+
+static uint16_t msm_sensor_power_up_ovti_13855(struct cam_sensor_ctrl_t *s_ctrl)
+{
+
+	int rc = 0;
+	uint32_t values_addr[7] = { 0x3d81, 0x3d84, 0x3d88, 0x3d89, 0x3d8a, 0x3d8b, 0x0100 };
+	uint32_t values_data[7] = { 0x01, 0x40, 0x70, 0x00, 0x70, 0x0f };
+
+	rc = msm_sensor_parse_data(s_ctrl, values_addr, values_data, 2);
+	if (rc < 0)
+		goto error;
+
+	return rc;
+error:
+	CAM_ERR(CAM_SENSOR, "xy++ page write failed rc %d", rc);
+	return rc;
+}
+
+#define CAM_BACK 0
+#define CAM_AUX_BACK 1
+#define CAM_FRONT 2
+
+static int msm_sensor_power_up_per_id(struct cam_sensor_ctrl_t *s_ctrl)
+{
+	int rc = 0;
+	int sensor_id = s_ctrl->sensordata->camera_id;
+
+	switch (sensor_id) {
+		case CAM_AUX_BACK:
+			rc = msm_sensor_power_up_sony_imx586(s_ctrl);
+			if (rc < 0) {
+				CAM_ERR(CAM_SENSOR, "sersor %i powerup failed", sensor_id);
+				return rc;
+			}
+			break;
+		case CAM_BACK:
+			rc = msm_sensor_power_up_samsung_5e8(s_ctrl);
+			if (rc < 0) {
+				CAM_ERR(CAM_SENSOR, "sersor %i powerup failed", sensor_id);
+				return rc;
+			}
+			break;
+		case CAM_FRONT:
+			rc = msm_sensor_power_up_ovti_13855(s_ctrl);
+			if (rc < 0) {
+				CAM_ERR(CAM_SENSOR, "sersor %i powerup failed", sensor_id);
+				return rc;
+			}
+			break;
+		default:
+			CAM_ERR(CAM_SENSOR, "unknown sensor");
+			return -1;
+			break;
+	}
+	return 0;
+}
+
 int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 	void *arg)
 {
@@ -728,11 +859,17 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			goto free_power_settings;
 		}
 
+		rc = msm_sensor_power_up_per_id(s_ctrl);
+		if (rc < 0) {
+			msleep(20);
+			goto free_power_settings;
+		}
+
 		CAM_INFO(CAM_SENSOR,
-			"Probe success,slot:%d,slave_addr:0x%x,sensor_id:0x%x",
+			"Probe success,slot:%d,slave_addr:0x%x,sensor_id:0x%x sensor_name:%s",
 			s_ctrl->soc_info.index,
 			s_ctrl->sensordata->slave_info.sensor_slave_addr,
-			s_ctrl->sensordata->slave_info.sensor_id);
+			s_ctrl->sensordata->slave_info.sensor_id,s_ctrl->sensordata->sensorName);
 
 		rc = cam_sensor_power_down(s_ctrl);
 		if (rc < 0) {
