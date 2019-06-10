@@ -30,6 +30,10 @@
 #include "smb5-lib.h"
 #include "schgm-flash.h"
 
+#include <linux/notifier.h>
+#include <linux/msm_drm_notify.h>
+#include <linux/fb.h>
+
 static struct smb_params smb5_pmi632_params = {
 	.fcc			= {
 		.name   = "fast charge current",
@@ -642,6 +646,7 @@ static enum power_supply_property smb5_usb_props[] = {
 	POWER_SUPPLY_PROP_HVDCP_OPTI_ALLOWED,
 	POWER_SUPPLY_PROP_QC_OPTI_DISABLE,
 	POWER_SUPPLY_PROP_THERM_ICL_LIMIT,
+	POWER_SUPPLY_PROP_TYPE_RECHECK,
 };
 
 static int smb5_usb_get_prop(struct power_supply *psy,
@@ -813,6 +818,9 @@ static int smb5_usb_get_prop(struct power_supply *psy,
 		val->intval = get_client_vote(chg->usb_icl_votable,
 					THERMAL_THROTTLE_VOTER);
 		break;
+	case POWER_SUPPLY_PROP_TYPE_RECHECK:
+		rc = smblib_get_prop_type_recheck(chg, val);
+		break;
 	default:
 		pr_err("get prop %d is not supported in usb\n", psp);
 		rc = -EINVAL;
@@ -899,6 +907,9 @@ static int smb5_usb_set_prop(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX_LIMIT:
 		smblib_set_prop_usb_voltage_max_limit(chg, val);
 		break;
+	case POWER_SUPPLY_PROP_TYPE_RECHECK:
+		rc = smblib_set_prop_type_recheck(chg, val);
+		break;
 	default:
 		pr_err("set prop %d is not supported\n", psp);
 		rc = -EINVAL;
@@ -939,6 +950,7 @@ static int smb5_init_usb_psy(struct smb5 *chip)
 	struct power_supply_config usb_cfg = {};
 	struct smb_charger *chg = &chip->chg;
 
+	chg->usb_psy_desc = usb_psy_desc;
 	usb_cfg.drv_data = chip;
 	usb_cfg.of_node = chg->dev->of_node;
 	chg->usb_psy = devm_power_supply_register(chg->dev,
@@ -1407,6 +1419,8 @@ static enum power_supply_property smb5_batt_props[] = {
 	POWER_SUPPLY_PROP_CHARGE_FULL,
 	POWER_SUPPLY_PROP_FORCE_RECHARGE,
 	POWER_SUPPLY_PROP_FCC_STEPPER_ENABLE,
+	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
+	POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL,
 };
 
 static int smb5_batt_get_prop(struct power_supply *psy,
@@ -1471,8 +1485,6 @@ static int smb5_batt_get_prop(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
 		rc = smblib_get_prop_from_bms(chg,
 				POWER_SUPPLY_PROP_CURRENT_NOW, val);
-		if (!rc)
-			val->intval *= (-1);
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_QNOVO:
 		val->intval = get_client_vote_locked(chg->fcc_votable,
@@ -1489,7 +1501,7 @@ static int smb5_batt_get_prop(struct power_supply *psy,
 		rc = smblib_get_prop_from_bms(chg, POWER_SUPPLY_PROP_TEMP, val);
 		break;
 	case POWER_SUPPLY_PROP_TECHNOLOGY:
-		val->intval = POWER_SUPPLY_TECHNOLOGY_LION;
+		val->intval = POWER_SUPPLY_TECHNOLOGY_LIPO;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_DONE:
 		rc = smblib_get_prop_batt_charge_done(chg, val);
@@ -1537,6 +1549,12 @@ static int smb5_batt_get_prop(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_FCC_STEPPER_ENABLE:
 		val->intval = chg->fcc_stepper_enable;
+		break;
+	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
+		val->intval = 4000;
+		break;
+	case POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL:
+		rc = smblib_get_prop_system_temp_level(chg, val);
 		break;
 	default:
 		pr_err("batt power supply prop %d not supported\n", psp);
@@ -1635,6 +1653,9 @@ static int smb5_batt_set_prop(struct power_supply *psy,
 			msleep(50);
 			vote(chg->chg_disable_votable, FORCE_RECHARGE_VOTER,
 					false, 0);
+		break;
+	case POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL:
+		rc = smblib_set_prop_system_temp_level(chg, val);
 		break;
 	case POWER_SUPPLY_PROP_FCC_STEPPER_ENABLE:
 		chg->fcc_stepper_enable = val->intval;
@@ -2548,6 +2569,19 @@ static int smb5_init_hw(struct smb5 *chip)
 		}
 	}
 
+	/*
+	 * 1. set 0x154a bit2 to 1 to fix huawei scp cable 3A for SDP issue
+	 * 2. set 0x154a bit3 to 0 to enable AICL for debug access mode cable
+	 */
+	rc = smblib_masked_write(chg, TYPE_C_DEBUG_ACC_SNK_CFG,
+			TYPEC_DEBUG_ACC_SNK_SEL_ICL | TYPEC_DEBUG_ACC_SNK_DIS_AICL,
+			TYPEC_DEBUG_ACC_SNK_SEL_ICL);
+	if (rc < 0) {
+		dev_err(chg->dev, "Couldn't configure TYPE_C_DEBUG_ACC_SNK_CFG rc=%d\n",
+				rc);
+		return rc;
+	}
+
 	return rc;
 }
 
@@ -2775,7 +2809,6 @@ static struct smb_irq_info smb5_irqs[] = {
 	[TYPEC_OR_RID_DETECTION_CHANGE_IRQ] = {
 		.name		= "typec-or-rid-detect-change",
 		.handler	= typec_or_rid_detection_change_irq_handler,
-		.wake           = true,
 	},
 	[TYPEC_VPD_DETECT_IRQ] = {
 		.name		= "typec-vpd-detect",
@@ -3059,7 +3092,6 @@ static void smb5_create_debugfs(struct smb5 *chip)
 {}
 
 #endif
-
 static int smb5_show_charger_status(struct smb5 *chip)
 {
 	struct smb_charger *chg = &chip->chg;
@@ -3106,6 +3138,7 @@ static int smb5_probe(struct platform_device *pdev)
 	struct smb5 *chip;
 	struct smb_charger *chg;
 	int rc = 0;
+	unsigned char attr_count2;
 
 	chip = devm_kzalloc(&pdev->dev, sizeof(*chip), GFP_KERNEL);
 	if (!chip)
