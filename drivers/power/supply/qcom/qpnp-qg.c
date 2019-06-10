@@ -1991,8 +1991,7 @@ static int qg_charge_full_update(struct qpnp_qg *chip)
 				chip->msoc, health, chip->charge_full,
 				chip->charge_done);
 	if (chip->charge_done && !chip->charge_full) {
-		if (chip->msoc >= 99 && (health == POWER_SUPPLY_HEALTH_GOOD 
-				|| health ==  POWER_SUPPLY_HEALTH_COOL)) {
+		if (chip->msoc >= 99 && health == POWER_SUPPLY_HEALTH_GOOD) {
 			chip->charge_full = true;
 			qg_dbg(chip, QG_DEBUG_STATUS, "Setting charge_full (0->1) @ msoc=%d\n",
 					chip->msoc);
@@ -2684,20 +2683,19 @@ static int qg_setup_battery(struct qpnp_qg *chip)
 		/* battery present */
 		rc = get_batt_id_ohm(chip, &chip->batt_id_ohm);
 		if (rc < 0) {
-			pr_err("Failed to detect batt_id rc=%d, will use default id 68K to match profile \n", rc);
-			chip->batt_id_ohm = 68000;
-		}
-
-		rc = qg_load_battery_profile(chip);
-		if (rc < 0) {
-			pr_err("Failed to load battery-profile rc=%d\n",
-							rc);
+			pr_err("Failed to detect batt_id rc=%d\n", rc);
 			chip->profile_loaded = false;
-			chip->soc_reporting_ready = true;
 		} else {
-			chip->profile_loaded = true;
+			rc = qg_load_battery_profile(chip);
+			if (rc < 0) {
+				pr_err("Failed to load battery-profile rc=%d\n",
+								rc);
+				chip->profile_loaded = false;
+				chip->soc_reporting_ready = true;
+			} else {
+				chip->profile_loaded = true;
+			}
 		}
-
 	}
 
 	qg_dbg(chip, QG_DEBUG_PROFILE, "battery_missing=%d batt_id_ohm=%d Ohm profile_loaded=%d profile=%s\n",
