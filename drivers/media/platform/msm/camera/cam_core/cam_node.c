@@ -13,6 +13,8 @@
 #include <linux/debugfs.h>
 #include <linux/videodev2.h>
 #include <linux/uaccess.h>
+#include <linux/cpu_input_boost.h>
+#include <linux/devfreq_boost.h>
 
 #include "cam_node.h"
 #include "cam_trace.h"
@@ -718,6 +720,8 @@ acquire_kfree:
 			sizeof(start)))
 			rc = -EFAULT;
 		else {
+			cpu_input_boost_kick_max(500);
+			devfreq_boost_kick_max(DEVFREQ_MSM_CPUBW, 1000);
 			rc = __cam_node_handle_start_dev(node, &start);
 			if (rc)
 				CAM_ERR(CAM_CORE,
