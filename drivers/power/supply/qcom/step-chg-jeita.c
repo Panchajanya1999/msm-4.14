@@ -63,6 +63,7 @@ struct step_chg_info {
 	int			jeita_fv_index;
 	int			step_index;
 	int			get_config_retry_count;
+	int			last_vol;
 
 	struct step_chg_cfg	*step_chg_config;
 	struct jeita_fcc_cfg	*jeita_fcc_config;
@@ -418,6 +419,14 @@ static int get_val(struct range_data *range, int hysteresis, int current_index,
 	*new_index = -EINVAL;
 
 	/*
+	 * As battery temperature may be below 0, range.xxx is a unsigned int, but battery
+	 * temperature is a signed int, so cannot compare them when battery temp is below 0,
+	 * we treat it as 0 degree when the parameter threshold(battery temp) is below 0.
+	 */
+	if (threshold <= 0)
+		threshold = 0;
+
+	/*
 	 * If the threshold is lesser than the minimum allowed range,
 	 * return -ENODATA.
 	 */
@@ -615,6 +624,9 @@ update_time:
 }
 
 #define JEITA_SUSPEND_HYST_UV		50000
+#define JEITA_WARM_VOL		4100000
+#define JEITA_GOOD_VOL		4400000
+
 static int handle_jeita(struct step_chg_info *chip)
 {
 	union power_supply_propval pval = {0, };
@@ -718,6 +730,14 @@ static int handle_jeita(struct step_chg_info *chip)
 
 set_jeita_fv:
 	vote(chip->fv_votable, JEITA_VOTER, fv_uv ? true : false, fv_uv);
+
+	if (fv_uv == JEITA_GOOD_VOL && chip->last_vol == JEITA_WARM_VOL) {
+		rc = power_supply_set_property(chip->batt_psy,
+				POWER_SUPPLY_PROP_FORCE_RECHARGE, &pval);
+		if (rc < 0)
+			pr_err("Can't force recharge from batt warm to good ,rc=%d\n", rc);
+	}
+	chip->last_vol = fv_uv;
 
 update_time:
 	chip->jeita_last_update_time = ktime_get();

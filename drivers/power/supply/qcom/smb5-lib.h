@@ -32,6 +32,7 @@ enum print_reason {
 	PR_PARALLEL	= BIT(3),
 	PR_OTG		= BIT(4),
 	PR_WLS		= BIT(5),
+	PR_OEM		= BIT(6),
 };
 
 #define DEFAULT_VOTER			"DEFAULT_VOTER"
@@ -82,6 +83,7 @@ enum print_reason {
 #define CHARGER_TYPE_VOTER		"CHARGER_TYPE_VOTER"
 #define HDC_IRQ_VOTER			"HDC_IRQ_VOTER"
 #define DETACH_DETECT_VOTER		"DETACH_DETECT_VOTER"
+#define QC2_UNSUPPORTED_VOTER	        "QC2_UNSUPPORTED_VOTER"
 #define CC_MODE_VOTER			"CC_MODE_VOTER"
 #define MAIN_FCC_VOTER			"MAIN_FCC_VOTER"
 #define DCIN_AICL_VOTER			"DCIN_AICL_VOTER"
@@ -89,6 +91,11 @@ enum print_reason {
 
 #define BOOST_BACK_STORM_COUNT	3
 #define WEAK_CHG_STORM_COUNT	8
+
+/* defined for charger type recheck */
+#define CHARGER_RECHECK_DELAY_MS	20000
+#define TYPE_RECHECK_TIME_5S		5000
+#define TYPE_RECHECK_COUNT	        3
 
 #define VBAT_TO_VRAW_ADC(v)		div_u64((u64)v * 1000000UL, 194637UL)
 
@@ -99,7 +106,7 @@ enum print_reason {
 #define SDP_100_MA			100000
 #define SDP_CURRENT_UA			500000
 #define CDP_CURRENT_UA			1500000
-#define DCP_CURRENT_UA			1500000
+#define DCP_CURRENT_UA			2000000
 #define HVDCP_CURRENT_UA		3000000
 #define TYPEC_DEFAULT_CURRENT_UA	900000
 #define TYPEC_MEDIUM_CURRENT_UA		1500000
@@ -107,6 +114,9 @@ enum print_reason {
 #define DCIN_ICL_MIN_UA			100000
 #define DCIN_ICL_MAX_UA			1500000
 #define DCIN_ICL_STEP_UA		100000
+#define NONSTANDARD_CURRENT_UA		1000000
+#define HVDCP2_CURRENT_UA		1500000
+#define QC2_UNSUPPORTED_UA		2000000
 
 #define ROLE_REVERSAL_DELAY_MS		2000
 
@@ -409,6 +419,7 @@ struct smb_charger {
 	struct power_supply		*dc_psy;
 	struct power_supply		*bms_psy;
 	struct power_supply		*usb_main_psy;
+	struct power_supply_desc        usb_psy_desc;
 	struct power_supply		*usb_port_psy;
 	struct power_supply		*wls_psy;
 	struct power_supply		*cp_psy;
@@ -464,6 +475,7 @@ struct smb_charger {
 	struct delayed_work	bb_removal_work;
 	struct delayed_work	lpd_ra_open_work;
 	struct delayed_work	lpd_detach_work;
+	struct delayed_work	charger_type_recheck;
 	struct delayed_work	thermal_regulation_work;
 	struct delayed_work	usbov_dbc_work;
 	struct delayed_work	role_reversal_check;
@@ -583,6 +595,7 @@ struct smb_charger {
 	int                     qc2_max_pulses;
 	enum qc2_non_comp_voltage qc2_unsupported_voltage;
 	bool			dbc_usbov;
+	bool			qc2_unsupported;
 
 	/* extcon for VBUS / ID notification to USB for uUSB */
 	struct extcon_dev	*extcon;
@@ -609,6 +622,9 @@ struct smb_charger {
 	int			dcin_uv_count;
 	ktime_t			dcin_uv_last_time;
 	int			last_wls_vout;
+	/* charger type recheck */
+	int			recheck_charger;
+	int			precheck_charger_type;
 };
 
 int smblib_read(struct smb_charger *chg, u16 addr, u8 *val);
@@ -815,6 +831,10 @@ void smblib_hvdcp_detect_enable(struct smb_charger *chg, bool enable);
 void smblib_hvdcp_exit_config(struct smb_charger *chg);
 void smblib_apsd_enable(struct smb_charger *chg, bool enable);
 int smblib_force_vbus_voltage(struct smb_charger *chg, u8 val);
+int smblib_set_prop_type_recheck(struct smb_charger *chg,
+				 const union power_supply_propval *val);
+int smblib_get_prop_type_recheck(struct smb_charger *chg,
+				 union power_supply_propval *val);
 int smblib_get_irq_status(struct smb_charger *chg,
 				union power_supply_propval *val);
 int smblib_get_qc3_main_icl_offset(struct smb_charger *chg, int *offset_ua);
