@@ -1431,6 +1431,29 @@ int smblib_toggle_smb_en(struct smb_charger *chg, int toggle)
 	return rc;
 }
 
+int smblib_get_irq_status(struct smb_charger *chg,
+				union power_supply_propval *val)
+{
+	int rc;
+	u8 reg;
+
+	mutex_lock(&chg->irq_status_lock);
+	/* Report and clear cached status */
+	val->intval = chg->irq_status;
+	chg->irq_status = 0;
+
+	/* get real time status of pulse skip irq */
+	rc = smblib_read(chg, MISC_PBS_RT_STS_REG, &reg);
+	if (rc < 0)
+		smblib_err(chg, "Couldn't read MISC_PBS_RT_STS_REG rc=%d\n",
+				rc);
+	else
+		val->intval |= (reg & PULSE_SKIP_IRQ_BIT);
+	mutex_unlock(&chg->irq_status_lock);
+
+	return rc;
+}
+
 /****************************
  * uUSB Moisture Protection *
  ****************************/
@@ -3826,12 +3849,16 @@ static int get_rp_based_dcp_current(struct smb_charger *chg, int typec_mode)
 int smblib_set_prop_pd_current_max(struct smb_charger *chg,
 				    const union power_supply_propval *val)
 {
-	int rc;
+	int rc, icl;
 
-	if (chg->pd_active)
+	if (chg->pd_active) {
+		icl = get_client_vote(chg->usb_icl_votable, PD_VOTER);
 		rc = vote(chg->usb_icl_votable, PD_VOTER, true, val->intval);
-	else
+		if (val->intval != icl)
+			power_supply_changed(chg->usb_psy);
+	} else {
 		rc = -EPERM;
+	}
 
 	return rc;
 }
@@ -4517,6 +4544,21 @@ irqreturn_t default_irq_handler(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+irqreturn_t sdam_sts_change_irq_handler(int irq, void *data)
+{
+	struct smb_irq_data *irq_data = data;
+	struct smb_charger *chg = irq_data->parent_data;
+
+	smblib_dbg(chg, PR_INTERRUPT, "IRQ: %s\n", irq_data->name);
+
+	mutex_lock(&chg->irq_status_lock);
+	chg->irq_status |= PULSE_SKIP_IRQ_BIT;
+	mutex_unlock(&chg->irq_status_lock);
+
+	power_supply_changed(chg->usb_main_psy);
+	return IRQ_HANDLED;
+}
+
 #define CHG_TERM_WA_ENTRY_DELAY_MS		300000		/* 5 min */
 #define CHG_TERM_WA_EXIT_DELAY_MS		60000		/* 1 min */
 static void smblib_eval_chg_termination(struct smb_charger *chg, u8 batt_status)
@@ -4524,7 +4566,8 @@ static void smblib_eval_chg_termination(struct smb_charger *chg, u8 batt_status)
 	union power_supply_propval pval = {0, };
 	int rc = 0;
 
-	rc = smblib_get_prop_from_bms(chg, POWER_SUPPLY_PROP_CAPACITY, &pval);
+	rc = smblib_get_prop_from_bms(chg,
+				POWER_SUPPLY_PROP_REAL_CAPACITY, &pval);
 	if (rc < 0) {
 		smblib_err(chg, "Couldn't read SOC value, rc=%d\n", rc);
 		return;
@@ -4538,6 +4581,8 @@ static void smblib_eval_chg_termination(struct smb_charger *chg, u8 batt_status)
 	 * to prevent overcharing.
 	 */
 	if ((batt_status == TERMINATE_CHARGE) && (pval.intval == 100)) {
+		chg->cc_soc_ref = 0;
+		chg->last_cc_soc = 0;
 		alarm_start_relative(&chg->chg_termination_alarm,
 				ms_to_ktime(CHG_TERM_WA_ENTRY_DELAY_MS));
 	} else if (pval.intval < 100) {
@@ -4546,6 +4591,7 @@ static void smblib_eval_chg_termination(struct smb_charger *chg, u8 batt_status)
 		 * we exit the TERMINATE_CHARGE state and soc drops below 100%
 		 */
 		chg->cc_soc_ref = 0;
+		chg->last_cc_soc = 0;
 	}
 }
 
@@ -6348,7 +6394,8 @@ static void smblib_chg_termination_work(struct work_struct *work)
 	if ((rc < 0) || !input_present)
 		goto out;
 
-	rc = smblib_get_prop_from_bms(chg, POWER_SUPPLY_PROP_CAPACITY, &pval);
+	rc = smblib_get_prop_from_bms(chg,
+				POWER_SUPPLY_PROP_REAL_CAPACITY, &pval);
 	if ((rc < 0) || (pval.intval < 100)) {
 		vote(chg->usb_icl_votable, CHG_TERMINATION_VOTER, false, 0);
 		vote(chg->dc_suspend_votable, CHG_TERMINATION_VOTER, false, 0);
@@ -6380,6 +6427,18 @@ static void smblib_chg_termination_work(struct work_struct *work)
 		if (rc < 0)
 			goto out;
 	}
+
+	/*
+	 * In BSM a sudden jump in CC_SOC is not expected. If seen, its a
+	 * good_ocv or updated capacity, reject it.
+	 */
+	if (chg->last_cc_soc && pval.intval > (chg->last_cc_soc + 100)) {
+		/* CC_SOC has increased by 1% from last time */
+		chg->cc_soc_ref = pval.intval;
+		smblib_dbg(chg, PR_MISC, "cc_soc jumped(%d->%d), reset cc_soc_ref\n",
+				chg->last_cc_soc, pval.intval);
+	}
+	chg->last_cc_soc = pval.intval;
 
 	/*
 	 * Suspend/Unsuspend USB input to keep cc_soc within the 0.5% to 0.75%
@@ -6849,6 +6908,7 @@ int smblib_init(struct smb_charger *chg)
 	int rc = 0;
 
 	mutex_init(&chg->smb_lock);
+	mutex_init(&chg->irq_status_lock);
 	INIT_WORK(&chg->bms_update_work, bms_update_work);
 	INIT_WORK(&chg->pl_update_work, pl_update_work);
 	INIT_WORK(&chg->jeita_update_work, jeita_update_work);
