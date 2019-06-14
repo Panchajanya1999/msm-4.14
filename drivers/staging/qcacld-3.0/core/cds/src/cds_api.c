@@ -301,7 +301,6 @@ cds_cfg_update_ac_specs_params(struct txrx_pdev_cfg_param_t *olcfg,
 	}
 }
 
-#ifdef QCA_LL_TX_FLOW_CONTROL_V2
 static inline void
 cds_cdp_set_flow_control_params(struct cds_config_info *cds_cfg,
 				struct txrx_pdev_cfg_param_t *cdp_cfg)
@@ -310,12 +309,6 @@ cds_cdp_set_flow_control_params(struct cds_config_info *cds_cfg,
 	cdp_cfg->tx_flow_start_queue_offset =
 				 cds_cfg->tx_flow_start_queue_offset;
 }
-#else
-static inline void
-cds_cdp_set_flow_control_params(struct cds_config_info *cds_cfg,
-				struct txrx_pdev_cfg_param_t *cdp_cfg)
-{}
-#endif
 
 /**
  * cds_cdp_cfg_attach() - attach data path config module
@@ -810,7 +803,6 @@ QDF_STATUS cds_pre_enable(void)
 	status = wma_wait_for_ready_event(gp_cds_context->wma_context);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		cds_err("Failed to wait for ready event; status: %u", status);
-		cds_trigger_recovery(QDF_REASON_UNSPECIFIED);
 		goto stop_wmi;
 	}
 

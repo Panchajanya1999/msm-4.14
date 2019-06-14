@@ -71,7 +71,6 @@
 #include <linux/semaphore.h>
 #include <linux/ctype.h>
 #include <linux/compat.h>
-#include <linux/reboot.h>
 #ifdef MSM_PLATFORM
 #include <soc/qcom/subsystem_restart.h>
 #endif
@@ -170,7 +169,6 @@
 #define PANIC_ON_BUG_STR ""
 #endif
 
-bool g_is_system_reboot_triggered;
 int wlan_start_ret_val;
 static DECLARE_COMPLETION(wlan_start_comp);
 static unsigned int dev_num = 1;
@@ -310,7 +308,6 @@ int limit_off_chan_tbl[HDD_MAX_AC][HDD_MAX_OFF_CHAN_ENTRIES] = {
 };
 
 struct notifier_block hdd_netdev_notifier;
-struct notifier_block system_reboot_notifier;
 
 struct sock *cesium_nl_srv_sock;
 #ifdef FEATURE_WLAN_AUTO_SHUTDOWN
@@ -512,14 +509,6 @@ int hdd_validate_channel_and_bandwidth(struct hdd_adapter *adapter,
 		}
 	}
 
-	if (WLAN_REG_IS_5GHZ_CH(chan_number)) {
-		if ((chan_bw != CH_WIDTH_20MHZ) && (chan_number == 165) &&
-				(chan_bw != CH_WIDTH_MAX)) {
-			hdd_err("Only BW20 possible on channel 165");
-			return -EINVAL;
-		}
-	}
-
 	return 0;
 }
 
@@ -539,11 +528,6 @@ static bool hdd_wait_for_recovery_completion(void)
 	while (cds_is_driver_recovering()) {
 		if (retry == HDD_MOD_EXIT_SSR_MAX_RETRIES/2)
 			hdd_err("Recovery in progress; wait here!!!");
-
-		if (g_is_system_reboot_triggered) {
-			hdd_info("System Reboot happening ignore unload!!");
-			return false;
-		}
 
 		msleep(1000);
 		if (retry++ == HDD_MOD_EXIT_SSR_MAX_RETRIES) {
@@ -692,27 +676,6 @@ static int hdd_netdev_notifier_call(struct notifier_block *nb,
 
 struct notifier_block hdd_netdev_notifier = {
 	.notifier_call = hdd_netdev_notifier_call,
-};
-
-static int system_reboot_notifier_call(struct notifier_block *nb,
-				       unsigned long msg_type, void *_unused)
-{
-	switch (msg_type) {
-	case SYS_DOWN:
-	case SYS_HALT:
-	case SYS_POWER_OFF:
-		g_is_system_reboot_triggered = true;
-		hdd_info("reboot, reason: %ld", msg_type);
-		break;
-	default:
-		break;
-	}
-
-	return NOTIFY_OK;
-}
-
-struct notifier_block system_reboot_notifier = {
-	.notifier_call = system_reboot_notifier_call,
 };
 
 /* variable to hold the insmod parameters */
@@ -1220,6 +1183,8 @@ static int hdd_update_tdls_config(struct hdd_context *hdd_ctx)
 	tdls_cfg.tdls_rx_cb = wlan_cfg80211_tdls_rx_callback;
 	tdls_cfg.tdls_rx_cb_data = psoc;
 	tdls_cfg.tdls_dp_vdev_update = hdd_update_dp_vdev_flags;
+	tdls_cfg.tdls_osif_init_cb = wlan_cfg80211_tdls_osif_priv_init;
+	tdls_cfg.tdls_osif_deinit_cb = wlan_cfg80211_tdls_osif_priv_deinit;
 
 	status = ucfg_tdls_update_config(psoc, &tdls_cfg);
 	if (status != QDF_STATUS_SUCCESS) {
@@ -2111,7 +2076,7 @@ hdd_modify_nss_chains_tgt_cfg(struct hdd_context *hdd_ctx,
 				  max_supported_tx_nss, vdev_op_mode, band);
 }
 
-void hdd_update_tgt_cfg(hdd_handle_t hdd_handle, struct wma_tgt_cfg *cfg)
+int hdd_update_tgt_cfg(hdd_handle_t hdd_handle, struct wma_tgt_cfg *cfg)
 {
 	int ret;
 	struct hdd_context *hdd_ctx = hdd_handle_to_context(hdd_handle);
@@ -2124,12 +2089,12 @@ void hdd_update_tgt_cfg(hdd_handle_t hdd_handle, struct wma_tgt_cfg *cfg)
 
 	if (!hdd_ctx) {
 		hdd_err("HDD context is NULL");
-		return;
+		return -EINVAL;
 	}
 	ret = hdd_objmgr_create_and_store_pdev(hdd_ctx);
 	if (ret) {
 		QDF_DEBUG_PANIC("Failed to create pdev; errno:%d", ret);
-		return;
+		return -EINVAL;
 	}
 
 	hdd_debug("New pdev has been created with pdev_id = %u",
@@ -2139,7 +2104,8 @@ void hdd_update_tgt_cfg(hdd_handle_t hdd_handle, struct wma_tgt_cfg *cfg)
 	if (QDF_IS_STATUS_ERROR(status)) {
 		QDF_DEBUG_PANIC("dispatcher pdev open failed; status:%d",
 				status);
-		return;
+		ret = qdf_status_to_os_return(status);
+		goto exit;
 	}
 
 	hdd_objmgr_update_tgt_max_vdev_psoc(hdd_ctx, cfg->max_intf_count);
@@ -2314,6 +2280,12 @@ void hdd_update_tgt_cfg(hdd_handle_t hdd_handle, struct wma_tgt_cfg *cfg)
 				 cfg->obss_color_collision_offloaded);
 	if (QDF_IS_STATUS_ERROR(status))
 		hdd_err("Failed to set WNI_CFG_OBSS_COLOR_COLLISION_OFFLOAD");
+
+	return 0;
+
+exit:
+	hdd_objmgr_release_and_destroy_pdev(hdd_ctx);
+	return ret;
 }
 
 bool hdd_dfs_indicate_radar(struct hdd_context *hdd_ctx)
@@ -3949,28 +3921,6 @@ static void hdd_set_multicast_list(struct net_device *dev)
 	cds_ssr_unprotect(__func__);
 }
 #endif
-
-/**
- * hdd_select_queue() - used by Linux OS to decide which queue to use first
- * @dev:	Pointer to the WLAN device.
- * @skb:	Pointer to OS packet (sk_buff).
- *
- * This function is registered with the Linux OS for network
- * core to decide which queue to use first.
- *
- * Return: ac, Queue Index/access category corresponding to UP in IP header
- */
-static uint16_t hdd_select_queue(struct net_device *dev, struct sk_buff *skb
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 13, 0))
-			  , void *accel_priv
-#endif
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0))
-			  , select_queue_fallback_t fallback
-#endif
-)
-{
-	return hdd_wmm_select_queue(dev, skb);
-}
 
 static const struct net_device_ops wlan_drv_ops = {
 	.ndo_open = hdd_open,
@@ -6368,8 +6318,9 @@ static void hdd_connect_bss(struct net_device *dev, const u8 *bssid,
 #endif
 
 #if defined(WLAN_FEATURE_FILS_SK)
-#if defined(CFG80211_CONNECT_DONE) || \
-	(LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0))
+#if (defined(CFG80211_CONNECT_DONE) || \
+	(LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0))) && \
+	(LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 0))
 #if defined(CFG80211_FILS_SK_OFFLOAD_SUPPORT) || \
 		 (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0))
 /**
@@ -6398,6 +6349,8 @@ static void hdd_populate_fils_params(struct cfg80211_connect_resp_params
 	fils_params->pmk = pmk;
 	fils_params->pmk_len = pmk_len;
 	fils_params->pmkid = pmkid;
+	hdd_debug("FILS erp_next_seq_num:%d",
+		  fils_params->fils_erp_next_seq_num);
 }
 #else
 static inline void hdd_populate_fils_params(struct cfg80211_connect_resp_params
@@ -6408,6 +6361,41 @@ static inline void hdd_populate_fils_params(struct cfg80211_connect_resp_params
 					    uint16_t fils_seq_num)
 { }
 #endif
+
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 0))
+/**
+ * hdd_populate_fils_params() - Populate FILS keys to connect response
+ * @fils_params: connect response to supplicant
+ * @fils_kek: FILS kek
+ * @fils_kek_len: FILS kek length
+ * @pmk: FILS PMK
+ * @pmk_len: FILS PMK length
+ * @pmkid: PMKID
+ * @fils_seq_num: FILS Seq number
+ *
+ * Return: None
+ */
+static void hdd_populate_fils_params(struct cfg80211_connect_resp_params
+				     *fils_params, const uint8_t *fils_kek,
+				     size_t fils_kek_len, const uint8_t *pmk,
+				     size_t pmk_len, const uint8_t *pmkid,
+				     uint16_t fils_seq_num)
+{
+	/* Increament seq number to be used for next FILS */
+	fils_params->fils.erp_next_seq_num = fils_seq_num + 1;
+	fils_params->fils.update_erp_next_seq_num = true;
+	fils_params->fils.kek = fils_kek;
+	fils_params->fils.kek_len = fils_kek_len;
+	fils_params->fils.pmk = pmk;
+	fils_params->fils.pmk_len = pmk_len;
+	fils_params->fils.pmkid = pmkid;
+	hdd_debug("FILS erp_next_seq_num:%d",
+		  fils_params->fils.erp_next_seq_num);
+}
+#endif /* CFG80211_CONNECT_DONE */
+
+#if defined(CFG80211_CONNECT_DONE) || \
+	(LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0))
 
 void hdd_update_hlp_info(struct net_device *dev,
 			 struct csr_roam_info *roam_info)
@@ -6528,9 +6516,7 @@ static void hdd_connect_done(struct net_device *dev, const u8 *bssid,
 					 roam_info->fils_seq_num);
 		hdd_save_gtk_params(adapter, roam_info, false);
 	}
-	hdd_debug("FILS indicate connect status %d seq no %d",
-		  fils_params.status,
-		  fils_params.fils_erp_next_seq_num);
+	hdd_debug("FILS indicate connect status %d", fils_params.status);
 
 	cfg80211_connect_done(dev, &fils_params, gfp);
 
@@ -6544,7 +6530,7 @@ static void hdd_connect_done(struct net_device *dev, const u8 *bssid,
 		qdf_mem_free(roam_fils_params);
 	roam_info->fils_join_rsp = NULL;
 }
-#else
+#else /* CFG80211_CONNECT_DONE */
 static inline void
 hdd_connect_done(struct net_device *dev, const u8 *bssid,
 		 struct cfg80211_bss *bss, struct csr_roam_info *roam_info,
@@ -6554,7 +6540,7 @@ hdd_connect_done(struct net_device *dev, const u8 *bssid,
 		 tSirResultCodes timeout_reason)
 { }
 #endif
-#endif
+#endif /* WLAN_FEATURE_FILS_SK */
 
 #if defined(WLAN_FEATURE_FILS_SK) && \
 	(defined(CFG80211_CONNECT_DONE) || \
@@ -7662,7 +7648,6 @@ static void hdd_wlan_exit(struct hdd_context *hdd_ctx)
 		hdd_deinit_all_adapters(hdd_ctx, false);
 	}
 
-	unregister_reboot_notifier(&system_reboot_notifier);
 	unregister_netdevice_notifier(&hdd_netdev_notifier);
 
 	hdd_wlan_stop_modules(hdd_ctx, false);
@@ -8809,63 +8794,6 @@ static void hdd_set_thermal_level_cb(hdd_handle_t hdd_handle, u_int8_t level)
 		/* restore original concurrency mode */
 		ucfg_ipa_send_mcc_scc_msg(hdd_ctx->pdev, hdd_ctx->mcc_mode);
 }
-
-/**
- * hdd_get_safe_channel() - Get safe channel from current regulatory
- * @hdd_ctx: pointer to hdd context
- * @adapter: pointer to softap adapter
- *
- * This function is used to get safe channel from current regulatory valid
- * channels to restart SAP if failed to get safe channel from PCL.
- *
- * Return: Channel number to restart SAP in case of success. In case of any
- * failure, the channel number returned is zero.
- */
-static uint8_t
-hdd_get_safe_channel(struct hdd_context *hdd_ctx,
-		     struct hdd_adapter *adapter)
-{
-	struct sir_pcl_list pcl = {0};
-	uint32_t i, j;
-	bool found = false;
-	int ret;
-
-	/* Try for safe channel from all valid channel */
-	pcl.pcl_len = MAX_NUM_CHAN;
-	ret = hdd_get_valid_chan(hdd_ctx, pcl.pcl_list,
-				 &pcl.pcl_len);
-	if (ret) {
-		hdd_err("error %d in getting valid channel list", ret);
-		return INVALID_CHANNEL_ID;
-	}
-
-	for (i = 0; i < pcl.pcl_len; i++) {
-		hdd_debug("chan[%d]:%d", i, pcl.pcl_list[i]);
-		found = false;
-		for (j = 0; j < hdd_ctx->unsafe_channel_count; j++) {
-			if (pcl.pcl_list[i] ==
-					hdd_ctx->unsafe_channel_list[j]) {
-				hdd_debug("unsafe chan:%d", pcl.pcl_list[i]);
-				found = true;
-				break;
-			}
-		}
-
-		if (found)
-			continue;
-
-		if ((pcl.pcl_list[i] >=
-		   adapter->session.ap.sap_config.acs_cfg.start_ch) &&
-		   (pcl.pcl_list[i] <=
-		   adapter->session.ap.sap_config.acs_cfg.end_ch)) {
-			hdd_debug("found safe chan:%d", pcl.pcl_list[i]);
-			return pcl.pcl_list[i];
-		}
-	}
-
-	return INVALID_CHANNEL_ID;
-}
-
 #else
 /**
  * hdd_set_thermal_level_cb() - set thermal level callback function
@@ -8880,96 +8808,7 @@ hdd_get_safe_channel(struct hdd_context *hdd_ctx,
 static void hdd_set_thermal_level_cb(hdd_handle_t hdd_handle, u_int8_t level)
 {
 }
-
-/**
- * hdd_get_safe_channel() - Get safe channel from current regulatory
- * @hdd_ctx: pointer to hdd context
- * @adapter: pointer to softap adapter
- *
- * This function is used to get safe channel from current regulatory valid
- * channels to restart SAP if failed to get safe channel from PCL.
- *
- * Return: Channel number to restart SAP in case of success. In case of any
- * failure, the channel number returned is zero.
- */
-static uint8_t
-hdd_get_safe_channel(struct hdd_context *hdd_ctx,
-		     struct hdd_adapter *adapter)
-{
-	return 0;
-}
 #endif
-
-/**
- * hdd_get_safe_channel_from_pcl_and_acs_range() - Get safe channel for SAP
- * restart
- * @adapter: AP adapter, which should be checked for NULL
- *
- * Get a safe channel to restart SAP. PCL already takes into account the
- * unsafe channels. So, the PCL is validated with the ACS range to provide
- * a safe channel for the SAP to restart.
- *
- * Return: Channel number to restart SAP in case of success. In case of any
- * failure, the channel number returned is zero.
- */
-static uint8_t
-hdd_get_safe_channel_from_pcl_and_acs_range(struct hdd_adapter *adapter)
-{
-	struct sir_pcl_list pcl;
-	QDF_STATUS status;
-	uint32_t i;
-	mac_handle_t mac_handle;
-	struct hdd_context *hdd_ctx;
-
-	hdd_ctx = WLAN_HDD_GET_CTX(adapter);
-	if (!hdd_ctx) {
-		hdd_err("invalid HDD context");
-		return INVALID_CHANNEL_ID;
-	}
-
-	mac_handle = hdd_ctx->mac_handle;
-	if (!mac_handle) {
-		hdd_err("invalid MAC handle");
-		return INVALID_CHANNEL_ID;
-	}
-
-	status = policy_mgr_get_pcl_for_existing_conn(hdd_ctx->psoc,
-			PM_SAP_MODE, pcl.pcl_list, &pcl.pcl_len,
-			pcl.weight_list, QDF_ARRAY_SIZE(pcl.weight_list),
-			false);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		hdd_err("Get PCL failed");
-		return INVALID_CHANNEL_ID;
-	}
-
-	/*
-	 * In some scenarios, like hw dbs disabled, sap+sap case, if operating
-	 * channel is unsafe channel, the pcl may be empty, instead of return,
-	 * try to choose a safe channel from acs range.
-	 */
-	if (!pcl.pcl_len)
-		hdd_debug("pcl length is zero!");
-
-	hdd_debug("start:%d end:%d",
-		adapter->session.ap.sap_config.acs_cfg.start_ch,
-		adapter->session.ap.sap_config.acs_cfg.end_ch);
-
-	/* PCL already takes unsafe channel into account */
-	for (i = 0; i < pcl.pcl_len; i++) {
-		hdd_debug("chan[%d]:%d", i, pcl.pcl_list[i]);
-		if ((pcl.pcl_list[i] >=
-		   adapter->session.ap.sap_config.acs_cfg.start_ch) &&
-		   (pcl.pcl_list[i] <=
-		   adapter->session.ap.sap_config.acs_cfg.end_ch)) {
-			hdd_debug("found PCL safe chan:%d", pcl.pcl_list[i]);
-			return pcl.pcl_list[i];
-		}
-	}
-
-	hdd_debug("no safe channel from PCL found in ACS range");
-
-	return hdd_get_safe_channel(hdd_ctx, adapter);
-}
 
 /**
  * hdd_switch_sap_channel() - Move SAP to the given channel
@@ -9103,8 +8942,8 @@ void hdd_unsafe_channel_restart_sap(struct hdd_context *hdd_ctxt)
 			continue;
 		} else
 			restart_chan =
-				hdd_get_safe_channel_from_pcl_and_acs_range(
-					adapter);
+				wlansap_get_safe_channel_from_pcl_and_acs_range(
+					WLAN_HDD_GET_SAP_CTX_PTR(adapter));
 		if (!restart_chan) {
 			hdd_err("fail to restart SAP");
 		} else {
@@ -9170,7 +9009,8 @@ static void hdd_lte_coex_restart_sap(struct hdd_adapter *adapter,
 {
 	uint8_t restart_chan;
 
-	restart_chan = hdd_get_safe_channel_from_pcl_and_acs_range(adapter);
+	restart_chan = wlansap_get_safe_channel_from_pcl_and_acs_range(
+				WLAN_HDD_GET_SAP_CTX_PTR(adapter));
 	if (!restart_chan) {
 		hdd_alert("fail to restart SAP");
 		return;
@@ -10053,7 +9893,6 @@ err_close_adapters:
 }
 
 
-#ifdef QCA_LL_TX_FLOW_CONTROL_V2
 /**
  * hdd_txrx_populate_cds_config() - Populate txrx cds configuration
  * @cds_cfg: CDS Configuration
@@ -10070,13 +9909,6 @@ static inline void hdd_txrx_populate_cds_config(struct cds_config_info
 	cds_cfg->tx_flow_start_queue_offset =
 		hdd_ctx->config->TxFlowStartQueueOffset;
 }
-#else
-static inline void hdd_txrx_populate_cds_config(struct cds_config_info
-						*cds_cfg,
-						struct hdd_context *hdd_ctx)
-{
-}
-#endif
 
 #ifdef FEATURE_WLAN_RA_FILTERING
 /**
@@ -12064,12 +11896,6 @@ int hdd_wlan_startup(struct device *dev)
 		goto err_wiphy_unregister;
 	}
 
-	ret = register_reboot_notifier(&system_reboot_notifier);
-	if (ret) {
-		hdd_err("Failed to register reboot notifier: %d", ret);
-		goto err_unregister_netdev;
-	}
-
 	rtnl_held = hdd_hold_rtnl_lock();
 
 	ret = hdd_open_interfaces(hdd_ctx, rtnl_held);
@@ -12128,11 +11954,9 @@ err_close_adapters:
 	hdd_close_all_adapters(hdd_ctx, rtnl_held);
 
 err_release_rtnl_lock:
-	unregister_reboot_notifier(&system_reboot_notifier);
 	if (rtnl_held)
 		hdd_release_rtnl_lock();
 
-err_unregister_netdev:
 	unregister_netdevice_notifier(&hdd_netdev_notifier);
 
 err_wiphy_unregister:
@@ -14179,12 +14003,10 @@ static int hdd_update_dp_config(struct hdd_context *hdd_ctx)
 
 	params.tso_enable = hdd_ctx->config->tso_enable;
 	params.lro_enable = hdd_ctx->config->lro_enable;
-#ifdef QCA_LL_TX_FLOW_CONTROL_V2
 	params.tx_flow_stop_queue_threshold =
 			hdd_ctx->config->TxFlowStopQueueThreshold;
 	params.tx_flow_start_queue_offset =
 			hdd_ctx->config->TxFlowStartQueueOffset;
-#endif
 	params.flow_steering_enable = hdd_ctx->config->flow_steering_enable;
 	params.napi_enable = hdd_ctx->napi_enable;
 	params.tcp_udp_checksumoffload =
@@ -14964,7 +14786,8 @@ void hdd_check_and_restart_sap_with_non_dfs_acs(void)
 		hdd_warn("STA-AP Mode DFS not supported, Switch SAP channel to Non DFS");
 
 		restart_chan =
-			hdd_get_safe_channel_from_pcl_and_acs_range(ap_adapter);
+			wlansap_get_safe_channel_from_pcl_and_acs_range(
+				WLAN_HDD_GET_SAP_CTX_PTR(ap_adapter));
 		if (!restart_chan ||
 		    wlan_reg_is_dfs_ch(hdd_ctx->pdev, restart_chan))
 			restart_chan = SAP_DEFAULT_5GHZ_CHANNEL;
