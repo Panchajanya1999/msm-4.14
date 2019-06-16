@@ -16,6 +16,12 @@
 #include <linux/sched.h>
 #include <linux/jiffies.h>
 #include <linux/err.h>
+#include <linux/version.h>
+
+/* The sched_param struct is located elsewhere in newer kernels */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
+#include <uapi/linux/sched/types.h>
+#endif
 
 #include "kgsl.h"
 #include "kgsl_sharedmem.h"
@@ -978,16 +984,7 @@ static void _adreno_dispatcher_issuecmds(struct adreno_device *adreno_dev)
  */
 static void adreno_dispatcher_issuecmds(struct adreno_device *adreno_dev)
 {
-	struct adreno_dispatcher *dispatcher = &adreno_dev->dispatcher;
-
-	/* If the dispatcher is busy then schedule the work for later */
-	if (!mutex_trylock(&dispatcher->mutex)) {
-		adreno_dispatcher_schedule(KGSL_DEVICE(adreno_dev));
-		return;
-	}
-
-	_adreno_dispatcher_issuecmds(adreno_dev);
-	mutex_unlock(&dispatcher->mutex);
+	adreno_dispatcher_schedule(KGSL_DEVICE(adreno_dev));
 }
 
 /**
@@ -2457,18 +2454,13 @@ static void _dispatcher_power_down(struct adreno_device *adreno_dev)
 	mutex_unlock(&device->mutex);
 }
 
-static void adreno_dispatcher_work(struct kthread_work *work)
+static void adreno_dispatcher_work(struct adreno_device *adreno_dev)
 {
-	struct adreno_dispatcher *dispatcher =
-		container_of(work, struct adreno_dispatcher, work);
-	struct adreno_device *adreno_dev =
-		container_of(dispatcher, struct adreno_device, dispatcher);
+	struct adreno_dispatcher *dispatcher = &adreno_dev->dispatcher;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 	int count = 0;
 	unsigned int i = 0;
-
-	mutex_lock(&dispatcher->mutex);
 
 	/*
 	 * As long as there are inflight commands, process retired comamnds from
@@ -2508,8 +2500,40 @@ static void adreno_dispatcher_work(struct kthread_work *work)
 		_dispatcher_update_timers(adreno_dev);
 	else
 		_dispatcher_power_down(adreno_dev);
+}
 
-	mutex_unlock(&dispatcher->mutex);
+static int adreno_dispatcher_thread(void *data)
+{
+	static const struct sched_param sched_rt_prio = {
+		.sched_priority = 16
+	};
+	struct adreno_device *adreno_dev = data;
+	struct adreno_dispatcher *dispatcher = &adreno_dev->dispatcher;
+
+	sched_setscheduler_nocheck(current, SCHED_FIFO, &sched_rt_prio);
+
+	while (1) {
+		bool should_stop;
+
+		wait_event(dispatcher->cmd_waitq,
+			  (should_stop = kthread_should_stop()) ||
+			   atomic_cmpxchg(&dispatcher->state, THREAD_REQ,
+					  THREAD_ACTIVE) == THREAD_REQ);
+
+		if (should_stop)
+			break;
+
+		mutex_lock(&dispatcher->mutex);
+		do {
+			adreno_dispatcher_work(adreno_dev);
+		} while (atomic_cmpxchg(&dispatcher->state, THREAD_REQ,
+					THREAD_ACTIVE) == THREAD_REQ);
+		mutex_unlock(&dispatcher->mutex);
+
+		atomic_cmpxchg(&dispatcher->state, THREAD_ACTIVE, THREAD_IDLE);
+	}
+
+	return 0;
 }
 
 void adreno_dispatcher_schedule(struct kgsl_device *device)
@@ -2517,7 +2541,8 @@ void adreno_dispatcher_schedule(struct kgsl_device *device)
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	struct adreno_dispatcher *dispatcher = &adreno_dev->dispatcher;
 
-	kthread_queue_work(&kgsl_driver.worker, &dispatcher->work);
+	if (atomic_xchg(&dispatcher->state, THREAD_REQ) == THREAD_IDLE)
+		wake_up(&dispatcher->cmd_waitq);
 }
 
 /**
@@ -2636,6 +2661,8 @@ void adreno_dispatcher_close(struct adreno_device *adreno_dev)
 	struct adreno_dispatcher *dispatcher = &adreno_dev->dispatcher;
 	int i;
 	struct adreno_ringbuffer *rb;
+
+	kthread_stop(dispatcher->thread);
 
 	mutex_lock(&dispatcher->mutex);
 	del_timer_sync(&dispatcher->timer);
@@ -2804,13 +2831,18 @@ int adreno_dispatcher_init(struct adreno_device *adreno_dev)
 	setup_timer(&dispatcher->fault_timer, adreno_dispatcher_fault_timer,
 		(unsigned long) adreno_dev);
 
-	kthread_init_work(&dispatcher->work, adreno_dispatcher_work);
-
 	init_completion(&dispatcher->idle_gate);
 	complete_all(&dispatcher->idle_gate);
 
 	plist_head_init(&dispatcher->pending);
 	spin_lock_init(&dispatcher->plist_lock);
+
+	init_waitqueue_head(&dispatcher->cmd_waitq);
+	dispatcher->state = (atomic_t)ATOMIC_INIT(THREAD_IDLE);
+	dispatcher->thread = kthread_run(adreno_dispatcher_thread, adreno_dev,
+					 "adreno_dispatch");
+	if (IS_ERR(dispatcher->thread))
+		return PTR_ERR(dispatcher->thread);
 
 	ret = kobject_init_and_add(&dispatcher->kobj, &ktype_dispatcher,
 		&device->dev->kobj, "dispatch");
