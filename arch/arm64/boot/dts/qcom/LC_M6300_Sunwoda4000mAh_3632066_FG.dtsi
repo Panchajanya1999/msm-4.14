@@ -2,7 +2,7 @@ qcom,3632066_LC_M6300_Sunwoda_4000mAh_FG {
     /* 3632066_LC_M6300_Sunwoda_4000mAh_FG_averaged_MasterSlave_Oct17th2018 */
     qcom,max-voltage-uv = <4400000>;
     qcom,fg-cc-cv-threshold-uv = <4390000>;
-    qcom,fastchg-current-ma = <3000>;
+    qcom,fastchg-current-ma = <3500>;
     qcom,batt-id-kohm = <330>;
     qcom,battery-beta = <3380>;
     qcom,battery-therm-kohm = <10>;
