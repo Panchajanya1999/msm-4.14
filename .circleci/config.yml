@@ -7,7 +7,7 @@ jobs:
       - run:
           command: |
            apt-get -y update && apt-get -y upgrade && apt-get -y install bc build-essential zip curl libstdc++6 git wget python gcc clang libssl-dev
-           git clone https://github.com/Panchajanya1999/msm-4.14.git -b $(CIRCLE_BRANCH) --depth=1
+           git clone --depth=1 https://github.com/Panchajanya1999/msm-4.14.git -b $CIRCLE_BRANCH
            cd msm-4.14
            git clone https://github.com/Panchajanya1999/myscripts.git -b master
            source myscripts/kernel.sh violet clean PUSH
