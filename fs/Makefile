@@ -71,6 +71,7 @@ obj-$(CONFIG_EXT4_FS)		+= ext4/
 # ext2 driver, which doesn't know about journalling!  Explicitly request ext2
 # by giving the rootfstype= parameter.
 obj-$(CONFIG_EXT2_FS)		+= ext2/
+obj-$(CONFIG_SDFAT_FS)		+= sdfatfs/
 obj-$(CONFIG_JBD2)		+= jbd2/
 obj-$(CONFIG_CRAMFS)		+= cramfs/
 obj-$(CONFIG_SQUASHFS)		+= squashfs/
