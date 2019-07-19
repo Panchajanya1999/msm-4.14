@@ -395,11 +395,15 @@ int wma_vdev_tsf_handler(void *handle, uint8_t *data, uint32_t data_len)
 	ptsf->tsf_high = tsf_event->tsf_high;
 	ptsf->soc_timer_low = tsf_event->qtimer_low;
 	ptsf->soc_timer_high = tsf_event->qtimer_high;
-
+	ptsf->global_tsf_low = tsf_event->wlan_global_tsf_low;
+	ptsf->global_tsf_high = tsf_event->wlan_global_tsf_high;
 	WMA_LOGD("%s: receive WMI_VDEV_TSF_REPORT_EVENTID ", __func__);
 	WMA_LOGD("%s: vdev_id = %u,tsf_low =%u, tsf_high = %u", __func__,
 	ptsf->vdev_id, ptsf->tsf_low, ptsf->tsf_high);
 
+	WMA_LOGD("%s,g_tsf: %d %d; soc_timer: %d %d",
+		 __func__, ptsf->global_tsf_low, ptsf->global_tsf_high,
+		 ptsf->soc_timer_low, ptsf->soc_timer_high);
 	tsf_msg.type = eWNI_SME_TSF_EVENT;
 	tsf_msg.bodyptr = ptsf;
 	tsf_msg.bodyval = 0;
@@ -940,6 +944,46 @@ QDF_STATUS wma_get_peer_info_ext(WMA_HANDLE handle,
 	qdf_mem_copy(&(wma_handle->peer_macaddr),
 					&(peer_info_req->peer_macaddr),
 					QDF_MAC_ADDR_SIZE);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS wma_get_isolation(tp_wma_handle wma)
+{
+	wmi_coex_get_antenna_isolation_cmd_fixed_param *cmd;
+	wmi_buf_t wmi_buf;
+	uint32_t  len;
+	uint8_t *buf_ptr;
+
+	WMA_LOGD("%s: get isolation", __func__);
+
+	if (!wma || !wma->wmi_handle) {
+		WMA_LOGE("%s: WMA is closed, can not issue get isolation",
+			 __func__);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	len  = sizeof(wmi_coex_get_antenna_isolation_cmd_fixed_param);
+	wmi_buf = wmi_buf_alloc(wma->wmi_handle, len);
+	if (!wmi_buf) {
+		WMA_LOGE("%s: wmi_buf_alloc failed", __func__);
+		return QDF_STATUS_E_NOMEM;
+	}
+	buf_ptr = (uint8_t *)wmi_buf_data(wmi_buf);
+
+	cmd = (wmi_coex_get_antenna_isolation_cmd_fixed_param *)buf_ptr;
+	WMITLV_SET_HDR(
+	&cmd->tlv_header,
+	WMITLV_TAG_STRUC_wmi_coex_get_antenna_isolation_cmd_fixed_param,
+	WMITLV_GET_STRUCT_TLVLEN(
+	wmi_coex_get_antenna_isolation_cmd_fixed_param));
+
+	if (wmi_unified_cmd_send(wma->wmi_handle, wmi_buf, len,
+				 WMI_COEX_GET_ANTENNA_ISOLATION_CMDID)) {
+		WMA_LOGE("Failed to get isolation request from fw");
+		wmi_buf_free(wmi_buf);
+		return QDF_STATUS_E_FAILURE;
+	}
 
 	return QDF_STATUS_SUCCESS;
 }

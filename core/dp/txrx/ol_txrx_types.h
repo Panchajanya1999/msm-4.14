@@ -442,6 +442,7 @@ struct ol_tx_group_credit_stats_t {
 };
 
 
+#if defined(QCA_LL_TX_FLOW_CONTROL_V2) || defined(QCA_LL_PDEV_TX_FLOW_CONTROL)
 /**
  * enum flow_pool_status - flow pool status
  * @FLOW_POOL_ACTIVE_UNPAUSED : pool is active (can take/put descriptors)
@@ -513,6 +514,7 @@ struct ol_tx_flow_pool_t {
 	uint16_t stop_priority_th;
 	uint16_t start_priority_th;
 };
+#endif
 
 
 #define OL_TXRX_INVALID_PEER_UNMAP_COUNT 0xF
@@ -755,11 +757,13 @@ struct ol_txrx_pdev_t {
 #ifdef DESC_DUP_DETECT_DEBUG
 		unsigned long *free_list_bitmap;
 #endif
+#ifdef QCA_LL_PDEV_TX_FLOW_CONTROL
 		uint16_t stop_th;
 		uint16_t start_th;
 		uint16_t stop_priority_th;
 		uint16_t start_priority_th;
 		enum flow_pool_status status;
+#endif
 	} tx_desc;
 
 	uint8_t is_mgmt_over_wmi_enabled;
@@ -1049,6 +1053,7 @@ struct ol_txrx_pdev_t {
 	bool new_htt_msg_format;
 	uint8_t peer_id_unmap_ref_cnt;
 	bool enable_peer_unmap_conf_support;
+	bool enable_tx_compl_tsf64;
 };
 
 struct ol_txrx_vdev_t {
