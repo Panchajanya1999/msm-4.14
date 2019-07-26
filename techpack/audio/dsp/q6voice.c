@@ -6873,6 +6873,7 @@ int voc_end_voice_call(uint32_t session_id)
 		if (ret < 0)
 			pr_debug("%s: voice_mhi_end failed! %d\n",
 				 __func__, ret);
+
 		v->voc_state = VOC_RELEASE;
 	} else {
 		pr_err("%s: Error: End voice called in state %d\n",
