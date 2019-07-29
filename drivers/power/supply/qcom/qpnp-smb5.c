@@ -1078,7 +1078,6 @@ static enum power_supply_property smb5_usb_main_props[] = {
 	POWER_SUPPLY_PROP_FLASH_TRIGGER,
 	POWER_SUPPLY_PROP_TOGGLE_STAT,
 	POWER_SUPPLY_PROP_MAIN_FCC_MAX,
-	POWER_SUPPLY_PROP_IRQ_STATUS,
 };
 
 static int smb5_usb_main_get_prop(struct power_supply *psy,
@@ -1123,9 +1122,6 @@ static int smb5_usb_main_get_prop(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_MAIN_FCC_MAX:
 		val->intval = chg->main_fcc_max;
-		break;
-	case POWER_SUPPLY_PROP_IRQ_STATUS:
-		rc = smblib_get_irq_status(chg, val);
 		break;
 	default:
 		pr_debug("get prop %d is not supported in usb-main\n", psp);
@@ -2058,16 +2054,6 @@ static int smb5_configure_iterm_thresholds(struct smb5 *chip)
 
 	switch (chip->dt.term_current_src) {
 	case ITERM_SRC_ADC:
-		if (chip->chg.smb_version == PM8150B_SUBTYPE) {
-			rc = smblib_masked_write(chg, CHGR_ADC_TERM_CFG_REG,
-					TERM_BASED_ON_SYNC_CONV_OR_SAMPLE_CNT,
-					TERM_BASED_ON_SAMPLE_CNT);
-			if (rc < 0) {
-				dev_err(chg->dev, "Couldn't configure ADC_ITERM_CFG rc=%d\n",
-						rc);
-				return rc;
-			}
-		}
 		rc = smb5_configure_iterm_thresholds_adc(chip);
 		break;
 	default:
@@ -2913,11 +2899,6 @@ static struct smb_irq_info smb5_irqs[] = {
 	},
 	[FLASH_EN_IRQ] = {
 		.name		= "flash-en",
-	},
-	/* SDAM */
-	[SDAM_STS_IRQ] = {
-		.name		= "sdam-sts",
-		.handler	= sdam_sts_change_irq_handler,
 	},
 };
 
