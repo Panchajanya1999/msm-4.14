@@ -952,8 +952,6 @@ err_nfcc_reset_failed:
 		break;
 	}
 
-	/*Disable NFC by default to save power on boot*/
-	gpio_set_value(enable_gpio, 0);/* ULPM: Disable */
 	ret = 0;
 	goto done;
 
