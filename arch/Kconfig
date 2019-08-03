@@ -631,7 +631,7 @@ config LD_LLD
 endchoice
 
 config LD_DEAD_CODE_DATA_ELIMINATION
-	bool
+	bool "Eliminate dead code & data sections at link time"
 	help
 	  Select this if the architecture wants to do dead code and
 	  data elimination with the linker by compiling with
