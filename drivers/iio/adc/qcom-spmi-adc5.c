@@ -392,11 +392,7 @@ static int adc_pre_configure_usb_in_read(struct adc_chip *adc)
 {
 	int ret;
 	u8 data = ADC_CAL_DELAY_CTL_VAL_256S;
-	bool channel_check = false;
-
-	if (adc->pmic_rev_id)
-		if (adc->pmic_rev_id->pmic_subtype == PMI632_SUBTYPE)
-			channel_check = true;
+	bool channel_check = true;
 
 	/* Increase calibration measurement interval to 256s */
 	ret = regmap_bulk_write(adc->regmap,
@@ -470,11 +466,7 @@ static int adc_configure(struct adc_chip *adc,
 	int ret;
 	u8 buf[ADC5_MULTI_TRANSFER];
 	u8 conv_req = 0;
-	bool channel_check = false;
-
-	if (adc->pmic_rev_id)
-		if (adc->pmic_rev_id->pmic_subtype == PMI632_SUBTYPE)
-			channel_check = true;
+	bool channel_check = true;
 
 	/* Read registers 0x42 through 0x46 */
 	ret = adc_read(adc, ADC_USR_DIG_PARAM, buf, ADC5_MULTI_TRANSFER);
