@@ -569,7 +569,11 @@ static inline struct sock *__udp4_lib_lookup_skb(struct sk_buff *skb,
 struct sock *udp4_lib_lookup_skb(struct sk_buff *skb,
 				 __be16 sport, __be16 dport)
 {
-	return __udp4_lib_lookup_skb(skb, sport, dport, &udp_table);
+	const struct iphdr *iph = ip_hdr(skb);
+
+	return __udp4_lib_lookup(dev_net(skb->dev), iph->saddr, sport,
+				 iph->daddr, dport, inet_iif(skb),
+				 inet_sdif(skb), &udp_table, NULL);
 }
 EXPORT_SYMBOL_GPL(udp4_lib_lookup_skb);
 
@@ -955,6 +959,7 @@ int udp_sendmsg(struct sock *sk, struct msghdr *msg, size_t len)
 	ipc.tx_flags = 0;
 	ipc.ttl = 0;
 	ipc.tos = -1;
+	ipc.sockc.transmit_time = 0;
 
 	getfrag = is_udplite ? udplite_getfrag : ip_generic_getfrag;
 

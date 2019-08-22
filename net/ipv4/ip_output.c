@@ -518,6 +518,7 @@ static void ip_copy_metadata(struct sk_buff *to, struct sk_buff *from)
 	to->pkt_type = from->pkt_type;
 	to->priority = from->priority;
 	to->protocol = from->protocol;
+	to->skb_iif = from->skb_iif;
 	skb_dst_drop(to);
 	skb_dst_copy(to, from);
 	to->dev = from->dev;
@@ -1145,6 +1146,7 @@ static int ip_setup_cork(struct sock *sk, struct inet_cork *cork,
 	cork->tos = ipc->tos;
 	cork->priority = ipc->priority;
 	cork->tx_flags = ipc->tx_flags;
+	cork->transmit_time = ipc->sockc.transmit_time;
 
 	return 0;
 }
@@ -1405,6 +1407,7 @@ struct sk_buff *__ip_make_skb(struct sock *sk,
 
 	skb->priority = (cork->tos != -1) ? cork->priority: sk->sk_priority;
 	skb->mark = sk->sk_mark;
+	skb->tstamp = cork->transmit_time;
 	/*
 	 * Steal rt from cork.dst to avoid a pair of atomic_inc/atomic_dec
 	 * on dst refcount
@@ -1542,6 +1545,7 @@ void ip_send_unicast_reply(struct sock *sk, struct sk_buff *skb,
 	ipc.tx_flags = 0;
 	ipc.ttl = 0;
 	ipc.tos = -1;
+	ipc.sockc.transmit_time = 0;
 
 	if (replyopts.opt.opt.optlen) {
 		ipc.opt = &replyopts.opt;
