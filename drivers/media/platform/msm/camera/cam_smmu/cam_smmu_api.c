@@ -3196,7 +3196,6 @@ static int cam_smmu_setup_cb(struct cam_context_bank_info *cb,
 	struct device *dev)
 {
 	int rc = 0;
-	int32_t stall_disable = 1;
 
 	if (!cb || !dev) {
 		CAM_ERR(CAM_SMMU, "Error: invalid input params");
@@ -3263,13 +3262,6 @@ static int cam_smmu_setup_cb(struct cam_context_bank_info *cb,
 			CAM_ERR(CAM_SMMU,
 				"Error: failed to set non fatal fault attribute");
 		}
-		if (iommu_domain_set_attr(cb->mapping->domain,
-			DOMAIN_ATTR_CB_STALL_DISABLE,
-			&stall_disable) < 0) {
-			CAM_ERR(CAM_SMMU,
-				"Error: failed to set cb stall disable");
-		}
-
 
 	} else {
 		CAM_ERR(CAM_SMMU, "Context bank does not have IO region");
