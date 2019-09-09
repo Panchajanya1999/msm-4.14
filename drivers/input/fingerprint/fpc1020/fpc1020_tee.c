@@ -43,6 +43,9 @@
 #include <drm/drm_bridge.h>
 #include <linux/msm_drm_notify.h>
 
+#include <linux/kthread.h>
+#include <uapi/linux/sched/types.h>
+#include <linux/sched/rt.h>
 
 #define FPC_TTW_HOLD_TIME 2000
 #define FP_UNLOCK_REJECTION_TIMEOUT (FPC_TTW_HOLD_TIME - 500)
@@ -60,6 +63,8 @@
 
 #define tyt_debug printk("tyt %s:%d\n",__func__,__LINE__) 
 static struct proc_dir_entry *proc_entry;
+static struct kthread_worker fp_boost_worker;
+static struct task_struct *fp_boost_worker_thread;
 extern int fpsensor;
 
 static const char * const pctl_names[] = {
@@ -96,9 +101,9 @@ struct fpc1020_data {
 	bool prepared;
 	atomic_t wakeup_enabled; /* Used both in ISR and non-ISR */
 	struct notifier_block fb_notifier;
+	struct kthread_work worker;
 	bool fb_black;
 	bool wait_finger_down;
-	struct work_struct work;
 };
 
 static int vreg_setup(struct fpc1020_data *fpc1020, const char *name,
@@ -507,7 +512,7 @@ static const struct attribute_group attribute_group = {
 	.attrs = attributes,
 };
 
-static void notification_work(struct work_struct *work)
+static void notification_work(struct kthread_work *worker)
 {
 	pr_debug("%s: unblank\n", __func__);
 	dsi_bridge_interface_enable(FP_UNLOCK_REJECTION_TIMEOUT);
@@ -529,7 +534,7 @@ static irqreturn_t fpc1020_irq_handler(int irq, void *handle)
 	if (fpc1020->wait_finger_down && fpc1020->fb_black) {
 		//printk("%s enter\n", __func__);
 		fpc1020->wait_finger_down = false;
-		schedule_work(&fpc1020->work);
+		kthread_queue_work(&fp_boost_worker, &fpc1020->worker);
 	}  
 	return IRQ_HANDLED;
 }
@@ -624,6 +629,16 @@ static int fpc1020_probe(struct platform_device *pdev)
 	struct device_node *np = dev->of_node;
 	struct fpc1020_data *fpc1020 = devm_kzalloc(dev, sizeof(*fpc1020),
 			GFP_KERNEL);
+			
+	struct sched_param param = { .sched_priority = MAX_RT_PRIO - 1 };
+	
+	cpumask_t sys_bg_mask;
+
+        /* Hardcode the cpumask to bind the kthread to it | cpu 0 .. 4*/
+	for (i = 0; i <= 4; i++) {
+		cpumask_set_cpu(i, &sys_bg_mask);
+	}
+
 	if (!fpc1020) {
 		dev_err(dev,
 			"failed to allocate memory for struct fpc1020_data\n");
@@ -734,12 +749,24 @@ static int fpc1020_probe(struct platform_device *pdev)
 	} else {
 		printk("fpc1020 Create proc entry success!");
 	}
+	
+	kthread_init_worker(&fp_boost_worker);
+	fp_boost_worker_thread = kthread_create(kthread_worker_fn,&fp_boost_worker,"fp_boost_worker_thread");
+	if (IS_ERR(fp_boost_worker_thread)) {
+		pr_err("fpc1020: Failed to initaialize fp worker kthread");
+		return -EFAULT;
+	}
 
+	sched_setscheduler(fp_boost_worker_thread, SCHED_FIFO, &param);
+	
+	/* Bind it to hardcoded cpumask and wake it up */
+	kthread_bind_mask(fp_boost_worker_thread, &sys_bg_mask);
+	wake_up_process(fp_boost_worker_thread);
 
 	dev_info(dev, "%s: ok\n", __func__);
 	fpc1020->fb_black = false;
 	fpc1020->wait_finger_down = false;
-	INIT_WORK(&fpc1020->work, notification_work);
+	kthread_init_work(&fpc1020->worker, &notification_work);
 	fpc1020->fb_notifier = fpc_notif_block;
 	msm_drm_register_client(&fpc1020->fb_notifier);
 
@@ -777,7 +804,7 @@ static struct platform_driver fpc1020_driver = {
 		.of_match_table = fpc1020_of_match,
 	},
 	.probe	= fpc1020_probe,
-	.remove	= fpc1020_remove,
+	.remove = fpc1020_remove,
 };
 
 static int __init fpc1020_init(void)
