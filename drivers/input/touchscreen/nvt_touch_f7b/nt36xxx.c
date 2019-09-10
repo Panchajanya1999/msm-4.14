@@ -46,11 +46,12 @@ char g_lcd_id[128];
 EXPORT_SYMBOL(g_lcd_id);
 extern int lct_nvt_tp_info_node_init(void);
 
-static void tp_fb_notifier_resume_work(struct work_struct *work);
+static void tp_fb_notifier_resume_work(struct kthread_work *work);
 
 #if NVT_TOUCH_ESD_PROTECT
-static struct delayed_work nvt_esd_check_work;
-static struct workqueue_struct *nvt_esd_check_wq;
+static struct kthread_delayed_work nvt_esd_check_work;
+static struct kthread_worker nvt_worker;
+static struct task_struct *nvt_worker_thread;
 static unsigned long irq_timer = 0;
 uint8_t esd_check = false;
 uint8_t esd_retry = 0;
@@ -67,11 +68,8 @@ extern int32_t nvt_mp_proc_init(void);
 
 struct nvt_ts_data *ts;
 
-static struct workqueue_struct *nvt_wq;
-
 #if BOOT_UPDATE_FIRMWARE
-static struct workqueue_struct *nvt_fwu_wq;
-extern void Boot_Update_Firmware(struct work_struct *work);
+extern void Boot_Update_Firmware(struct kthread_work *work);
 #endif
 
 static int lct_tp_gesture_node_callback(bool flag);
@@ -510,7 +508,7 @@ static ssize_t nvt_flash_read(struct file *file, char __user *buff, size_t count
 	 * stop esd check work to avoid case that 0x77 report righ after here to enable esd check again
 	 * finally lead to trigger esd recovery bootloader reset
 	 */
-	cancel_delayed_work_sync(&nvt_esd_check_work);
+	kthread_cancel_delayed_work_sync(&nvt_esd_check_work);
 	nvt_esd_check_enable(false);
 #endif /* #if NVT_TOUCH_ESD_PROTECT */
 
@@ -842,7 +840,7 @@ static uint8_t nvt_fw_recovery(uint8_t *point_data)
 	return detected;
 }
 
-static void nvt_esd_check_func(struct work_struct *work)
+static void nvt_esd_check_func(struct kthread_work *work)
 {
 	unsigned int timer = jiffies_to_msecs(jiffies - irq_timer);
 
@@ -859,7 +857,7 @@ static void nvt_esd_check_func(struct work_struct *work)
 		esd_retry++;
 	}
 
-	queue_delayed_work(nvt_esd_check_wq, &nvt_esd_check_work,
+	kthread_queue_delayed_work(&nvt_worker, &nvt_esd_check_work,
 			msecs_to_jiffies(NVT_TOUCH_ESD_CHECK_PERIOD));
 }
 #endif /* #if NVT_TOUCH_ESD_PROTECT */
@@ -872,7 +870,7 @@ Description:
 return:
 	n.a.
 *******************************************************/
-static void nvt_ts_work_func(struct work_struct *work)
+static void nvt_ts_work_func(struct kthread_work *work)
 {
 	int32_t ret = -1;
 	uint8_t point_data[POINT_DATA_LEN + 1] = {0};
@@ -1034,7 +1032,7 @@ static irqreturn_t nvt_ts_irq_handler(int32_t irq, void *dev_id)
 	}
 #endif
 
-	queue_work(nvt_wq, &ts->nvt_work);
+	kthread_queue_work(&nvt_worker, &ts->nvt_work);
 
 	return IRQ_HANDLED;
 }
@@ -1256,15 +1254,19 @@ static int32_t nvt_ts_probe(struct i2c_client *client, const struct i2c_device_i
 	mutex_unlock(&ts->lock);
 
 	//---create workqueue---
-	nvt_wq = create_workqueue("nvt_wq");
-	if (!nvt_wq) {
+	kthread_init_worker(&nvt_worker);
+	nvt_worker_thread = kthread_run(kthread_worker_fn, 
+					&nvt_worker, "nvt_worker_thread");
+	if(IS_ERR(nvt_worker_thread)) {
 		NVT_ERR("nvt_wq create workqueue failed\n");
 		ret = -ENOMEM;
 		goto err_create_nvt_wq_failed;
 	}
-	INIT_WORK(&ts->nvt_work, nvt_ts_work_func);
+	sched_setscheduler(nvt_worker_thread, SCHED_FIFO, &param);
+	
+	kthread_init_work(&ts->nvt_work, &nvt_ts_work_func);
 
-    INIT_WORK(&ts->fb_notify_work, tp_fb_notifier_resume_work);
+    	kthread_init_work(&ts->fb_notify_work, &tp_fb_notifier_resume_work);
 
 	//---allocate input device---
 	ts->input_dev = input_allocate_device();
@@ -1353,21 +1355,25 @@ static int32_t nvt_ts_probe(struct i2c_client *client, const struct i2c_device_i
 
 
 #if BOOT_UPDATE_FIRMWARE
-	nvt_fwu_wq = create_singlethread_workqueue("nvt_fwu_wq");
-	if (!nvt_fwu_wq) {
-		NVT_ERR("nvt_fwu_wq create workqueue failed\n");
+	kthread_init_worker(&nvt_worker);
+	nvt_worker_thread = kthread_run(kthread_worker_fn, 
+					&nvt_worker, "nvt_worker_thread");
+	if (IS_ERR(nvt_worker_thread)) {
+		NVT_ERR("nvt_worker khread run failed\n");
 		ret = -ENOMEM;
 		goto err_create_nvt_fwu_wq_failed;
 	}
-	INIT_DELAYED_WORK(&ts->nvt_fwu_work, Boot_Update_Firmware);
+	kthread_init_delayed_work(&ts->nvt_fwu_work, &Boot_Update_Firmware);
 	// please make sure boot update start after display reset(RESX) sequence
-	queue_delayed_work(nvt_fwu_wq, &ts->nvt_fwu_work, msecs_to_jiffies(14000));
+	kthread_queue_delayed_work(&nvt_worker, &ts->nvt_fwu_work, msecs_to_jiffies(14000));
 #endif
 
 #if NVT_TOUCH_ESD_PROTECT
-	INIT_DELAYED_WORK(&nvt_esd_check_work, nvt_esd_check_func);
-	nvt_esd_check_wq = create_workqueue("nvt_esd_check_wq");
-	queue_delayed_work(nvt_esd_check_wq, &nvt_esd_check_work,
+	kthread_init_delayed_work(&nvt_esd_check_work, nvt_esd_check_func);
+	kthread_init_worker(&nvt_worker);
+	nvt_worker_thread = kthread_run(kthread_worker_fn, 
+					&nvt_worker, "nvt_esd_check_wq");
+	kthread_queue_delayed_work(&nvt_worker, &nvt_esd_check_work,
 			msecs_to_jiffies(NVT_TOUCH_ESD_CHECK_PERIOD));
 #endif /* #if NVT_TOUCH_ESD_PROTECT */
 
@@ -1519,7 +1525,7 @@ static int32_t nvt_ts_suspend(struct device *dev)
 	bTouchIsAwake = 0;
 
 #if NVT_TOUCH_ESD_PROTECT
-	cancel_delayed_work_sync(&nvt_esd_check_work);
+	kthread_cancel_delayed_work_sync(&nvt_esd_check_work);
 	nvt_esd_check_enable(false);
 #endif /* #if NVT_TOUCH_ESD_PROTECT */
 
@@ -1603,7 +1609,7 @@ if (delay_gesture) {
 }
 
 #if NVT_TOUCH_ESD_PROTECT
-	queue_delayed_work(nvt_esd_check_wq, &nvt_esd_check_work,
+	kthread_queue_delayed_work(&nvt_worker, &nvt_esd_check_work,
 			msecs_to_jiffies(NVT_TOUCH_ESD_CHECK_PERIOD));
 #endif /* #if NVT_TOUCH_ESD_PROTECT */
 
@@ -1722,7 +1728,7 @@ out:
 }
 #if defined(CONFIG_FB)
 
-static void tp_fb_notifier_resume_work(struct work_struct *work)
+static void tp_fb_notifier_resume_work(struct kthread_work *work)
 {
     int ret = 0;
 	mutex_lock(&ts->pm_mutex);
@@ -1743,7 +1749,7 @@ static int fb_notifier_callback(struct notifier_block *self, unsigned long event
 	if (evdata && evdata->data && event == MSM_DRM_EARLY_EVENT_BLANK) {
 		blank = evdata->data;
 		if (*blank == MSM_DRM_BLANK_POWERDOWN) {
-			flush_work(&ts->fb_notify_work);
+			kthread_flush_work(&ts->fb_notify_work);
 			mutex_lock(&ts->pm_mutex);
 			nvt_ts_suspend(&ts->client->dev);
 			mutex_unlock(&ts->pm_mutex);
@@ -1751,7 +1757,7 @@ static int fb_notifier_callback(struct notifier_block *self, unsigned long event
 	} else if (evdata && evdata->data && event == MSM_DRM_EVENT_BLANK) {
 		blank = evdata->data;
 		if (*blank == MSM_DRM_BLANK_UNBLANK) {
-			queue_work(nvt_wq, &ts->fb_notify_work);
+			kthread_queue_work(&nvt_worker, &ts->fb_notify_work);
 		}
 	}
 
@@ -1880,17 +1886,14 @@ static void __exit nvt_driver_exit(void)
 {
 	i2c_del_driver(&nvt_i2c_driver);
 
-	if (nvt_wq)
-		destroy_workqueue(nvt_wq);
+		kthread_flush_worker(&nvt_worker);
 
 #if BOOT_UPDATE_FIRMWARE
-	if (nvt_fwu_wq)
-		destroy_workqueue(nvt_fwu_wq);
+		kthread_flush_worker(&nvt_worker);
 #endif
 
 #if NVT_TOUCH_ESD_PROTECT
-	if (nvt_esd_check_wq)
-		destroy_workqueue(nvt_esd_check_wq);
+		kthread_destroy_worker(&nvt_worker);
 #endif /* #if NVT_TOUCH_ESD_PROTECT */
 }
 

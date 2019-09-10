@@ -22,6 +22,9 @@
 #include <linux/i2c.h>
 #include <linux/input.h>
 #include <linux/regulator/consumer.h>
+#include <linux/kthread.h>
+#include <uapi/linux/sched/types.h>
+#include <linux/sched/rt.h>
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
 #endif
@@ -96,17 +99,19 @@ extern const uint16_t gesture_key_array[];
 #define TOUCH_STATE_WORKING    0x00
 #define TOUCH_STATE_UPGRADING  0x01
 
+static struct sched_param param = { .sched_priority = MAX_RT_PRIO / 2 };
+
 struct nvt_ts_data {
 	uint8_t touch_state;
 	struct i2c_client *client;
 	struct input_dev *input_dev;
-	struct work_struct nvt_work;
-	struct delayed_work nvt_fwu_work;
+	struct kthread_work nvt_work;
+	struct kthread_delayed_work nvt_fwu_work;
 	uint16_t addr;
 	int8_t phys[32];
 #if defined(CONFIG_FB)
 	struct notifier_block fb_notif;
-    struct work_struct fb_notify_work;
+    struct kthread_work fb_notify_work;
 
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
 	struct early_suspend early_suspend;
