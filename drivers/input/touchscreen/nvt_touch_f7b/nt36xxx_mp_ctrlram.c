@@ -1396,9 +1396,6 @@ static int lct_nova_tp_selftest(void)
 		return -ERESTARTSYS;
 	}
 
-#if NVT_TOUCH_ESD_PROTECT
-	nvt_esd_check_enable(false);
-#endif /* #if NVT_TOUCH_ESD_PROTECT */
 
 	if (nvt_get_fw_info()) {
 		mutex_unlock(&ts->lock);
@@ -1606,9 +1603,6 @@ static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 		return -ERESTARTSYS;
 	}
 
-#if NVT_TOUCH_ESD_PROTECT
-	nvt_esd_check_enable(false);
-#endif /* #if NVT_TOUCH_ESD_PROTECT */
 
 	if (nvt_get_fw_info()) {
 		mutex_unlock(&ts->lock);
