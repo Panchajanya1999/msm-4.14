@@ -457,6 +457,15 @@ Required properties:
 			 required to be configured to receive interrupts
 			 in BCL block of WSA macro
 
+WSA slave device as child of Bolero codec
+Required properties:
+ - compatible = "qcom,wsa881x";
+ - reg: Specifies the WSA slave device base address.
+ - qcom,spkr-sd-n-gpio: speaker reset gpio
+
+Optional properties:
+ - qcom,bolero-handle: phandle to bolero codec
+
 Example:
 
 &bolero {
@@ -468,6 +477,15 @@ Example:
 		<&clock_audio_wsa_2 0>;
 		qcom,wsa-swr-gpios = &wsa_swr_gpios;
 		qcom,wsa-bcl-pmic-params = /bits/ 8 <0x00 0x00 0x1E>;
+		swr_1: wsa_swr_master {
+			compatible = "qcom,swr-mstr";
+			wsa881x_1: wsa881x@20170212 {
+				compatible = "qcom,wsa881x";
+				reg = <0x00 0x20170212>;
+				qcom,spkr-sd-n-gpio = <&tlmm 80 0>;
+				qcom,bolero-handle = <&bolero>;
+			}
+		};
 	};
 };
 
