@@ -58,6 +58,21 @@ int cpufreq_frequency_table_cpuinfo(struct cpufreq_policy *policy,
 	policy->min = policy->cpuinfo.min_freq = min_freq;
 	policy->max = policy->cpuinfo.max_freq = max_freq;
 
+	/* We will use minimum frequency from CPU Input Boost driver parameter 
+	[CONFIG_MIN_FREQ_LP | CONFIG_MIN_FREQ_PERF] instead of writing a new config 
+	parameter. It is a easy and better alternative since we are widely using
+	CPU Input Boost across the source.
+	*/
+
+	#ifdef CONFIG_MIN_FREQ_LP
+		if (cpumask_test_cpu(policy->cpu, cpu_lp_mask))
+			policy->min = CONFIG_MIN_FREQ_LP;
+	#endif
+	#ifdef CONFIG_MIN_FREQ_PERF
+		if (cpumask_test_cpu(policy->cpu, cpu_perf_mask))
+			policy->min = CONFIG_MIN_FREQ_PERF;
+	#endif
+
 	if (max_freq > cpuinfo_max_freq_cached)
 		cpuinfo_max_freq_cached = max_freq;
 
