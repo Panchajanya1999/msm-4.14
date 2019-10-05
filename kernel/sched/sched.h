@@ -137,6 +137,8 @@ extern void init_sched_groups_capacity(int cpu, struct sched_domain *sd);
 static inline void cpu_load_update_active(struct rq *this_rq) { }
 #endif
 
+extern bool energy_aware(void);
+
 /*
  * Helpers for converting nanosecond timing to jiffy resolution
  */
@@ -3112,11 +3114,6 @@ static inline void clear_reserved(int cpu)
 	struct rq *rq = cpu_rq(cpu);
 
 	clear_bit(CPU_RESERVED, &rq->extra_flags);
-}
-
-static inline bool energy_aware(void)
-{
-	return sched_feat(ENERGY_AWARE);
 }
 
 struct sched_avg_stats {
