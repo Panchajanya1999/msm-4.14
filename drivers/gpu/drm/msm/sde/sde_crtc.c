@@ -1391,14 +1391,24 @@ static u32 _sde_crtc_get_displays_affected(struct drm_crtc *crtc,
 {
 	struct sde_crtc *sde_crtc;
 	struct sde_crtc_state *crtc_state;
+	struct drm_encoder *encoder;
 	u32 disp_bitmask = 0;
 	int i;
+	bool is_ppsplit = false;
 
 	sde_crtc = to_sde_crtc(crtc);
 	crtc_state = to_sde_crtc_state(state);
 
+	list_for_each_entry(encoder,
+			&crtc->dev->mode_config.encoder_list, head) {
+		if (encoder->crtc != state->crtc)
+			continue;
+
+		is_ppsplit |= sde_encoder_is_topology_ppsplit(encoder);
+	}
+
 	/* pingpong split: one ROI, one LM, two physical displays */
-	if (crtc_state->is_ppsplit) {
+	if (is_ppsplit) {
 		u32 lm_split_width = crtc_state->lm_bounds[0].w / 2;
 		struct sde_rect *roi = &crtc_state->lm_roi[0];
 
@@ -2016,7 +2026,8 @@ static void _sde_crtc_blend_setup_mixer(struct drm_crtc *crtc,
 		cnt++;
 	}
 
-	sort(pstates, cnt, sizeof(pstates[0]), pstate_cmp, NULL);
+	if (cnt)
+		sort(pstates, cnt, sizeof(pstates[0]), pstate_cmp, NULL);
 	_sde_crtc_set_src_split_order(crtc, pstates, cnt);
 
 	if (lm && lm->ops.setup_dim_layer) {
@@ -3179,24 +3190,27 @@ static int _sde_crtc_check_dest_scaler_data(struct drm_crtc *crtc,
 
 	SDE_DEBUG("crtc%d\n", crtc->base.id);
 
+	mutex_lock(&sde_crtc->crtc_lock);
+
 	if (!cstate->ds_dirty) {
 		SDE_DEBUG("dest scaler property not set, skip validation\n");
-		return 0;
+		goto end;
 	}
 
 	if (!kms || !kms->catalog) {
 		SDE_ERROR("crtc%d: invalid parameters\n", crtc->base.id);
-		return -EINVAL;
+		ret = -EINVAL;
+		goto end;
 	}
 
 	if (!kms->catalog->mdp[0].has_dest_scaler) {
 		SDE_DEBUG("dest scaler feature not supported\n");
-		return 0;
+		goto end;
 	}
 
 	if (!sde_crtc->num_mixers) {
 		SDE_DEBUG("mixers not allocated\n");
-		return 0;
+		goto end;
 	}
 
 	ret = _sde_validate_hw_resources(sde_crtc);
@@ -3375,10 +3389,12 @@ disable:
 			cstate->ds_dirty = false;
 	}
 
-	return 0;
+	goto end;
 
 err:
 	cstate->ds_dirty = false;
+end:
+	mutex_unlock(&sde_crtc->crtc_lock);
 	return ret;
 }
 
@@ -3498,12 +3514,12 @@ static void _sde_crtc_setup_mixers(struct drm_crtc *crtc)
 	struct sde_crtc *sde_crtc = to_sde_crtc(crtc);
 	struct drm_encoder *enc;
 
+	mutex_lock(&sde_crtc->crtc_lock);
 	sde_crtc->num_ctls = 0;
 	sde_crtc->num_mixers = 0;
 	sde_crtc->mixers_swapped = false;
 	memset(sde_crtc->mixers, 0, sizeof(sde_crtc->mixers));
 
-	mutex_lock(&sde_crtc->crtc_lock);
 	/* Check for mixers on all encoders attached to this crtc */
 	list_for_each_entry(enc, &crtc->dev->mode_config.encoder_list, head) {
 		if (enc->crtc != crtc)
@@ -5278,7 +5294,8 @@ static int sde_crtc_atomic_check(struct drm_crtc *crtc,
 	}
 
 	/* assign mixer stages based on sorted zpos property */
-	sort(pstates, cnt, sizeof(pstates[0]), pstate_cmp, NULL);
+	if (cnt)
+		sort(pstates, cnt, sizeof(pstates[0]), pstate_cmp, NULL);
 
 	rc = _sde_crtc_excl_dim_layer_check(state, pstates, cnt);
 	if (rc)
@@ -5657,7 +5674,11 @@ static int _sde_crtc_get_output_fence(struct drm_crtc *crtc,
 {
 	struct sde_crtc *sde_crtc;
 	struct sde_crtc_state *cstate;
-	uint32_t offset;
+	uint32_t offset, i;
+	struct drm_connector_state *old_conn_state, *new_conn_state;
+	struct drm_connector *conn;
+	struct sde_connector *sde_conn = NULL;
+	struct msm_display_info disp_info;
 	bool is_vid = false;
 	struct drm_encoder *encoder;
 
@@ -5669,6 +5690,29 @@ static int _sde_crtc_get_output_fence(struct drm_crtc *crtc,
 						MSM_DISPLAY_CAP_VID_MODE);
 		if (is_vid)
 			break;
+	}
+
+	/*
+	 * encoder_mask of drm_crtc_state will be zero until atomic_check
+	 * phase completes for first commit of dp. Hence, check for video
+	 * mode capability for current commit from new_connector_state.
+	 */
+	if (!state->encoder_mask) {
+		for_each_oldnew_connector_in_state(state->state, conn,
+				 old_conn_state, new_conn_state, i) {
+			if (!new_conn_state || new_conn_state->crtc != crtc)
+				continue;
+
+			sde_conn = to_sde_connector(new_conn_state->connector);
+			if (sde_conn->display && sde_conn->ops.get_info) {
+				sde_conn->ops.get_info(conn, &disp_info,
+							sde_conn->display);
+				is_vid |= disp_info.capabilities &
+						MSM_DISPLAY_CAP_VID_MODE;
+				if (is_vid)
+					break;
+			}
+		}
 	}
 
 	offset = sde_crtc_get_property(cstate, CRTC_PROP_OUTPUT_FENCE_OFFSET);
@@ -5688,6 +5732,7 @@ static int _sde_crtc_get_output_fence(struct drm_crtc *crtc,
 	 * which will be incremented during the prepare commit phase
 	 */
 	offset++;
+	SDE_EVT32(DRMID(crtc), is_vid, offset);
 
 	return sde_fence_create(sde_crtc->output_fence, val, offset);
 }

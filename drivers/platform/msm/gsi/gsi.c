@@ -175,7 +175,8 @@ static void gsi_channel_state_change_wait(unsigned long chan_hdl,
 		}
 
 		if (op == GSI_CH_START) {
-			if (curr_state == GSI_CHAN_STATE_STARTED) {
+			if (curr_state == GSI_CHAN_STATE_STARTED ||
+				curr_state == GSI_CHAN_STATE_FLOW_CONTROL) {
 				ctx->state = curr_state;
 				return;
 			}
@@ -2697,7 +2698,8 @@ int gsi_start_channel(unsigned long chan_hdl)
 		ctx,
 		GSI_START_CMD_TIMEOUT_MS, op);
 
-	if (ctx->state != GSI_CHAN_STATE_STARTED) {
+	if (ctx->state != GSI_CHAN_STATE_STARTED &&
+		ctx->state != GSI_CHAN_STATE_FLOW_CONTROL) {
 		/*
 		* Hardware returned unexpected status, unexpected
 		* hardware state.
@@ -3323,6 +3325,14 @@ int gsi_queue_xfer(unsigned long chan_hdl, uint16_t num_xfers,
 				chan_hdl, num_xfers, xfer);
 		return -GSI_STATUS_INVALID_PARAMS;
 	}
+
+	if (unlikely(gsi_ctx->chan[chan_hdl].state
+				 == GSI_CHAN_STATE_NOT_ALLOCATED)) {
+		GSIERR("bad state %d\n",
+			   gsi_ctx->chan[chan_hdl].state);
+		return -GSI_STATUS_UNSUPPORTED_OP;
+	}
+
 
 	ctx = &gsi_ctx->chan[chan_hdl];
 

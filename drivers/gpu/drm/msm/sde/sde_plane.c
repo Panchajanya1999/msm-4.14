@@ -3869,7 +3869,7 @@ static int sde_plane_sspp_atomic_update(struct drm_plane *plane,
 	if (psde->revalidate) {
 		SDE_DEBUG("plane:%d - reconfigure all the parameters\n",
 				plane->base.id);
-		pstate->dirty = SDE_PLANE_DIRTY_ALL | SDE_PLANE_DIRTY_CP;
+		pstate->dirty = SDE_PLANE_DIRTY_ALL;
 		psde->revalidate = false;
 	}
 
@@ -5202,7 +5202,7 @@ static int _sde_plane_init_debugfs(struct drm_plane *plane)
 		return -ENOMEM;
 
 	/* don't error check these */
-	debugfs_create_x32("features", 0600,
+	debugfs_create_x32("features", 0400,
 			psde->debugfs_root, &psde->features);
 
 	/* add register dump support */
