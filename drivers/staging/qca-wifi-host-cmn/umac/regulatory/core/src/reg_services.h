@@ -95,6 +95,14 @@
 /* EEPROM setting is a country code */
 #define    COUNTRY_ERD_FLAG     0x8000
 
+/**
+ * reg_is_world_ctry_code() - Check if the given country code is WORLD regdomain
+ * @ctry_code: Country code value.
+ *
+ * Return: If country code is WORLD regdomain return true else false
+ */
+bool reg_is_world_ctry_code(uint16_t ctry_code);
+
 extern const struct chan_map *channel_map;
 
 enum channel_enum reg_get_chan_enum(uint32_t chan_num);
@@ -139,6 +147,15 @@ void reg_set_channel_params(struct wlan_objmgr_pdev *pdev,
  * Return: QDF_STATUS
  */
 QDF_STATUS reg_set_band(struct wlan_objmgr_pdev *pdev, enum band_info band);
+
+/**
+ * reg_get_band() - Get the band information for the PDEV
+ * @pdev: The physical dev to get the band for
+ * @band: The band parameters of the physical device
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS reg_get_band(struct wlan_objmgr_pdev *pdev, enum band_info *band);
 
 /**
  * reg_restore_cached_channels() - Cache the current state of the channles

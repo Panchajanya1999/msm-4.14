@@ -181,7 +181,8 @@ QDF_STATUS tdls_vdev_obj_create_notification(struct wlan_objmgr_vdev *vdev,
 	tdls_vdev_obj = qdf_mem_malloc(sizeof(*tdls_vdev_obj));
 	if (!tdls_vdev_obj) {
 		tdls_err("Failed to allocate memory for tdls vdev object");
-		return QDF_STATUS_E_NOMEM;
+		status = QDF_STATUS_E_NOMEM;
+		goto err;
 	}
 
 	status = wlan_objmgr_vdev_component_obj_attach(vdev,
@@ -212,7 +213,12 @@ QDF_STATUS tdls_vdev_obj_create_notification(struct wlan_objmgr_vdev *vdev,
 	tdls_debug("tdls object attach to vdev successfully");
 	return status;
 err:
-	qdf_mem_free(tdls_vdev_obj);
+	if (tdls_soc_obj->tdls_osif_deinit_cb)
+		tdls_soc_obj->tdls_osif_deinit_cb(vdev);
+	if (tdls_vdev_obj) {
+		qdf_mem_free(tdls_vdev_obj);
+		tdls_vdev_obj = NULL;
+	}
 	return status;
 }
 
@@ -285,11 +291,6 @@ static QDF_STATUS tdls_process_reset_all_peers(struct wlan_objmgr_vdev *vdev)
 	status = tdls_get_vdev_objects(vdev, &tdls_vdev, &tdls_soc);
 	if (QDF_STATUS_SUCCESS != status) {
 		tdls_err("tdls objects are NULL ");
-		return status;
-	}
-
-	if (!tdls_soc->connected_peer_count) {
-		tdls_debug("No tdls connected peers");
 		return status;
 	}
 
