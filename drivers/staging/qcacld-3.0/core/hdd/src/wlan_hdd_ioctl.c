@@ -2331,9 +2331,10 @@ static int hdd_set_dwell_time(struct hdd_adapter *adapter, uint8_t *command)
 	sme_get_config_param(mac_handle, sme_config);
 
 	if (strncmp(command, "SETDWELLTIME ACTIVE MAX", 23) == 0) {
-		if (drv_cmd_validate(command, 23))
-			return -EINVAL;
-
+		if (drv_cmd_validate(command, 23)) {
+			retval = -EINVAL;
+			goto free;
+		}
 		value = value + 24;
 		temp = kstrtou32(value, 10, &val);
 		if (temp != 0 || val < CFG_ACTIVE_MAX_CHANNEL_TIME_MIN ||
@@ -2346,8 +2347,10 @@ static int hdd_set_dwell_time(struct hdd_adapter *adapter, uint8_t *command)
 		sme_config->csrConfig.nActiveMaxChnTime = val;
 		sme_update_config(mac_handle, sme_config);
 	} else if (strncmp(command, "SETDWELLTIME ACTIVE MIN", 23) == 0) {
-		if (drv_cmd_validate(command, 23))
-			return -EINVAL;
+		if (drv_cmd_validate(command, 23)) {
+			retval = -EINVAL;
+			goto free;
+		}
 
 		value = value + 24;
 		temp = kstrtou32(value, 10, &val);
@@ -2361,8 +2364,10 @@ static int hdd_set_dwell_time(struct hdd_adapter *adapter, uint8_t *command)
 		sme_config->csrConfig.nActiveMinChnTime = val;
 		sme_update_config(mac_handle, sme_config);
 	} else if (strncmp(command, "SETDWELLTIME PASSIVE MAX", 24) == 0) {
-		if (drv_cmd_validate(command, 24))
-			return -EINVAL;
+		if (drv_cmd_validate(command, 24)) {
+			retval = -EINVAL;
+			goto free;
+		}
 
 		value = value + 25;
 		temp = kstrtou32(value, 10, &val);
@@ -2376,8 +2381,10 @@ static int hdd_set_dwell_time(struct hdd_adapter *adapter, uint8_t *command)
 		sme_config->csrConfig.nPassiveMaxChnTime = val;
 		sme_update_config(mac_handle, sme_config);
 	} else if (strncmp(command, "SETDWELLTIME PASSIVE MIN", 24) == 0) {
-		if (drv_cmd_validate(command, 24))
-			return -EINVAL;
+		if (drv_cmd_validate(command, 24)) {
+			retval = -EINVAL;
+			goto free;
+		}
 
 		value = value + 25;
 		temp = kstrtou32(value, 10, &val);
@@ -2391,8 +2398,10 @@ static int hdd_set_dwell_time(struct hdd_adapter *adapter, uint8_t *command)
 		sme_config->csrConfig.nPassiveMinChnTime = val;
 		sme_update_config(mac_handle, sme_config);
 	} else if (strncmp(command, "SETDWELLTIME", 12) == 0) {
-		if (drv_cmd_validate(command, 12))
-			return -EINVAL;
+		if (drv_cmd_validate(command, 12)) {
+			retval = -EINVAL;
+			goto free;
+		}
 
 		value = value + 13;
 		temp = kstrtou32(value, 10, &val);
@@ -6235,24 +6244,28 @@ static int drv_cmd_tdls_off_channel(struct hdd_adapter *adapter,
 {
 	int ret;
 	uint8_t *value = command;
-	int set_value;
+	int channel;
+	enum channel_state reg_state;
 
 	/* Move pointer to point the string */
 	value += command_len;
 
-	ret = sscanf(value, "%d", &set_value);
+	ret = sscanf(value, "%d", &channel);
 	if (ret != 1)
 		return -EINVAL;
+	reg_state = wlan_reg_get_channel_state(hdd_ctx->pdev, channel);
 
-	if (wlan_reg_is_dfs_ch(hdd_ctx->pdev, set_value)) {
-		hdd_err("DFS channel %d is passed for hdd_set_tdls_offchannel",
-		    set_value);
+	if (reg_state == CHANNEL_STATE_DFS ||
+		reg_state == CHANNEL_STATE_DISABLE ||
+		reg_state == CHANNEL_STATE_INVALID) {
+		hdd_err("reg state of the  channel %d is %d and not supported",
+			channel, reg_state);
 		return -EINVAL;
 	}
 
-	hdd_debug("Tdls offchannel num: %d", set_value);
+	hdd_debug("Tdls offchannel num: %d", channel);
 
-	ret = hdd_set_tdls_offchannel(hdd_ctx, adapter, set_value);
+	ret = hdd_set_tdls_offchannel(hdd_ctx, adapter, channel);
 
 	return ret;
 }

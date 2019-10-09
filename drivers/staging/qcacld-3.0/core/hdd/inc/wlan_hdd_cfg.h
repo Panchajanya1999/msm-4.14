@@ -534,7 +534,7 @@ enum hdd_dot11_mode {
  * gNeighborScanChannelMaxTime - Set neighbor scan channel max time
  * @Min: 3
  * @Max: 300
- * @Default: 30
+ * @Default: 40
  *
  * This ini is used to set the maximum time in secs spent on each
  * channel in LFR scan inside firmware.
@@ -550,7 +550,7 @@ enum hdd_dot11_mode {
 #define CFG_NEIGHBOR_SCAN_MAX_CHAN_TIME_NAME                  "gNeighborScanChannelMaxTime"
 #define CFG_NEIGHBOR_SCAN_MAX_CHAN_TIME_MIN                   (3)
 #define CFG_NEIGHBOR_SCAN_MAX_CHAN_TIME_MAX                   (300)
-#define CFG_NEIGHBOR_SCAN_MAX_CHAN_TIME_DEFAULT               (30)
+#define CFG_NEIGHBOR_SCAN_MAX_CHAN_TIME_DEFAULT               (40)
 
 /*
  * <ini>
@@ -1847,11 +1847,15 @@ enum hdd_dot11_mode {
  * <ini>
  * gForce1x1Exception - force 1x1 when connecting to certain peer
  * @Min: 0
- * @Max: 1
- * @Default: 0
+ * @Max: 2
+ * @Default: 2
  *
  * This INI when enabled will force 1x1 connection with certain peer.
- *
+ * The implementation for this ini would be as follows:-
+ * Value 0: Even if the AP is present in OUI, 1x1 will not be forced
+ * Value 1: If antenna sharing supported, then only do 1x1.
+ * Value 2: If AP present in OUI, force 1x1 connection.
+
  *
  * Related: None
  *
@@ -1863,8 +1867,8 @@ enum hdd_dot11_mode {
  */
 #define CFG_FORCE_1X1_NAME      "gForce1x1Exception"
 #define CFG_FORCE_1X1_MIN       (0)
-#define CFG_FORCE_1X1_MAX       (1)
-#define CFG_FORCE_1X1_DEFAULT   (1)
+#define CFG_FORCE_1X1_MAX       (2)
+#define CFG_FORCE_1X1_DEFAULT   (2)
 
 /*
  * <ini>
@@ -10020,6 +10024,31 @@ enum dot11p_mode {
 #endif
 
 /*
+ * <ini>
+ * gThreeWayCoexConfigLegacyEnable - Enable coex config legacy feature
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini is used to enable or disable three way coex config legacy feature.
+ * This feature is designed only for non-mobile solution.
+ * When the feature is disabled, Firmware use the default configuration to
+ * set the coex priority of three antenna(WLAN, BT, ZIGBEE).
+ * when enable this feature, customer can use the vendor command to set antenna
+ * coex priority dynamically.
+ *
+ * Supported Feature: three way coex config
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_ENABLE_TW_COEX_LEGACY_NAME  "gThreeWayCoexConfigLegacyEnable"
+#define CFG_ENABLE_TW_COEX_LEGACY_MIN     (0)
+#define CFG_ENABLE_TW_COEX_LEGACY_MAX     (1)
+#define CFG_ENABLE_TW_COEX_LEGACY_DEFAULT (0)
+
+/*
  * Dense traffic threshold
  * traffic threshold required for dense roam scan
  * Measured in kbps
@@ -11400,8 +11429,8 @@ enum hdd_wext_control {
  * <ini>
  * gAutoBmpsTimerValue - Set Auto BMPS Timer value
  * @Min: 0
- * @Max: 120
- * @Default: 90
+ * @Max: 1000
+ * @Default: 600
  *
  * This ini is used to set Auto BMPS Timer value in seconds
  *
@@ -11415,8 +11444,8 @@ enum hdd_wext_control {
  */
 #define CFG_AUTO_PS_ENABLE_TIMER_NAME          "gAutoBmpsTimerValue"
 #define CFG_AUTO_PS_ENABLE_TIMER_MIN           (0)
-#define CFG_AUTO_PS_ENABLE_TIMER_MAX           (120)
-#define CFG_AUTO_PS_ENABLE_TIMER_DEFAULT       (90)
+#define CFG_AUTO_PS_ENABLE_TIMER_MAX           (1000)
+#define CFG_AUTO_PS_ENABLE_TIMER_DEFAULT       (600)
 
 #ifdef WLAN_ICMP_DISABLE_PS
 /*
@@ -15298,7 +15327,7 @@ enum hdd_external_acs_policy {
  * </ini>
  */
 #define CFG_ACTION_OUI_SWITCH_TO_11N_MODE_NAME    "gActionOUISwitchTo11nMode"
-#define CFG_ACTION_OUI_SWITCH_TO_11N_MODE_DEFAULT "00904C 03 0418BF E0 21 40"
+#define CFG_ACTION_OUI_SWITCH_TO_11N_MODE_DEFAULT "00904C 05 0418BF0CB2 F8 21 40"
 
 /*
  * <ini>
@@ -16770,6 +16799,7 @@ struct hdd_config {
 	uint8_t tsf_ptp_options;
 #endif /* WLAN_FEATURE_TSF_PLUS */
 #endif
+	bool enable_three_way_coex_config_legacy;
 	uint32_t roam_dense_traffic_thresh;
 	uint32_t roam_dense_rssi_thresh_offset;
 	bool ignore_peer_ht_opmode;
@@ -16927,7 +16957,7 @@ struct hdd_config {
 	enum hdd_external_acs_policy external_acs_policy;
 	/* threshold of packet drops at which FW initiates disconnect */
 	uint16_t pkt_err_disconn_th;
-	bool is_force_1x1;
+	enum force_1x1_type is_force_1x1_enable;
 	uint8_t enable_rts_sifsbursting;
 	uint8_t max_mpdus_inampdu;
 	uint16_t sap_max_mcs_txdata;

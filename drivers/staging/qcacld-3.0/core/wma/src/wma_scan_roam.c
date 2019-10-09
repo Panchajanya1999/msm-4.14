@@ -1595,33 +1595,28 @@ QDF_STATUS wma_process_roaming_config(tp_wma_handle wma_handle,
 		}
 
 		/* Send BTM config as disabled during RSO Stop */
-		if (roam_req->reason == REASON_CTX_INIT) {
-			qdf_status = wma_roam_scan_btm_offload(wma_handle,
-							       roam_req);
-			if (QDF_IS_STATUS_ERROR(qdf_status)) {
-				WMA_LOGE("Sending BTM config to fw failed");
-				break;
-			}
+		qdf_status = wma_roam_scan_btm_offload(wma_handle,
+						       roam_req);
+		if (QDF_IS_STATUS_ERROR(qdf_status)) {
+			WMA_LOGE("Sending BTM config to fw failed");
+			break;
 		}
 
 		/*
 		 * Send 11k offload enable and bss load trigger parameters
 		 * to FW as part of RSO Start
 		 */
-		if (roam_req->reason == REASON_CTX_INIT) {
-			qdf_status = wma_send_offload_11k_params(wma_handle,
-						&roam_req->offload_11k_params);
-			if (qdf_status != QDF_STATUS_SUCCESS) {
-				WMA_LOGE("11k offload enable not sent, status %d",
-					 qdf_status);
-				break;
-			}
+		qdf_status = wma_send_offload_11k_params(wma_handle,
+					&roam_req->offload_11k_params);
+		if (QDF_IS_STATUS_ERROR(qdf_status)) {
+			WMA_LOGE("11k offload enable not sent, status %d",
+				 qdf_status);
+			break;
+		}
 
-			if (roam_req->bss_load_trig_enabled) {
-				bss_load_cfg = &roam_req->bss_load_config;
-				wma_send_roam_bss_load_config(wma_handle,
-							      bss_load_cfg);
-			}
+		if (roam_req->bss_load_trig_enabled) {
+			bss_load_cfg = &roam_req->bss_load_config;
+			wma_send_roam_bss_load_config(wma_handle, bss_load_cfg);
 		}
 		break;
 
@@ -2320,14 +2315,29 @@ static void wma_roam_update_vdev(tp_wma_handle wma,
 	vdev_id = roam_synch_ind_ptr->roamedVdevId;
 	wma->interfaces[vdev_id].nss = roam_synch_ind_ptr->nss;
 	del_bss_params = qdf_mem_malloc(sizeof(*del_bss_params));
+	if (!del_bss_params)
+		return;
+
 	del_sta_params = qdf_mem_malloc(sizeof(*del_sta_params));
-	set_link_params = qdf_mem_malloc(sizeof(*set_link_params));
-	add_sta_params = qdf_mem_malloc(sizeof(*add_sta_params));
-	if (!del_bss_params || !del_sta_params ||
-		!set_link_params || !add_sta_params) {
-		WMA_LOGE("%s: failed to allocate memory", __func__);
+	if (!del_sta_params) {
+		qdf_mem_free(del_bss_params);
 		return;
 	}
+
+	set_link_params = qdf_mem_malloc(sizeof(*set_link_params));
+	if (!set_link_params) {
+		qdf_mem_free(del_bss_params);
+		qdf_mem_free(del_sta_params);
+		return;
+	}
+	add_sta_params = qdf_mem_malloc(sizeof(*add_sta_params));
+	if (!add_sta_params) {
+		qdf_mem_free(del_bss_params);
+		qdf_mem_free(del_sta_params);
+		qdf_mem_free(set_link_params);
+		return;
+	}
+
 	qdf_mem_zero(del_bss_params, sizeof(*del_bss_params));
 	qdf_mem_zero(del_sta_params, sizeof(*del_sta_params));
 	qdf_mem_zero(set_link_params, sizeof(*set_link_params));
@@ -3191,6 +3201,7 @@ void wma_set_channel(tp_wma_handle wma, tpSwitchChannelParams params)
 	req.is_dfs = params->isDfsChannel;
 	req.cac_duration_ms = params->cac_duration_ms;
 	req.dfs_regdomain = params->dfs_regdomain;
+	req.ssid = params->ssid;
 
 	/* In case of AP mode, once radar is detected, we need to
 	 * issuse VDEV RESTART, so we making is_channel_switch as
@@ -3199,7 +3210,7 @@ void wma_set_channel(tp_wma_handle wma, tpSwitchChannelParams params)
 	if ((wma_is_vdev_in_ap_mode(wma, req.vdev_id) == true) ||
 	    (params->restart_on_chan_switch == true)) {
 		wma->interfaces[req.vdev_id].is_channel_switch = true;
-		req.hidden_ssid = intr[vdev_id].vdev_restart_params.ssidHidden;
+		req.hidden_ssid = params->ssid_hidden;
 	    }
 
 	if (params->restart_on_chan_switch == true &&
@@ -3704,6 +3715,7 @@ int wma_extscan_operations_event_handler(void *handle,
 			WMA_LOGE("FW mesg num_buk %d more than TLV hdr %d",
 				 oprn_event->num_buckets,
 				 param_buf->num_bucket_id);
+			qdf_mem_free(oprn_ind);
 			return -EINVAL;
 		}
 

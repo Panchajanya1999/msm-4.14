@@ -50,7 +50,7 @@
 
 /* Private */
 
-#define WMA_READY_EVENTID_TIMEOUT          3000
+#define WMA_READY_EVENTID_TIMEOUT          6000
 #define WMA_SERVICE_READY_EXT_TIMEOUT      6000
 #define NAN_CLUSTER_ID_BYTES               4
 
@@ -816,6 +816,7 @@ struct roam_synch_frame_ind {
  * @staKeyParams: sta key parameters
  * @ps_enabled: is powersave enable/disable
  * @peer_count: peer count
+ * @peer_lock: peer lock
  * @roam_synch_in_progress: flag is in progress or not
  * @plink_status_req: link status request
  * @psnr_req: snr request
@@ -887,6 +888,7 @@ struct wma_txrx_node {
 	uint32_t nwType;
 	void *staKeyParams;
 	uint32_t peer_count;
+	qdf_spinlock_t peer_lock;
 	bool roam_synch_in_progress;
 	void *plink_status_req;
 	void *psnr_req;
@@ -1276,6 +1278,7 @@ typedef struct {
 	qdf_mc_timer_t wma_fw_time_sync_timer;
 	qdf_atomic_t critical_events_in_flight;
 	bool enable_tx_compl_tsf64;
+	bool enable_three_way_coex_config_legacy;
 } t_wma_handle, *tp_wma_handle;
 
 extern void cds_wma_complete_cback(void);
@@ -2540,5 +2543,14 @@ QDF_STATUS wma_config_bmiss_bcnt_params(uint32_t vdev_id, uint32_t first_cnt,
  * Return: None
  */
 void wma_check_and_set_wake_timer(uint32_t time);
+
+/**
+ * wma_force_objmgr_vdev_peer_cleanup() - Cleanup ObjMgr Vdev peers during SSR
+ * @wma_handle: WMA handle
+ * @vdev_id: vdev ID
+ *
+ * Return: none
+ */
+void wma_force_objmgr_vdev_peer_cleanup(tp_wma_handle wma, uint8_t vdev_id);
 
 #endif
