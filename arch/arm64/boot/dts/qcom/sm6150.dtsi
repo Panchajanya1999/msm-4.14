@@ -669,11 +669,6 @@
 			size = <0 0x2000000>;
 			linux,cma-default;
 		};
-
-		pstore_reserve_mem: pstore_reserve_mem_region@0 {
-			reg = <0x0 0xA0400000 0x0 0x00400000>;
-			label = "pstore_reserve_mem";
-		};
 	};
 };
 
