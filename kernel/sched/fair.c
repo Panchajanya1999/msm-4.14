@@ -7408,9 +7408,10 @@ static int start_cpu(struct task_struct *p, bool boosted,
 	int start_cpu = -1;
 
 	if (boosted) {
-		if (rd->mid_cap_orig_cpu != -1 &&
+		/*if (rd->mid_cap_orig_cpu != -1 &&
 		    task_fits_max(p, rd->mid_cap_orig_cpu))
 			return rd->mid_cap_orig_cpu;
+		*/
 		return rd->max_cap_orig_cpu;
 	}
 
