@@ -1763,7 +1763,7 @@ static ssize_t cpuset_write_resmask_wrapper(struct kernfs_open_file *of,
 	};
 	struct c_data c_targets[6] = {
 		/* Silver only cpusets go first */
-		{ "foreground",			"0-5"},//0-2,4-7
+		{ "foreground",			"0-5,6-7"},//0-2,4-7
 		{ "background",			"0-2"},//0-1
 		{ "system-background",	"0-3"},//0-2
 		{ "restricted",			"0-5"},//0-7
