@@ -150,7 +150,7 @@ do_gc:
 			sbi->rapid_gc = false;
 			rapid_gc_set_wakelock();
 			sbi->gc_mode = GC_NORMAL;
-			f2fs_info(sbi,
+			f2fs_msg(sbi->sb, KERN_INFO,
 				"No more rapid GC victim found, "
 				"sleeping for %u ms", wait_ms);
 
@@ -159,7 +159,7 @@ do_gc:
 			 * that would not be read again anytime soon.
 			 */
 			mm_drop_caches(3);
-			f2fs_info(sbi, "dropped caches");
+			f2fs_msg(sbi->sb, KERN_INFO, "dropped caches");
 		}
 
 		trace_f2fs_background_gc(sbi->sb, wait_ms,
@@ -245,7 +245,7 @@ static void f2fs_start_rapid_gc(void)
 			wake_up_interruptible_all(&sbi->gc_thread->gc_wait_queue_head);
 			wake_up_discard_thread(sbi, true);
 		} else {
-			f2fs_info(sbi,
+			f2fs_msg(sbi->sb, KERN_INFO,
 					"Invalid blocks lower than %d%%,"
 					"skipping rapid GC (%u / (%u - %u))",
 					RAPID_GC_LIMIT_INVALID_BLOCK,
