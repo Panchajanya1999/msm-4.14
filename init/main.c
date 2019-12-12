@@ -99,6 +99,7 @@
 #include "do_mounts.h"
 
 static int kernel_init(void *);
+int fpsensor = 1;
 
 extern void init_IRQ(void);
 extern void radix_tree_init(void);
@@ -541,7 +542,7 @@ static void __init mm_init(void)
 asmlinkage __visible void __init start_kernel(void)
 {
 	char *command_line;
-	char *after_dashes;
+	char *after_dashes, *p = NULL;
 
 	set_task_stack_end_magic(&init_task);
 	smp_setup_processor_id();
@@ -576,6 +577,13 @@ asmlinkage __visible void __init start_kernel(void)
 
 	build_all_zonelists(NULL);
 	page_alloc_init();
+	
+	p = strstr(command_line, "androidboot.fpsensor=fpc");
+	
+	if(p)
+		fpsensor = 1;//fpc fingerprint
+ 	else
+		fpsensor = 2;//goodix fingerprint
 
 	pr_notice("Kernel command line: %s\n", boot_command_line);
 	/* parameters may set static keys */
