@@ -1294,6 +1294,22 @@ config TOUCHSCREEN_RAYDIUM_CHIPSET
 	help
 	  Say Y here if you have a Raydium WT030 CHIPSET touchscreen.
 
+config TOUCHSCREEN_NVT_F7B
+	bool "Novatek F7B Touchscreen Driver"
+	depends on I2C
+	help
+	  Say Y here if you have a Novatek touchscreen.
+	  nvt controllers are multi touch controllers which can
+	  report 5 touches at a time.
+
+	  If unsure, say N.
+
+config TOUCHSCREEN_FTS
+	bool "Focaltech Touchscreen Driver"
+	depends on I2C
+	help
+	  Say Y here if you have Focaltech touchscreen panel
+
 	  If unsure, say N.
 
 endif
