@@ -779,6 +779,13 @@ static int smblib_usb_pd_adapter_allowance_override(struct smb_charger *chg,
 	return rc;
 }
 
+static int smblib_set_adapter_allowance(struct smb_charger *chg, 
+					u8 allowed_voltage) 
+{
+	return smblib_usb_pd_adapter_allowance_override(chg,
+					allowed_voltage);
+}
+
 #define MICRO_5V	5000000
 #define MICRO_9V	9000000
 #define MICRO_12V	12000000
@@ -1286,7 +1293,6 @@ void smblib_suspend_on_debug_battery(struct smb_charger *chg)
 {
 	int rc;
 	union power_supply_propval val;
-	const struct apsd_result *apsd_result;
 
 	rc = smblib_get_prop_from_bms(chg,
 			POWER_SUPPLY_PROP_DEBUG_BATTERY, &val);
@@ -5190,7 +5196,7 @@ unsuspend_input:
 		rc = smblib_force_vbus_voltage(chg, FORCE_5V_BIT);
 		if (rc < 0)
 			pr_err("Failed to force 5V\n");
-		rc = smblib_set_adapter_allowance(chg, USBIN_ADAPTER_ALLOW_5V);;
+		rc = smblib_set_adapter_allowance(chg, !!chg->pd_active ? FORCE_5V : FORCE_NULL);;
 		if (rc < 0)
 			pr_err("Failed to set adapter allowance to 5V\n");
 		rc = smblib_set_opt_switcher_freq(chg, chg->chg_freq.freq_5V);
