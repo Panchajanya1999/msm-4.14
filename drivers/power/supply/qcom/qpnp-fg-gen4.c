@@ -5906,7 +5906,6 @@ static int fg_gen4_probe(struct platform_device *pdev)
 	if (rc < 0) {
 		dev_err(fg->dev, "Error in creating debugfs entries, rc:%d\n",
 			rc);
-		goto exit;
 	}
 
 	rc = fg_get_battery_voltage(fg, &volt_uv);
