@@ -897,7 +897,7 @@ static int userfaultfd_release(struct inode *inode, struct file *file)
 				prev = vma;
 		}
 		vm_write_begin(vma);
-		WRITE_ONCE(vma->vm_flags, new_flags);
+		vma->vm_flags = new_flags;
 		vma->vm_userfaultfd_ctx = NULL_VM_UFFD_CTX;
 		vm_write_end(vma);
 	}
