@@ -1,6 +1,6 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/arm64 4.14.166 Kernel Configuration
+# Linux/arm64 4.14.167 Kernel Configuration
 #
 CONFIG_ARM64=y
 CONFIG_64BIT=y
@@ -4346,8 +4346,6 @@ CONFIG_ION=y
 # CONFIG_ION_CMA_HEAP is not set
 # CONFIG_ION_FORCE_DMA_SYNC is not set
 CONFIG_ION_DEFER_FREE_NO_SCHED_IDLE=y
-# CONFIG_FIQ_DEBUGGER is not set
-# CONFIG_FIQ_WATCHDOG is not set
 # CONFIG_STAGING_BOARD is not set
 # CONFIG_DGNC is not set
 # CONFIG_GS_FPGABOOT is not set
@@ -5620,6 +5618,16 @@ CONFIG_DEFAULT_SECURITY_SELINUX=y
 # CONFIG_DEFAULT_SECURITY_SMACK is not set
 # CONFIG_DEFAULT_SECURITY_DAC is not set
 CONFIG_DEFAULT_SECURITY="selinux"
+
+#
+# Kernel hardening options
+#
+
+#
+# Memory initialization
+#
+CONFIG_INIT_STACK_NONE=y
+# CONFIG_INIT_STACK_ALL is not set
 CONFIG_CRYPTO=y
 
 #
