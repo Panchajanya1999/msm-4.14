@@ -141,7 +141,6 @@ static int ten_thousand = 10000;
 #ifdef CONFIG_PERF_EVENTS
 static int six_hundred_forty_kb = 640 * 1024;
 #endif
-static int two_hundred_fifty_five = 255;
 
 /* this is needed for the proc_doulongvec_minmax of vm_dirty_bytes */
 static unsigned long dirty_bytes_min = 2 * PAGE_SIZE;
@@ -305,6 +304,10 @@ static int max_sched_tunable_scaling = SCHED_TUNABLESCALING_END-1;
 #endif /* CONFIG_SMP */
 #endif /* CONFIG_SCHED_DEBUG */
 
+#ifndef CONFIG_SCHED_WALT
+static int sysctl_sched_boost = 0;
+#endif
+
 #ifdef CONFIG_COMPACTION
 static int min_extfrag_threshold;
 static int max_extfrag_threshold = 1000;
@@ -405,6 +408,16 @@ static struct ctl_table kern_table[] = {
 		.proc_handler	= sched_little_cluster_coloc_fmin_khz_handler,
 		.extra1		= &zero,
 		.extra2		= &two_million,
+	},
+#else
+	{
+		.procname	= "sched_boost",
+		.data		= &sysctl_sched_boost,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0644,
+		.proc_handler	= sched_boost_handler,
+		.extra1		= &neg_three,
+		.extra2		= &three,
 	},
 #endif
 	{
@@ -590,22 +603,6 @@ static struct ctl_table kern_table[] = {
 		.extra1		= &one,
 	},
 #endif
-	{
-		.procname	= "sched_lib_name",
-		.data		= sched_lib_name,
-		.maxlen		= LIB_PATH_LENGTH,
-		.mode		= 0644,
-		.proc_handler	= proc_dostring,
-	},
-	{
-		.procname	= "sched_lib_mask_force",
-		.data		= &sched_lib_mask_force,
-		.maxlen		= sizeof(unsigned int),
-		.mode		= 0644,
-		.proc_handler	= proc_douintvec_minmax,
-		.extra1		= &zero,
-		.extra2		= &two_hundred_fifty_five,
-	},
 #ifdef CONFIG_PROVE_LOCKING
 	{
 		.procname	= "prove_locking",
@@ -1580,7 +1577,7 @@ static struct ctl_table vm_table[] = {
 		.procname	= "drop_caches",
 		.data		= &sysctl_drop_caches,
 		.maxlen		= sizeof(int),
-		.mode		= 0644,
+		.mode		= 0200,
 		.proc_handler	= drop_caches_sysctl_handler,
 		.extra1		= &one,
 		.extra2		= &four,
@@ -3367,6 +3364,24 @@ int proc_douintvec_capacity(struct ctl_table *table, int write,
 	return do_proc_dointvec(table, write, buffer, lenp, ppos,
 				do_proc_douintvec_capacity_conv, NULL);
 }
+
+#ifndef CONFIG_SCHED_WALT
+int sched_boost_handler(struct ctl_table *table, int write,
+		void __user *buffer, size_t *lenp,
+		loff_t *ppos)
+{
+	int ret;
+	unsigned int *data = (unsigned int *)table->data;
+
+	ret = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
+
+	if (ret || !write)
+		return ret;
+
+	pr_debug("%s set sb to %i\n", current->comm, *data);
+	return ret;
+}
+#endif
 
 #else /* CONFIG_PROC_SYSCTL */
 

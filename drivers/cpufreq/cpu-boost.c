@@ -321,12 +321,12 @@ static int cpu_boost_init(void)
 {
 	int cpu, ret, i;
 	struct cpu_sync *s;
-	struct sched_param param = { .sched_priority = 2 };
+	struct sched_param param = { .sched_priority = MAX_RT_PRIO - 5 };
 	cpumask_t sys_bg_mask;
 
 	/* Hardcode the cpumask to bind the kthread to it */
 	cpumask_clear(&sys_bg_mask);
-	for (i = 0; i <= 3; i++) {
+	for (i = 0; i <= 5; i++) {
 		cpumask_set_cpu(i, &sys_bg_mask);
 	}
 

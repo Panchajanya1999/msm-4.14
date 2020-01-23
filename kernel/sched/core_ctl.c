@@ -1295,11 +1295,13 @@ static int __init core_ctl_init(void)
 			"core_ctl/isolation:dead",
 			NULL, core_ctl_isolation_dead_cpu);
 
+#ifdef CONFIG_SCHED_WALT
 	for_each_sched_cluster(cluster) {
 		ret = cluster_init(&cluster->cpus);
 		if (ret)
 			pr_warn("unable to create core ctl group: %d\n", ret);
 	}
+#endif
 
 	initialized = true;
 	return 0;

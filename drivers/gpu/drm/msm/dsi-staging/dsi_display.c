@@ -4850,40 +4850,6 @@ static ssize_t sysfs_dynamic_dsi_clk_write(struct device *dev,
 
 }
 
-static ssize_t dsi_display_set_ce(struct device *dev,struct device_attribute *attr,const char *buf,size_t len)
-{
-
-	int rc = 0;
-	int param = 0;
-	struct dsi_display *display;
-
-	display = dev_get_drvdata(dev);
-	if (!display) {
-		pr_err("Invalid display\n");
-		return -EINVAL;
-	}
-
-	rc = kstrtoint(buf, 10, &param);
-	if (rc) {
-		pr_err("kstrtoint failed. rc=%d\n", rc);
-		return rc;
-	}
-
-	switch(param) {
-		case 0x1: //ce on
-			dsi_panel_set_feature(display->panel, DSI_CMD_SET_CE_ON);
-			break;
-		case 0x2: //ce off
-			dsi_panel_set_feature(display->panel, DSI_CMD_SET_CE_OFF);
-			break;
-		default:
-			pr_err("unknow cmds: %d\n", param);
-			break;
-	}
-	printk("xinj:_##### ce over ###\n");
-	return len;
-}
-
 static ssize_t dsi_display_set_cabc(struct device *dev,struct device_attribute *attr,const char *buf,size_t len)
 {
 
@@ -4914,7 +4880,6 @@ static ssize_t dsi_display_set_cabc(struct device *dev,struct device_attribute *
 			pr_err("unknow cmds: %d\n", param);
 			break;
 	}
-	printk("xinj:_##### cabc over ###\n");
 	return len;
 }
 
@@ -4948,7 +4913,6 @@ static ssize_t dsi_display_set_cabc_movie(struct device *dev,struct device_attri
 			pr_err("unknow cmds: %d\n", param);
 			break;
 	}
-	printk("xinj:_##### cabc_movie over ###\n");
 	return len;
 }
 
@@ -4982,10 +4946,10 @@ static ssize_t dsi_display_set_cabc_still(struct device *dev,struct device_attri
 			pr_err("unknow cmds: %d\n", param);
 			break;
 	}
-	printk("xinj:_##### cabc_still over ###\n");
 	return len;
 }
-static ssize_t dsi_display_set_srgb(struct device *dev,struct device_attribute *attr,const char *buf,size_t len)
+
+static ssize_t dsi_display_set_hbm(struct device *dev,struct device_attribute *attr,const char *buf,size_t len)
 {
 
 	int rc = 0;
@@ -5005,17 +4969,22 @@ static ssize_t dsi_display_set_srgb(struct device *dev,struct device_attribute *
 	}
 
 	switch(param) {
-		case 0x1: //srgb on
-			dsi_panel_set_feature(display->panel, DSI_CMD_SET_SRGB_ON);
+		case 0x1: //hbm1 on
+			dsi_panel_set_feature(display->panel, DSI_CMD_SET_HBM1_ON);
 			break;
-		case 0x2: //srgb off
-			dsi_panel_set_feature(display->panel, DSI_CMD_SET_SRGB_OFF);
+		case 0x2: //hbm2 off
+			dsi_panel_set_feature(display->panel, DSI_CMD_SET_HBM2_ON);
 			break;
-		default:
+		case 0x03://hbm3 on
+			dsi_panel_set_feature(display->panel, DSI_CMD_SET_HBM3_ON);
+			break;
+		case 0x0://hbm off
+			dsi_panel_set_feature(display->panel, DSI_CMD_SET_HBM_OFF);
+			break;
+			default:
 			pr_err("unknow cmds: %d\n", param);
-			break;
+		break;
 	}
-	printk("xinj:_##### srgb over ###\n");
 	return len;
 }
 
@@ -5082,16 +5051,14 @@ static int dsi_display_whitepoint_create_sysfs(void){
 	return ret;
 }
 
-static DEVICE_ATTR(dsi_display_ce, 0644, NULL, dsi_display_set_ce);
 static DEVICE_ATTR(dsi_display_cabc, 0644, NULL, dsi_display_set_cabc);
-static DEVICE_ATTR(dsi_display_srgb, 0644, NULL, dsi_display_set_srgb);
+static DEVICE_ATTR(dsi_display_hbm, 0644, NULL, dsi_display_set_hbm);
 static DEVICE_ATTR(dsi_display_cabc_movie, 0644, NULL, dsi_display_set_cabc_movie);
 static DEVICE_ATTR(dsi_display_cabc_still, 0644, NULL, dsi_display_set_cabc_still);
 
 static struct attribute *dsi_display_feature_attrs[] = {
-	&dev_attr_dsi_display_ce.attr,
 	&dev_attr_dsi_display_cabc.attr,
-	&dev_attr_dsi_display_srgb.attr,
+	&dev_attr_dsi_display_hbm.attr,
 	&dev_attr_dsi_display_cabc_movie.attr,
 	&dev_attr_dsi_display_cabc_still.attr,
 	NULL,
@@ -5113,7 +5080,6 @@ static int dsi_display_feature_create_sysfs(struct dsi_display *display){
 	pr_info("xinj:%s success\n",__func__);
 	return ret;
 }
-
 
 static DEVICE_ATTR(dynamic_dsi_clock, 0644,
 			sysfs_dynamic_dsi_clk_read,
