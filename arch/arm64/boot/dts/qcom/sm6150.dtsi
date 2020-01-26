@@ -610,9 +610,9 @@
 
 		ramoops_region: ramoops_region@0xa1600000 {
 			compatible = "ramoops";
-			reg = <0 0xa1600000 0 0x400000>;
-			console-size = <0x200000>;
-			pmsg-size = <0x200000>;
+			reg = <0 0xa1600000 0 0x800000>;
+			console-size = <0x400000>;
+			pmsg-size = <0x400000>;
 		};
 
 		adsp_mem: adsp_region {
