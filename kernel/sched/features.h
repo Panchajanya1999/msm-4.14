@@ -136,3 +136,12 @@ SCHED_FEAT(FBT_STRICT_ORDER, false)
  * RT class.
  */
 SCHED_FEAT(SCHEDTUNE_BOOST_HOLD_ALL, false)
+
+/*
+ * If the sync flag is set but ignored, prefer to
+ * select cpu in the same cluster as current. So
+ * if current is a big cpu and sync is set, indicate
+ * that the selection algorithm for a boosted task
+ * should be used.
+ */
+SCHED_FEAT(SYNC_BOOST, true)
