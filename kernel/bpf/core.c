@@ -95,6 +95,7 @@ struct bpf_prog *bpf_prog_alloc(unsigned int size, gfp_t gfp_extra_flags)
 	fp->pages = size / PAGE_SIZE;
 	fp->aux = aux;
 	fp->aux->prog = fp;
+	fp->jit_requested = ebpf_jit_enabled();
 
 	INIT_LIST_HEAD_RCU(&fp->aux->ksym_lnode);
 
@@ -532,6 +533,16 @@ static void bpf_jit_uncharge_modmem(u32 pages)
 	atomic_long_sub(pages, &bpf_jit_current);
 }
 
+void *__weak bpf_jit_alloc_exec(unsigned long size)
+{
+	return module_alloc(size);
+}
+
+void __weak bpf_jit_free_exec(void *addr)
+{
+	module_memfree(addr);
+}
+
 struct bpf_binary_header *
 bpf_jit_binary_alloc(unsigned int proglen, u8 **image_ptr,
 		     unsigned int alignment,
@@ -549,7 +560,7 @@ bpf_jit_binary_alloc(unsigned int proglen, u8 **image_ptr,
 
 	if (bpf_jit_charge_modmem(pages))
 		return NULL;
-	hdr = module_alloc(size);
+	hdr = bpf_jit_alloc_exec(size);
 	if (!hdr) {
 		bpf_jit_uncharge_modmem(pages);
 		return NULL;
@@ -573,7 +584,7 @@ void bpf_jit_binary_free(struct bpf_binary_header *hdr)
 {
 	u32 pages = hdr->pages;
 
-	module_memfree(hdr);
+	bpf_jit_free_exec(hdr);
 	bpf_jit_uncharge_modmem(pages);
 }
 
@@ -772,7 +783,7 @@ struct bpf_prog *bpf_jit_blind_constants(struct bpf_prog *prog)
 	struct bpf_insn *insn;
 	int i, rewritten;
 
-	if (!bpf_jit_blinding_enabled())
+	if (!bpf_jit_blinding_enabled(prog))
 		return prog;
 
 	clone = bpf_prog_clone_create(prog, GFP_USER);
@@ -1011,14 +1022,10 @@ select_insn:
 		(*(s64 *) &DST) >>= IMM;
 		CONT;
 	ALU64_MOD_X:
-		if (unlikely(SRC == 0))
-			return 0;
 		div64_u64_rem(DST, SRC, &AX);
 		DST = AX;
 		CONT;
 	ALU_MOD_X:
-		if (unlikely((u32)SRC == 0))
-			return 0;
 		AX = (u32) DST;
 		DST = do_div(AX, (u32) SRC);
 		CONT;
@@ -1031,13 +1038,9 @@ select_insn:
 		DST = do_div(AX, (u32) IMM);
 		CONT;
 	ALU64_DIV_X:
-		if (unlikely(SRC == 0))
-			return 0;
 		DST = div64_u64(DST, SRC);
 		CONT;
 	ALU_DIV_X:
-		if (unlikely((u32)SRC == 0))
-			return 0;
 		AX = (u32) DST;
 		do_div(AX, (u32) SRC);
 		DST = (u32) AX;
@@ -1471,6 +1474,118 @@ struct bpf_prog *bpf_prog_select_runtime(struct bpf_prog *fp, int *err)
 	return fp;
 }
 EXPORT_SYMBOL_GPL(bpf_prog_select_runtime);
+
+static unsigned int __bpf_prog_ret1(const void *ctx,
+				    const struct bpf_insn *insn)
+{
+	return 1;
+}
+
+static struct bpf_prog_dummy {
+	struct bpf_prog prog;
+} dummy_bpf_prog = {
+	.prog = {
+		.bpf_func = __bpf_prog_ret1,
+	},
+};
+
+/* to avoid allocating empty bpf_prog_array for cgroups that
+ * don't have bpf program attached use one global 'empty_prog_array'
+ * It will not be modified the caller of bpf_prog_array_alloc()
+ * (since caller requested prog_cnt == 0)
+ * that pointer should be 'freed' by bpf_prog_array_free()
+ */
+static struct {
+	struct bpf_prog_array hdr;
+	struct bpf_prog *null_prog;
+} empty_prog_array = {
+	.null_prog = NULL,
+};
+
+struct bpf_prog_array __rcu *bpf_prog_array_alloc(u32 prog_cnt, gfp_t flags)
+{
+	if (prog_cnt)
+		return kzalloc(sizeof(struct bpf_prog_array) +
+			       sizeof(struct bpf_prog *) * (prog_cnt + 1),
+			       flags);
+
+	return &empty_prog_array.hdr;
+}
+
+void bpf_prog_array_free(struct bpf_prog_array __rcu *progs)
+{
+	if (!progs ||
+	    progs == (struct bpf_prog_array __rcu *)&empty_prog_array.hdr)
+		return;
+	kfree_rcu(progs, rcu);
+}
+
+void bpf_prog_array_delete_safe(struct bpf_prog_array __rcu *progs,
+				struct bpf_prog *old_prog)
+{
+	struct bpf_prog **prog = progs->progs;
+
+	for (; *prog; prog++)
+		if (*prog == old_prog) {
+			WRITE_ONCE(*prog, &dummy_bpf_prog.prog);
+			break;
+		}
+}
+
+int bpf_prog_array_copy(struct bpf_prog_array __rcu *old_array,
+			struct bpf_prog *exclude_prog,
+			struct bpf_prog *include_prog,
+			struct bpf_prog_array **new_array)
+{
+	int new_prog_cnt, carry_prog_cnt = 0;
+	struct bpf_prog **existing_prog;
+	struct bpf_prog_array *array;
+	int new_prog_idx = 0;
+
+	/* Figure out how many existing progs we need to carry over to
+	 * the new array.
+	 */
+	if (old_array) {
+		existing_prog = old_array->progs;
+		for (; *existing_prog; existing_prog++) {
+			if (*existing_prog != exclude_prog &&
+			    *existing_prog != &dummy_bpf_prog.prog)
+				carry_prog_cnt++;
+			if (*existing_prog == include_prog)
+				return -EEXIST;
+		}
+	}
+
+	/* How many progs (not NULL) will be in the new array? */
+	new_prog_cnt = carry_prog_cnt;
+	if (include_prog)
+		new_prog_cnt += 1;
+
+	/* Do we have any prog (not NULL) in the new array? */
+	if (!new_prog_cnt) {
+		*new_array = NULL;
+		return 0;
+	}
+
+	/* +1 as the end of prog_array is marked with NULL */
+	array = bpf_prog_array_alloc(new_prog_cnt + 1, GFP_KERNEL);
+	if (!array)
+		return -ENOMEM;
+
+	/* Fill in the new prog array */
+	if (carry_prog_cnt) {
+		existing_prog = old_array->progs;
+		for (; *existing_prog; existing_prog++)
+			if (*existing_prog != exclude_prog &&
+			    *existing_prog != &dummy_bpf_prog.prog)
+				array->progs[new_prog_idx++] = *existing_prog;
+	}
+	if (include_prog)
+		array->progs[new_prog_idx++] = include_prog;
+	array->progs[new_prog_idx] = NULL;
+	*new_array = array;
+	return 0;
+}
 
 static void bpf_prog_free_deferred(struct work_struct *work)
 {
