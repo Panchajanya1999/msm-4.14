@@ -7464,7 +7464,7 @@ static bool is_packing_eligible(struct task_struct *p, int target_cpu,
 }
 
 static int start_cpu(struct task_struct *p, bool boosted,
-		     bool sync_boost, struct cpumask *rtg_target)
+		     struct cpumask *rtg_target)
 {
 	struct root_domain *rd = cpu_rq(smp_processor_id())->rd;
 	int start_cpu = -1;
@@ -7508,7 +7508,7 @@ enum fastpaths {
 };
 
 static inline int find_best_target(struct task_struct *p, int *backup_cpu,
-				   bool boosted, bool sync_boost, bool prefer_idle,
+				   bool boosted, bool prefer_idle,
 				   struct find_best_target_env *fbt_env)
 {
 	unsigned long min_util = boosted_task_util(p);
@@ -7551,7 +7551,7 @@ static inline int find_best_target(struct task_struct *p, int *backup_cpu,
 		target_capacity = 0;
 
 	/* Find start CPU based on boost value */
-	cpu = start_cpu(p, boosted, sync_boost, fbt_env->rtg_target);
+	cpu = start_cpu(p, boosted, fbt_env->rtg_target);
 	if (cpu < 0)
 		return -1;
 
@@ -8299,7 +8299,7 @@ static int find_energy_efficient_cpu(struct sched_domain *sd,
 
 		/* Find a cpu with sufficient capacity */
 		target_cpu = find_best_target(p, &eenv->cpu[EAS_CPU_BKP].cpu_id,
-					      boosted, sync_boost, prefer_idle, &fbt_env);
+					      boosted, prefer_idle, &fbt_env);
 		if (target_cpu < 0)
 			goto out;
 
