@@ -488,10 +488,19 @@
 				compatible = "android,fstab";
 				vendor {
 					compatible = "android,vendor";
-					dev = "/dev/block/platform/soc/1d84000.ufshc/by-name/vendor";
+					dev = "/dev/block/platform/soc/7c4000.sdhci/by-name/vendor";
 					type = "ext4";
 					mnt_flags = "ro,barrier=1,discard";
 					fsmgr_flags = "wait,avb";
+					status = "ok";
+				};
+				persist {
+					compatible = "android,persist";
+					dev = "/dev/block/platform/soc/7c4000.sdhci/by-name/persist";
+					type = "ext4";
+					mnt_point = "/mnt/vendor/persist";	
+					mnt_flags = "nosuid,nodev,noatime,barrier=1";
+					fsmgr_flags = "wait";
 					status = "ok";
 				};
 			};
@@ -601,9 +610,9 @@
 
 		ramoops_region: ramoops_region@0xa1600000 {
 			compatible = "ramoops";
-			reg = <0 0xa1600000 0 0x400000>;
-			console-size = <0x200000>;
-			pmsg-size = <0x200000>;
+			reg = <0 0xa1600000 0 0x800000>;
+			console-size = <0x400000>;
+			pmsg-size = <0x400000>;
 		};
 
 		adsp_mem: adsp_region {
