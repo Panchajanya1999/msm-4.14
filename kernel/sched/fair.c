@@ -8541,6 +8541,9 @@ pick_cpu:
 			new_cpu = find_energy_efficient_cpu(energy_sd, p, cpu,
 					prev_cpu, sync, sibling_count_hint);
 
+			if (unlikely(new_cpu < 0))
+				new_cpu = prev_cpu;
+
 		/* if we did an energy-aware placement and had no choices available
 		 * then fall back to the default find_idlest_cpu choice
 		 */
