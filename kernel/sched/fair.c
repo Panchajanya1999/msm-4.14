@@ -7460,7 +7460,7 @@ static int get_start_cpu(struct task_struct *p, bool boosted,
 	struct root_domain *rd = cpu_rq(smp_processor_id())->rd;
 	int start_cpu = -1;
 
-	if (boosted || sync_boost) {
+	if (boosted) {
 		if (rd->mid_cap_orig_cpu != -1 &&
 		    task_fits_max(p, rd->mid_cap_orig_cpu))
 			return rd->mid_cap_orig_cpu;
