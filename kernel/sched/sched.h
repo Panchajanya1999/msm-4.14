@@ -137,6 +137,8 @@ extern void init_sched_groups_capacity(int cpu, struct sched_domain *sd);
 static inline void cpu_load_update_active(struct rq *this_rq) { }
 #endif
 
+extern bool energy_aware(void);
+
 /*
  * Helpers for converting nanosecond timing to jiffy resolution
  */
@@ -1299,9 +1301,10 @@ DECLARE_PER_CPU(int, sd_llc_size);
 DECLARE_PER_CPU(int, sd_llc_id);
 DECLARE_PER_CPU(struct sched_domain_shared *, sd_llc_shared);
 DECLARE_PER_CPU(struct sched_domain *, sd_numa);
-DECLARE_PER_CPU(struct sched_domain *, sd_asym);
 DECLARE_PER_CPU(struct sched_domain *, sd_ea);
 DECLARE_PER_CPU(struct sched_domain *, sd_scs);
+DECLARE_PER_CPU(struct sched_domain *, sd_asym_packing);
+DECLARE_PER_CPU(struct sched_domain *, sd_asym_cpucapacity);
 extern struct static_key_false sched_asym_cpucapacity;
 
 struct sched_group_capacity {
@@ -3066,7 +3069,7 @@ static inline void update_cpu_cluster_capacity(const cpumask_t *cpus) { }
 #ifdef CONFIG_SMP
 static inline unsigned long thermal_cap(int cpu)
 {
-	return cpu_rq(cpu)->cpu_capacity_orig;
+	return SCHED_CAPACITY_SCALE;
 }
 #endif
 
@@ -3112,11 +3115,6 @@ static inline void clear_reserved(int cpu)
 	struct rq *rq = cpu_rq(cpu);
 
 	clear_bit(CPU_RESERVED, &rq->extra_flags);
-}
-
-static inline bool energy_aware(void)
-{
-	return sched_feat(ENERGY_AWARE);
 }
 
 struct sched_avg_stats {
