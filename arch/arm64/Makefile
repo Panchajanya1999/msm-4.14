@@ -18,8 +18,16 @@ ifeq ($(CONFIG_RELOCATABLE), y)
 # Pass --no-apply-dynamic-relocs to restore pre-binutils-2.27 behaviour
 # for relative relocs, since this leads to better Image compression
 # with the relocation offsets always being zero.
-LDFLAGS_vmlinux		+= -shared -Bsymbolic -z notext -z norelro \
+LDFLAGS_vmlinux		+= -Bsymbolic -z notext -z norelro \
 			$(call ld-option, --no-apply-dynamic-relocs)
+
+# Pass -shared for bfd and -pie for lld to minimize Image size on both
+ifeq ($(ld-name),bfd)
+LDFLAGS_vmlinux		+= -shared
+endif
+ifeq ($(ld-name),lld)
+LDFLAGS_vmlinux		+= -pie
+endif
 endif
 
 ifeq ($(CONFIG_ARM64_ERRATUM_843419),y)
@@ -117,7 +125,7 @@ LD		+= -EB
 ifeq ($(ld-name),gold)
 LDFLAGS		+= -maarch64_elf64_be_vec
 else
-LDFLAGS		+= -maarch64linuxb
+LDFLAGS		+= -maarch64elfb
 endif
 UTS_MACHINE	:= aarch64_be
 else
@@ -128,7 +136,7 @@ LD		+= -EL
 ifeq ($(ld-name),gold)
 LDFLAGS		+= -maarch64_elf64_le_vec
 else
-LDFLAGS		+= -maarch64linux
+LDFLAGS		+= -maarch64elf
 endif
 UTS_MACHINE	:= aarch64
 endif

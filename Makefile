@@ -371,16 +371,12 @@ HOSTCXXFLAGS := -O2 $(HOST_LFS_CFLAGS)
 HOSTLDFLAGS  := $(HOST_LFS_LDFLAGS)
 HOST_LOADLIBES := $(HOST_LFS_LIBS)
 
-ifeq ($(shell $(HOSTCC) -v 2>&1 | grep -c "clang version"), 1)
-HOSTCFLAGS  += -Wno-unused-value -Wno-unused-parameter \
-		-Wno-missing-field-initializers
-endif
-
 # Make variables (CC, etc...)
 AS		= $(CROSS_COMPILE)as
 LD		= $(CROSS_COMPILE)ld
 CC		= $(CCACHE) $(CROSS_COMPILE)gcc
 LDGOLD		= $(CROSS_COMPILE)ld.gold
+LDLLD		= ld.lld
 CPP		= $(CC) -E
 AR		= $(CROSS_COMPILE)ar
 NM		= $(CROSS_COMPILE)nm
@@ -502,6 +498,10 @@ ifneq ($(GCC_TOOLCHAIN),)
 CLANG_FLAGS	+= --gcc-toolchain=$(GCC_TOOLCHAIN)
 endif
 CLANG_FLAGS	+= -Werror=unknown-warning-option
+ifeq ($(ld-name),lld)
+CLANG_FLAGS	+= -fuse-ld=$(shell which $(LD))
+endif
+KBUILD_CPPFLAGS	+= -Qunused-arguments
 KBUILD_CFLAGS	+= $(CLANG_FLAGS)
 KBUILD_AFLAGS	+= $(CLANG_FLAGS) -no-integrated-as
 export CLANG_FLAGS
@@ -656,16 +656,26 @@ export CFLAGS_GCOV CFLAGS_KCOV
 
 # Make toolchain changes before including arch/$(SRCARCH)/Makefile to ensure
 # ar/cc/ld-* macros return correct values.
-ifdef CONFIG_LTO_CLANG
-# use GNU gold with LLVMgold for LTO linking, and LD for vmlinux_link
+ifdef CONFIG_LD_GOLD
 LDFINAL_vmlinux := $(LD)
 LD		:= $(LDGOLD)
+endif
+ifdef CONFIG_LD_LLD
+LD		:= $(LDLLD)
+endif
+
+ifdef CONFIG_LTO_CLANG
+# use GNU gold with LLVMgold or LLD for LTO linking, and LD for vmlinux_link
+ifeq ($(ld-name),gold)
 LDFLAGS		+= -plugin LLVMgold.so
+endif
 # use llvm-ar for building symbol tables from IR files, and llvm-dis instead
 # of objdump for processing symbol versions and exports
 LLVM_AR		:= llvm-ar
 LLVM_DIS	:= llvm-dis
 export LLVM_AR LLVM_DIS
+# Set O3 optimization level for LTO
+LDFLAGS		+= --plugin-opt=O3
 endif
 
 # The arch Makefile can set ARCH_{CPP,A,C}FLAGS to override the default
@@ -696,6 +706,17 @@ endif
 ifeq ($(cc-name),clang)
 KBUILD_CFLAGS   += -O3
 KBUILD_CFLAGS	+= -mcpu=cortex-a55 -mtune=cortex-a55
+
+ifdef CONFIG_LLVM_POLLY
+KBUILD_CFLAGS	+= -mllvm -polly \
+		   -mllvm -polly-run-dce \
+		   -mllvm -polly-run-inliner \
+		   -mllvm -polly-opt-fusion=max \
+		   -mllvm -polly-ast-use-context \
+		   -mllvm -polly-detect-keep-going \
+		   -mllvm -polly-vectorizer=stripmine \
+		   -mllvm -polly-invariant-load-hoisting
+endif
 endif
 endif
 endif
@@ -751,7 +772,6 @@ endif
 KBUILD_CFLAGS += $(stackp-flag)
 
 ifeq ($(cc-name),clang)
-KBUILD_CPPFLAGS += $(call cc-option,-Qunused-arguments,)
 KBUILD_CFLAGS += $(call cc-disable-warning, format-invalid-specifier)
 KBUILD_CFLAGS += $(call cc-disable-warning, gnu)
 KBUILD_CFLAGS += $(call cc-disable-warning, duplicate-decl-specifier)
@@ -775,6 +795,10 @@ KBUILD_CFLAGS += $(call cc-option,-fno-delete-null-pointer-checks,)
 # These warnings generated too much noise in a regular build.
 # Use make W=1 to enable them (see scripts/Makefile.extrawarn)
 KBUILD_CFLAGS += $(call cc-disable-warning, unused-but-set-variable)
+endif
+
+ifeq ($(ld-name),lld)
+LDFLAGS += -O2
 endif
 
 KBUILD_CFLAGS += $(call cc-disable-warning, unused-const-variable)
@@ -970,6 +994,10 @@ endif
 
 ifeq ($(CONFIG_STRIP_ASM_SYMS),y)
 LDFLAGS_vmlinux	+= $(call ld-option, -X,)
+endif
+
+ifeq ($(CONFIG_RELR),y)
+LDFLAGS_vmlinux	+= --pack-dyn-relocs=relr
 endif
 
 # Default kernel image to build when no specific target is given.
@@ -1229,8 +1257,10 @@ ifdef CONFIG_LTO_CLANG
   ifneq ($(call clang-ifversion, -ge, 0500, y), y)
 	@echo Cannot use CONFIG_LTO_CLANG: requires clang 5.0 or later >&2 && exit 1
   endif
-  ifneq ($(call gold-ifversion, -ge, 112000000, y), y)
-	@echo Cannot use CONFIG_LTO_CLANG: requires GNU gold 1.12 or later >&2 && exit 1
+  ifneq ($(ld-name), lld)
+    ifneq ($(call gold-ifversion, -ge, 112000000, y), y)
+	@echo Cannot use CONFIG_LTO_CLANG: requires LLD or GNU gold 1.12 or later >&2 && exit 1
+    endif
   endif
 endif
 # Make sure compiler supports LTO flags
