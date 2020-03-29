@@ -27,12 +27,18 @@
 #include <uapi/linux/sync_file.h>
 
 static const struct file_operations sync_file_fops;
+static struct kmem_cache *kmem_sync_file_pool;
+
+void __init init_sync_kmem_pool(void)
+{
+	kmem_sync_file_pool = KMEM_CACHE(sync_file, SLAB_HWCACHE_ALIGN | SLAB_PANIC);
+}
 
 static struct sync_file *sync_file_alloc(void)
 {
 	struct sync_file *sync_file;
 
-	sync_file = kzalloc(sizeof(*sync_file), GFP_KERNEL);
+	sync_file = kmem_cache_zalloc(kmem_sync_file_pool, GFP_KERNEL);
 	if (!sync_file)
 		return NULL;
 
@@ -48,7 +54,7 @@ static struct sync_file *sync_file_alloc(void)
 	return sync_file;
 
 err:
-	kfree(sync_file);
+	kmem_cache_free(kmem_sync_file_pool, sync_file);
 	return NULL;
 }
 
@@ -307,7 +313,7 @@ static int sync_file_release(struct inode *inode, struct file *file)
 	if (test_bit(POLL_ENABLED, &sync_file->flags))
 		dma_fence_remove_callback(sync_file->fence, &sync_file->cb);
 	dma_fence_put(sync_file->fence);
-	kfree(sync_file);
+	kmem_cache_free(kmem_sync_file_pool, sync_file);
 
 	return 0;
 }
@@ -408,6 +414,7 @@ static long sync_file_ioctl_fence_info(struct sync_file *sync_file,
 {
 	struct sync_file_info info;
 	struct sync_fence_info *fence_info = NULL;
+	struct sync_fence_info fence_info_onstack[4] __aligned(8);
 	struct dma_fence **fences;
 	__u32 size;
 	int num_fences, ret, i;
@@ -437,9 +444,15 @@ static long sync_file_ioctl_fence_info(struct sync_file *sync_file,
 		return -EINVAL;
 
 	size = num_fences * sizeof(*fence_info);
-	fence_info = kzalloc(size, GFP_KERNEL);
-	if (!fence_info)
-		return -ENOMEM;
+
+	if (likely(size <= sizeof(fence_info_onstack))) {
+		memset(fence_info_onstack, 0, sizeof(fence_info_onstack));
+		fence_info = fence_info_onstack;
+	} else {
+		fence_info = kzalloc(size, GFP_KERNEL);
+		if (!fence_info)
+			return -ENOMEM;
+	}
 
 	for (i = 0; i < num_fences; i++) {
 		int status = sync_fill_fence_info(fences[i], &fence_info[i]);
@@ -462,7 +475,8 @@ no_fences:
 		ret = 0;
 
 out:
-	kfree(fence_info);
+	if (unlikely(fence_info != fence_info_onstack))
+		kfree(fence_info);
 
 	return ret;
 }
