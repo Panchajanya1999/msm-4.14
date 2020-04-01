@@ -1,0 +1,101 @@
+/*
+ * Copyright (C) 2020 The LineageOS Project
+ *
+ * this file is for attribution only of violet
+ * And public attribution of Xiaomi platforms (like F7B and so)
+ */
+
+#include "display/dsi-panel-ft8719-tianma-fhd-video.dtsi"
+#include "display/dsi-panel-nt36672a-shenchao-fhd-video.dtsi"
+
+&dsi_panel_pwr_supply {
+    qcom,panel-supply-entry@0 {
+        qcom,supply-post-on-sleep = <1>;
+        qcom,supply-pre-off-sleep = <15>;
+    };
+
+    qcom,panel-supply-entry@1 {
+        qcom,supply-post-on-sleep = <3>;
+    };
+
+    qcom,panel-supply-entry@2 {
+        /delete-property/ qcom,supply-post-on-sleep;
+        qcom,supply-pre-off-sleep = <4>;
+    };
+};
+
+&soc {
+    dsi_ft8719_tianma_vid_display: qcom,dsi-display@10 {
+        label = "dsi_ft8719_tianma_vid_display";
+        qcom,display-type = "primary";
+        qcom,dsi-ctrl-num = <0>;
+        qcom,dsi-phy-num = <0>;
+        qcom,dsi-select-clocks = "mux_byte_clk0", "mux_pixel_clk0";
+        qcom,dsi-panel = <&dsi_ft8719_tianma_video>;
+    };
+
+    dsi_nt36672a_shenchao_vid_display: qcom,dsi-display@11 {
+        label = "dsi_nt36672a_shenchao_vid_display";
+        qcom,display-type = "primary";
+        qcom,dsi-ctrl-num = <0>;
+        qcom,dsi-phy-num = <0>;
+        qcom,dsi-select-clocks = "mux_byte_clk0", "mux_pixel_clk0";
+        qcom,dsi-panel = <&dsi_nt36672a_shenchao_video>;
+    };
+};
+
+&sde_dsi {
+    qcom,dsi-display-list =
+            <&dsi_ft8719_tianma_vid_display
+            &dsi_nt36672a_shenchao_vid_display>;
+};
+
+&dsi_ft8719_tianma_video {
+    qcom,dsi-display-active;
+    qcom,mdss-dsi-t-clk-post = <0x0f>;
+    qcom,mdss-dsi-t-clk-pre = <0x37>;
+    qcom,panel-supply-entries = <&dsi_panel_pwr_supply>;
+    qcom,mdss-dsi-bl-pmic-control-type = "bl_ctrl_wled";
+    qcom,mdss-dsi-bl-min-level = <1>;
+    qcom,mdss-dsi-bl-max-level = <4095>;
+    qcom,platform-te-gpio = <&tlmm 90 0>;
+    qcom,platform-reset-gpio = <&tlmm 91 0>;
+    qcom,mdss-dsi-display-timings {
+        timing@0{
+            qcom,mdss-dsi-panel-phy-timings =
+            [26 21 09 0b 06 02 04 a0
+                         26 21 09 0b 06 02 04 a0
+                         26 21 09 0b 06 02 04 a0
+                         26 21 09 0b 06 02 04 a0
+                         26 20 0a 0b 06 02 04 a0];
+            qcom,display-topology = <1 0 1>;
+            qcom,default-topology-index = <0>;
+        };
+    };
+};
+
+&dsi_nt36672a_shenchao_video {
+    qcom,dsi-display-active;
+    qcom,mdss-dsi-t-clk-post = <0x0f>;
+    qcom,mdss-dsi-t-clk-pre = <0x37>;
+    qcom,panel-supply-entries = <&dsi_panel_pwr_supply>;
+    qcom,mdss-dsi-bl-pmic-control-type = "bl_ctrl_wled";
+    qcom,mdss-dsi-bl-min-level = <1>;
+    qcom,mdss-dsi-bl-max-level = <4095>;
+    qcom,platform-te-gpio = <&tlmm 90 0>;
+    qcom,platform-reset-gpio = <&tlmm 91 0>;
+    qcom,mdss-dsi-display-timings {
+        timing@0{
+            qcom,mdss-dsi-panel-phy-timings =
+                               [
+                               26 21 09 0b 06 02 04 a0
+                               26 21 09 0b 06 02 04 a0
+                               26 21 09 0b 06 02 04 a0
+                               26 21 09 0b 06 02 04 a0
+                               26 20 0a 0b 06 02 04 a0];
+
+            qcom,display-topology = <1 0 1>;
+            qcom,default-topology-index = <0>;
+        };
+    };
+};

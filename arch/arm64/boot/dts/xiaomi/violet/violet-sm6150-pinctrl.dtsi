@@ -1,0 +1,162 @@
+/*
+ * Copyright (C) 2020 The LineageOS Project
+ *
+ * this file is for attribution only of violet
+ * And public attribution of Xiaomi platforms (like F7B and so)
+ */
+
+&tlmm {
+    msm_gpio_101:msm_gpio_101 {
+        mux{
+            pins="gpio101";
+            function= "gpio";
+        };
+
+        config {
+            pins= "gpio101";
+            drive-strength = <2>;
+            bias-disable;
+            output-low;
+        };
+    };
+
+    msm_gpio_101_output_high:msm_gpio_101_output_high {
+        mux {
+            pins = "gpio101";
+            function = "gpio";
+        };
+
+        config{
+            pins = "gpio101";
+            drive-strength = <2>;
+            bias-disable;
+            output-high;
+        };
+    };
+
+    msm_gpio_93:msm_gpio_93{
+        mux{
+            pins = "gpio93";
+            function = "gpio";
+        };
+
+        config{
+            pins = "gpio93";
+            drive-strength=<2>;
+            bias-pull-down;
+        };
+    };
+
+    /delete-node/ ter_i2s_sck_ws;
+
+    pri_i2s_sck_ws {
+        pri_i2s_sck_sleep: pri_i2s_sck_sleep {
+            mux {
+                pins = "gpio108", "gpio109";
+                function = "mi2s_1";
+            };
+
+            config {
+                pins = "gpio108", "gpio109";
+                drive-strength = <2>;
+                bias-disable;
+            };
+        };
+
+        pri_i2s_sck_active: pri_i2s_sck_active {
+            mux {
+                pins = "gpio108", "gpio109";
+                function = "mi2s_1";
+            };
+
+            config {
+                pins = "gpio108", "gpio109";
+                drive-strength = <8>;
+                bias-disable;
+                output-high;
+            };
+        };
+    };
+    
+    /delete-node/ ter_i2s_data0;
+
+    pri_i2s_data0 {
+        pri_i2s_data0_sleep: pri_i2s_data0_sleep {
+            mux {    
+                pins = "gpio110";
+                function = "mi2s_1";
+            };
+
+            config {
+                pins = "gpio110";
+                drive-strength = <2>;
+                bias-pull-up;
+            };
+        };
+            
+        pri_i2s_data0_active: pri_i2s_data0_active {
+            mux {
+                pins = "gpio110";
+                function = "mi2s_1";
+            };
+
+            config {
+                pins = "gpio110";
+                drive-strength = <8>;
+                input-enable;
+                bias-disable;
+            };
+        };
+    };
+        
+    /delete-node/ ter_i2s_data1;
+
+    pri_i2s_data1 {
+        pri_i2s_data1_sleep: pri_i2s_data1_sleep {
+            mux {
+                pins = "gpio111";
+                function = "mi2s_1";
+            };
+
+            config {
+                pins = "gpio111";
+                drive-strength = <2>;
+                bias-disable;
+            };
+        };
+
+        pri_i2s_data1_active: pri_i2s_data1_active {
+            mux {
+                pins = "gpio111";
+                function = "mi2s_1";
+            };
+
+            config {
+                pins = "gpio111";
+                drive-strength = <8>;
+                output-high;
+                bias-disable;
+            };
+        };
+    };
+};
+
+&cam_sensor_rear_active {
+    mux {
+        pins = "gpio47","gpio94","gpio98";
+    };
+
+    config {
+        pins = "gpio47","gpio94","gpio98";
+    };
+};
+
+&cam_sensor_rear_suspend {
+    mux {
+        pins = "gpio47","gpio94","gpio98";
+    };
+
+    config {
+        pins = "gpio47","gpio94","gpio98";
+    };
+};

@@ -1,0 +1,18 @@
+/*
+ * Copyright (C) 2020 The LineageOS Project
+ *
+ * this file is for attribution only of violet
+ * And public attribution of Xiaomi platforms (like F7B and so)
+ */
+
+&qupv3_se6_spi {
+    status = "ok";
+    device@1 {
+        compatible = "qcom,spi-msm-codec-slave";
+        #address-cells = <1>;
+        #size-cells = <1>;
+        reg = <1>;
+        spi-max-frequency = <1000000>;
+        spi-cpol;
+    };
+};

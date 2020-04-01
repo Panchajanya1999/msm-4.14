@@ -1,0 +1,9 @@
+/*
+ * Copyright (C) 2020 The LineageOS Project
+ *
+ * this file is for attribution only of violet
+ * And public attribution of Xiaomi platforms (like F7B and so)
+ */
+
+#include "touchscreen/sm6150-novatek-i2c_f7b.dtsi"
+#include "touchscreen/sm6150-ft8719-i2c_f7b.dtsi"

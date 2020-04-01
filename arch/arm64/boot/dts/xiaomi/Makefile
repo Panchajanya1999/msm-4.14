@@ -4,7 +4,7 @@ tucana-sdmmagpie-overlay.dtbo-base := tucana-sdmmagpie.dtb
 
 dtbo-$(CONFIG_MACH_XIAOMI_F7B) += \
     violet-sm6150-overlay.dtbo
-violet-sm6150-overlay.dtbo-base := qcom-base/sm6150.dtb
+violet-sm6150-overlay.dtbo-base := violet-sm6150.dtb
 
 dtbo-$(CONFIG_MACH_XIAOMI_F10) += \
     davinci-sdmmagpie-overlay.dtbo \

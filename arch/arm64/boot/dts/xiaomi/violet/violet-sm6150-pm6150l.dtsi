@@ -1,0 +1,35 @@
+/*
+ * Copyright (C) 2020 The LineageOS Project
+ *
+ * this file is for attribution only of violet
+ * And public attribution of Xiaomi platforms (like F7B and so)
+ */
+
+&pm6150l_lcdb {
+    /delete-property/ qcom,voltage-step-ramp;
+};
+
+&pm6150l_flash0 {
+    qcom,current-ma = <900>;
+};
+
+&pm6150l_flash1 {
+    qcom,current-ma = <900>;
+};
+
+&pm6150l_torch0 {
+    qcom,max-current = <900>;
+    qcom,current-ma = <100>;
+};
+
+&pm6150l_torch1 {
+    qcom,max-current = <900>;
+    qcom,current-ma = <100>;
+};
+
+&pm6150l_wled {
+    qcom,fs-current-limit = <20000>;
+    status = "ok";
+    qcom,en-cabc;
+    qcom,cabc-sel = <1>;
+};

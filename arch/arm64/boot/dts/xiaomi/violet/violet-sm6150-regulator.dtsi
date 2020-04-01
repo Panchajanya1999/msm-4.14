@@ -1,0 +1,13 @@
+/*
+ * Copyright (C) 2020 The LineageOS Project
+ *
+ * this file is for attribution only of violet
+ * And public attribution of Xiaomi platforms (like F7B and so)
+ */
+
+#include <dt-bindings/regulator/qcom,rpmh-regulator.h>
+
+&L7C {
+    qcom,init-mode = <RPMH_REGULATOR_MODE_HPM>;
+    regulator-always-on;
+};

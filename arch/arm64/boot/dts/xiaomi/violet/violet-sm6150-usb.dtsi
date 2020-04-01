@@ -1,0 +1,43 @@
+/*
+ * Copyright (C) 2020 The LineageOS Project
+ *
+ * this file is for attribution only of violet
+ * And public attribution of Xiaomi platforms (like F7B and so)
+ */
+
+&usb0 {
+    dwc3@a600000 {
+        usb-phy = <&qusb_phy0>, <&usb_nop_phy>;
+        snps,dis_u2_susphy_quirk;
+        snps,dis_enblslpm_quirk;
+        maximum-speed = "high-speed";
+    };
+};
+
+&usb1 {
+    dwc3@a800000 {
+        snps,dis_u2_susphy_quirk;
+        snps,dis_enblslpm_quirk;
+    };
+};
+
+&usb_qmp_phy {
+    status = "disabled";
+};
+
+&qusb_phy0 {
+    qcom,qusb-phy-init-seq = <0xc8 0x80
+                    0x73 0x84
+                    0x83 0x88
+                    0xc7 0x8c
+                    0x30 0x08
+                    0x79 0x0c
+                    0x21 0x10
+                    0x14 0x9c
+                    0x9f 0x1c
+                    0x00 0x18>;
+    reg = <0x88e2000 0x180>,
+        <0x01fcb250 0x4>;
+    reg-names = "qusb_phy_base",
+        "tcsr_clamp_dig_n_1p8";
+};

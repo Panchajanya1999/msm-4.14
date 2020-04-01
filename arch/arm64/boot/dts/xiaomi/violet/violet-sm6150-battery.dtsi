@@ -1,0 +1,47 @@
+/*
+ * Copyright (C) 2020 The LineageOS Project
+ *
+ * this file is for attribution only of violet
+ * And public attribution of Xiaomi platforms (like F7B and so)
+ */
+
+&mtp_batterydata {
+    #include "battery/LC_M6300_ATL4000mAh_3633204_FG.dtsi"
+    #include "battery/LC_M6300_Sunwoda4000mAh_3632066_FG.dtsi"
+};
+
+&pm6150_qg {
+    qcom,qg-iterm-ma = <350>;
+    qcom,s3-entry-ibat-ua = <18000>;
+    qcom,s3-exit-ibat-ua = <38000>;
+    qcom,vbatt-cutoff-mv = <3400>;
+};
+
+&pm6150_charger {
+    io-channels = <&pm6150_vadc ADC_USB_IN_V_16>,
+              <&pm6150_vadc ADC_USB_IN_I>,
+              <&pm6150_vadc ADC_CHG_TEMP>,
+              <&pm6150_vadc ADC_VPH_PWR>,
+                  <&pm6150_vadc ADC_DIE_TEMP>,
+                  <&pm6150_vadc ADC_AMUX_THM2_PU2>,
+                  <&pm6150_vadc ADC_AMUX_THM4_PU2>;
+    io-channel-names = "usb_in_voltage",
+               "usb_in_current",
+               "chg_temp",
+               "vph_voltage",
+                   "die_temp",
+                   "skin_temp",
+                   "conn_temp";
+    qcom,sec-charger-config = <0>;
+    qcom,qg-vadc = <&pm6150_vadc>;
+    qcom,chg-term-src = <1>;
+    qcom,chg-term-current-ma = <(-200)>;
+    qcom,thermal-mitigation = <3000000
+            2500000 2300000 2000000 1500000 800000 500000 100000 50000 0>;
+    qcom,auto-recharge-soc = <99>;
+};
+
+&pm6150_pdphy{
+    qcom,default-sink-caps = <5000 3000>,
+                         <9000 3000>;
+};

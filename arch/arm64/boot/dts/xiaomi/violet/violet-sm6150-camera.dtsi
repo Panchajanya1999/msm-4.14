@@ -1,0 +1,121 @@
+/*
+ * Copyright (C) 2020 The LineageOS Project
+ *
+ * this file is for attribution only of violet
+ * And public attribution of Xiaomi platforms (like F7B and so)
+ */
+
+&soc {
+    /delete-node/ qcom,camera-flash@1;
+    /delete-node/ qcom,camera-flash@2;
+    /delete-node/ qcom,camera-flash@3;
+    qcom,cam-icp {
+        /delete-property/ icp_pc_en;
+    };
+};
+
+&camera_vana0_ldo {
+    regulator-min-microvolt = <2900000>;
+    regulator-max-microvolt = <2900000>;
+};
+
+&cam_cci {
+    qcom,actuator@0 {
+        cci-master = <1>;
+    };
+
+    qcom,actuator@1 {
+        reg = <0x1>;
+    };
+
+    /delete-node/ qcom,actuator@2;
+    /delete-node/ qcom,actuator@3;
+    /delete-node/ qcom,eeprom@3;
+    /delete-node/ qcom,cam-sensor@3;
+    /delete-node/ qcom,cam-sensor@4;
+    /delete-node/ qcom,cam-sensor@5;
+    /delete-node/ qcom,cam-sensor@6;
+
+    qcom,cam-sensor@0 {
+        csiphy-sd-index = <1>;
+        /delete-property/ led-flash-src;
+        /delete-property/ actuator-src;
+        /delete-property/ ois-src;
+        eeprom-src = <&eeprom_rear_aux>;
+        cam_vana-supply = <&camera_vana1_2_ldo>;
+        rgltr-load-current = <105000 0 80000 0>;
+        pinctrl-0 = <&cam_sensor_mclk1_active
+                    &cam_sensor_rear2_active>;
+        pinctrl-1 = <&cam_sensor_mclk1_suspend
+                    &cam_sensor_rear2_suspend>;
+        gpios = <&tlmm 29 0>,
+                <&tlmm 45 0>;
+        gpio-req-tbl-label = "CAMIF_MCLK1",
+                        "CAM_RESET1";
+        clocks = <&clock_camcc CAM_CC_MCLK1_CLK>;
+    };
+
+    qcom,cam-sensor@1 {
+        csiphy-sd-index = <0>;
+        led-flash-src = <&led_flash_rear>;
+        eeprom-src = <&eeprom_rear>;
+        cam_vana-supply = <&camera_vana0_ldo>;
+        /delete-property/ cam_vdig-supply;
+        cam_vaf-supply = <&pm6150_l19>;
+        regulator-names = "cam_vio", "cam_vana", "cam_vaf","cam_clk";
+        rgltr-min-voltage = <1800000 2900000 2800000 0>;
+        rgltr-max-voltage = <1800000 2900000 2800000 0>;
+        rgltr-load-current = <0 80000 100000 0>;
+        pinctrl-0 = <&cam_sensor_mclk0_active
+                    &cam_sensor_rear_active>;
+        pinctrl-1 = <&cam_sensor_mclk0_suspend
+                    &cam_sensor_rear_suspend>;
+        gpios = <&tlmm 28 0>,
+                <&tlmm 47 0>,
+            <&tlmm 94 0>,
+            <&tlmm 98 0>;
+        gpio-req-tbl-num = <0 1 2 3>;
+        gpio-req-tbl-flags = <1 0 0 0>;
+            gpio-req-tbl-label = "CAMIF_MCLK0",
+                        "CAM_RESET0",
+            "CAM_DVDD1_2V",
+            "CAM_AVDD1_8V";
+        gpio-custom1 = <2>;
+        gpio-custom2 = <3>;
+        clocks = <&clock_camcc CAM_CC_MCLK0_CLK>;
+    };
+
+    qcom,cam-sensor@2 {
+        /delete-property/ actuator-src;
+        /delete-property/ led-flash-src;
+    };
+};
+
+&eeprom_rear {
+    reg = <0x0>;
+    /delete-property/ cam_vdig-supply;
+    cam_clk-supply = <&titan_top_gdsc>;
+    regulator-names = "cam_vio", "cam_vana", "cam_vaf",
+        "cam_clk";
+    rgltr-min-voltage = <1800000 2900000 2800000 0>;
+    rgltr-max-voltage = <1800000 2900000 2800000 0>;
+    rgltr-load-current = <0 80000 100000 0>;
+    gpios = <&tlmm 28 0>,
+            <&tlmm 47 0>,
+        <&tlmm 94 0>,
+        <&tlmm 98 0>;
+    gpio-req-tbl-num = <0 1 2 3>;
+    gpio-req-tbl-flags = <1 0 0 0>;
+    gpio-custom1 = <2>;
+    gpio-custom2 = <3>;
+    gpio-req-tbl-label = "CAMIF_MCLK0",
+                    "CAM_RESET0",
+        "CAM_DVDD1_2V",
+        "CAM_AVDD1_8V";
+    cci-master = <1>;
+};
+
+&eeprom_rear_aux {
+    cci-master = <0>;
+    clocks = <&clock_camcc CAM_CC_MCLK1_CLK>;
+};

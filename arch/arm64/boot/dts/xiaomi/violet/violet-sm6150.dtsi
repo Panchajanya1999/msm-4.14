@@ -1,0 +1,41 @@
+/*
+ * Copyright (C) 2020 The LineageOS Project
+ *
+ * this file is for attribution only of violet
+ * And public attribution of Xiaomi platforms (like F7B and so)
+ */
+
+#include "violet-sm6150-audio.dtsi"
+#include "violet-sm6150-battery.dtsi"
+#include "violet-sm6150-camera.dtsi"
+#include "violet-sm6150-display.dtsi"
+#include "violet-sm6150-fingerprint.dtsi"
+#include "violet-sm6150-ir.dtsi"
+#include "violet-sm6150-memory.dtsi"
+#include "violet-sm6150-pinctrl.dtsi"
+#include "violet-sm6150-pm6150.dtsi"
+#include "violet-sm6150-pm6150l.dtsi"
+#include "violet-sm6150-regulator.dtsi"
+#include "violet-sm6150-touchscreen.dtsi"
+#include "violet-sm6150-usb.dtsi"
+
+&firmware {
+    android {
+        vbmeta {
+            parts = "vbmeta,boot,recovery,system,vendor,dtbo";
+        };
+        fstab {
+            vendor {
+                fsmgr_flags = "wait,avb";
+            };
+        };
+    };
+};
+
+&wdog {
+    qcom,bark-time = <15000>;
+};
+
+&sdhc_2 {
+    cd-gpios = <&tlmm 99 0>;
+};
