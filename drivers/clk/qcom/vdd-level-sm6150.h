@@ -40,7 +40,7 @@ enum vdd_mx_levels_sa6155 {
 	VDD_MX_NUM_SA6155,
 };
 
-static int vdd_mx_corner[] = {
+static int __maybe_unused vdd_mx_corner[] = {
 	RPMH_REGULATOR_LEVEL_OFF,		/* VDD_NONE */
 	RPMH_REGULATOR_LEVEL_MIN_SVS,		/* VDD_MIN */
 	RPMH_REGULATOR_LEVEL_LOW_SVS,		/* VDD_LOWER */

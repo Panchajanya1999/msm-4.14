@@ -1204,6 +1204,7 @@ static int32_t nvt_ts_probe(struct i2c_client *client, const struct i2c_device_i
 {
 	int32_t ret = 0;
 	int i;
+	cpumask_t nvt_sys_mask;
 #if ((TOUCH_KEY_NUM > 0) || WAKEUP_GESTURE)
 	int32_t retry = 0;
 #endif
@@ -1265,8 +1266,6 @@ static int32_t nvt_ts_probe(struct i2c_client *client, const struct i2c_device_i
 		goto err_create_nvt_wq_failed;
 	}
 	sched_setscheduler(nvt_worker_thread, SCHED_FIFO, &param);
-
-	cpumask_t nvt_sys_mask;
 
 	cpumask_clear(&nvt_sys_mask);
 

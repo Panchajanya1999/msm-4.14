@@ -118,9 +118,10 @@ static int msm_audio_dma_buf_map(struct dma_buf *dma_buf,
 		goto detach_dma_buf;
 	}
 
-	if (!(ionflag & ION_FLAG_CACHED))
+	if (!(ionflag & ION_FLAG_CACHED)) {
 		alloc_data->attach->dma_map_attrs |= DMA_ATTR_SKIP_CPU_SYNC;
 		alloc_data->attach->dma_map_attrs |= DMA_ATTR_EXEC_MAPPING;
+	}
 
 	/*
 	 * Get the scatter-gather list.
