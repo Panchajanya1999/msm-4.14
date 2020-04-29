@@ -1213,6 +1213,8 @@ static struct cluster_data *find_cluster_by_first_cpu(unsigned int first_cpu)
 	return NULL;
 }
 
+#ifdef CONFIG_SCHED_WALT
+
 static int cluster_init(const struct cpumask *mask)
 {
 	struct device *dev;
@@ -1281,11 +1283,14 @@ static int cluster_init(const struct cpumask *mask)
 	kobject_init(&cluster->kobj, &ktype_core_ctl);
 	return kobject_add(&cluster->kobj, &dev->kobj, "core_ctl");
 }
+#endif /* CONFIG_SCHED_WALT */
 
 static int __init core_ctl_init(void)
 {
+#ifdef CONFIG_SCHED_WALT
 	struct sched_cluster *cluster;
 	int ret;
+#endif
 
 	cpuhp_setup_state_nocalls(CPUHP_AP_ONLINE_DYN,
 			"core_ctl/isolation:online",
