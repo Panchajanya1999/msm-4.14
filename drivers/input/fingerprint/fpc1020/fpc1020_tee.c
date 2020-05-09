@@ -570,12 +570,6 @@ static int fpc1020_probe(struct platform_device *pdev)
 		goto exit;
 	}
 
-	if(fpsensor != 1){
-                 pr_err("Macle fpc1020_probe failed as fpsensor=%d(1=fp)\n", fpsensor);
-                 return -1;
-         }
-
-
 	fpc1020->dev = dev;
 	platform_set_drvdata(pdev, fpc1020);
 
@@ -695,6 +689,10 @@ exit:
 
 static int fpc1020_remove(struct platform_device *pdev)
 {
+	if(fpsensor != 1) {
+        	pr_err("Macle fpc1020_probe failed as fpsensor=%d(1=fp)\n", fpsensor);
+        	return -1;
+        }
 	struct fpc1020_data *fpc1020 = platform_get_drvdata(pdev);
 	sysfs_remove_group(&pdev->dev.kobj, &attribute_group);
 	mutex_destroy(&fpc1020->lock);
