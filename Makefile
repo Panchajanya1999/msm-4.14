@@ -707,6 +707,8 @@ endif
 ifeq ($(cc-name),clang)
 KBUILD_CFLAGS   += -O3
 KBUILD_CFLAGS	+= -mcpu=cortex-a55 -mtune=cortex-a55
+# Disable void-pointer-to-enum-cast
+KBUILD_CFLAGS += $(call cc-disable-warning, void-pointer-to-enum-cast)
 
 ifdef CONFIG_LLVM_POLLY
 KBUILD_CFLAGS	+= -mllvm -polly \
