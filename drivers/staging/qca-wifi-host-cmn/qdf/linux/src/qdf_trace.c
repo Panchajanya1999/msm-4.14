@@ -1874,6 +1874,7 @@ qdf_export_symbol(qdf_dp_display_proto_pkt_debug);
 void qdf_dp_display_proto_pkt_always(struct qdf_dp_trace_record_s *record,
 			      uint16_t index, uint8_t pdev_id, uint8_t info)
 {
+#ifdef QCA_CLD_DEBUG
 	int loc;
 	char prepend_str[QDF_DP_TRACE_PREPEND_STR_SIZE];
 	struct qdf_dp_trace_proto_buf *buf =
@@ -1882,12 +1883,14 @@ void qdf_dp_display_proto_pkt_always(struct qdf_dp_trace_record_s *record,
 	qdf_mem_zero(prepend_str, sizeof(prepend_str));
 	loc = qdf_dp_trace_fill_meta_str(prepend_str, sizeof(prepend_str),
 					 index, info, record);
+
 	qdf_info("%s [%d] [%s] SA: "QDF_MAC_ADDR_STR " %s DA: "
 		 QDF_MAC_ADDR_STR, prepend_str,
 		 buf->vdev_id, qdf_dp_subtype_to_str(buf->subtype),
 		 QDF_MAC_ADDR_ARRAY(buf->sa.bytes),
 		 qdf_dp_dir_to_str(buf->dir),
 		 QDF_MAC_ADDR_ARRAY(buf->da.bytes));
+#endif
 }
 qdf_export_symbol(qdf_dp_display_proto_pkt_always);
 
@@ -2848,6 +2851,7 @@ static inline void print_to_console(char *str_buffer)
 }
 #endif
 
+#if 0
 #ifdef MULTI_IF_NAME
 static const char *qdf_trace_wlan_modname(void)
 {
@@ -2931,6 +2935,7 @@ void qdf_trace_msg_cmn(unsigned int idx,
 	}
 }
 qdf_export_symbol(qdf_trace_msg_cmn);
+#endif
 
 QDF_STATUS qdf_print_setup(void)
 {
@@ -3353,6 +3358,7 @@ QDF_STATUS qdf_print_set_category_verbose(unsigned int idx,
 }
 qdf_export_symbol(qdf_print_set_category_verbose);
 
+#if 0
 bool qdf_print_is_category_enabled(unsigned int idx, QDF_MODULE_ID category)
 {
 	QDF_TRACE_LEVEL verbose_mask;
@@ -3424,6 +3430,7 @@ bool qdf_print_is_verbose_enabled(unsigned int idx, QDF_MODULE_ID category,
 	return verbose_enabled;
 }
 qdf_export_symbol(qdf_print_is_verbose_enabled);
+#endif
 
 #ifdef DBG_LVL_MAC_FILTERING
 

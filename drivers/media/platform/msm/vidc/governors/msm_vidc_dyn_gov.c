@@ -782,7 +782,7 @@ static unsigned long __calculate_encoder(struct vidc_bus_vote_data *d,
 		y_bw_10bpp_p010);
 	ddr.orig_read = fp_div(fp_mult(fp_mult(ddr.orig_read, FP(1, 50, 100)),
 		downscaling_ratio), original_compression_factor);
-	if (rotation == 90 || rotation == 270)
+	if ((rotation == 90) || (rotation == 270))
 		ddr.orig_read *= lcu_size == 32 ? (dpb_bpp == 8 ? 1 : 3) : 2;
 
 	ddr.line_buffer_read = FP_INT(tnbr_per_lcu * lcu_per_frame *

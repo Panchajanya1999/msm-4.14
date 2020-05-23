@@ -134,7 +134,7 @@
 	qcom,qg-iterm-ma = <350>;
 	qcom,s3-entry-ibat-ua = <18000>;
 	qcom,s3-exit-ibat-ua = <38000>;
-	qcom,vbatt-cutoff-mv = <3400>;
+	qcom,vbatt-cutoff-mv = <3100>;
 };
 
 &qusb_phy0 {

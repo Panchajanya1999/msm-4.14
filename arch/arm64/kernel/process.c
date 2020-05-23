@@ -61,7 +61,7 @@
 
 #ifdef CONFIG_CC_STACKPROTECTOR
 #include <linux/stackprotector.h>
-unsigned long __stack_chk_guard __read_mostly;
+__visible unsigned long __stack_chk_guard __read_mostly;
 EXPORT_SYMBOL(__stack_chk_guard);
 #endif
 
@@ -421,6 +421,13 @@ static void ssbs_thread_switch(struct task_struct *next)
 	 * (e.g. idle task) so check the flags and bail early.
 	 */
 	if (unlikely(next->flags & PF_KTHREAD))
+		return;
+
+	/*
+	 * If all CPUs implement the SSBS extension, then we just need to
+	 * context-switch the PSTATE field.
+	 */
+	if (cpu_have_feature(cpu_feature(SSBS)))
 		return;
 
 	/* If the mitigation is enabled, then we leave SSBS clear. */

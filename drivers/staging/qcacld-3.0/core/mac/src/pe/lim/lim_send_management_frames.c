@@ -58,6 +58,11 @@
 #include "lim_process_fils.h"
 #include "wlan_utility.h"
 
+/* Definition is needed for one of the noop-ed loggers */
+#ifndef TRACE_CODE_TX_MGMT
+#define TRACE_CODE_TX_MGMT 0
+#endif
+
 /**
  *
  * \brief This function is called to add the sequence number to the
@@ -4976,8 +4981,10 @@ static void lim_tx_mgmt_frame(tpAniSirGlobal mac_ctx,
 	MTRACE(qdf_trace(QDF_MODULE_ID_PE, TRACE_CODE_TX_COMPLETE,
 		session->peSessionId, qdf_status));
 	if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
+#ifdef WLAN_DEBUG
 		pe_err("*** Could not send Auth frame (subType: %d), retCode=%X ***",
 			fc->subType, qdf_status);
+#endif
 		mac_ctx->auth_ack_status = LIM_AUTH_ACK_RCD_FAILURE;
 		auth_ack_status = SENT_FAIL;
 		lim_diag_event_report(mac_ctx, WLAN_PE_DIAG_AUTH_ACK_EVENT,
@@ -5000,8 +5007,10 @@ void lim_send_mgmt_frame_tx(tpAniSirGlobal mac_ctx,
 	void *packet;
 
 	msg_len = mb_msg->msg_len - sizeof(*mb_msg);
+#ifdef WLAN_DEBUG
 	pe_debug("sending fc->type: %d fc->subType: %d",
 		fc->type, fc->subType);
+#endif
 
 	sme_session_id = mb_msg->session_id;
 
