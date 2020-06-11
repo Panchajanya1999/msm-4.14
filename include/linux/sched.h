@@ -111,6 +111,14 @@ struct task_group;
 					 (task->flags & PF_FROZEN) == 0 && \
 					 (task->state & TASK_NOLOAD) == 0)
 
+enum task_boost_type {
+	TASK_BOOST_NONE = 0,
+	TASK_BOOST_ON_MID,
+	TASK_BOOST_ON_MAX,
+	TASK_BOOST_STRICT_MAX,
+	TASK_BOOST_END,
+};
+
 #ifdef CONFIG_DEBUG_ATOMIC_SLEEP
 
 /*
@@ -766,14 +774,6 @@ struct task_struct {
 	unsigned long			wakee_flip_decay_ts;
 	struct task_struct		*last_wakee;
 
-	/*
-	 * recent_used_cpu is initially set as the last CPU used by a task
-	 * that wakes affine another task. Waker/wakee relationships can
-	 * push tasks around a CPU where each wakeup moves to the next one.
-	 * Tracking a recently used CPU allows a quick search for a recently
-	 * used CPU that may be idle.
-	 */
-	int				recent_used_cpu;
 	int				wake_cpu;
 #endif
 	int				on_rq;

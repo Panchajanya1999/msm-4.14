@@ -2609,7 +2609,6 @@ void wake_up_new_task(struct task_struct *p)
 	 * Use __set_task_cpu() to avoid calling sched_class::migrate_task_rq,
 	 * as we're not fully set-up yet.
 	 */
-	p->recent_used_cpu = task_cpu(p);
 	__set_task_cpu(p, select_task_rq(p, task_cpu(p), SD_BALANCE_FORK, 0, 1));
 #endif
 	rq = __task_rq_lock(p, &rf);
@@ -7472,7 +7471,7 @@ const u32 sched_prio_to_wmult[40] = {
  */
 int set_task_boost(int boost, u64 period)
 {
-	if (boost < 0 || boost > 2)
+	if (boost < TASK_BOOST_NONE || boost >= TASK_BOOST_END)
 		return -EINVAL;
 	if (boost) {
 		current->boost = boost;

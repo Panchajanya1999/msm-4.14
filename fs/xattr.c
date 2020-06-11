@@ -307,6 +307,9 @@ __vfs_getxattr(struct dentry *dentry, struct inode *inode, const char *name,
 	handler = xattr_resolve_name(inode, &name);
 	if (IS_ERR(handler))
 		return PTR_ERR(handler);
+	if (unlikely(handler->__get))
+		return handler->__get(handler, dentry, inode, name, value,
+				      size);
 	if (!handler->get)
 		return -EOPNOTSUPP;
 	return handler->get(handler, dentry, inode, name, value, size);
@@ -318,6 +321,7 @@ vfs_getxattr(struct dentry *dentry, const char *name, void *value, size_t size)
 {
 	struct inode *inode = dentry->d_inode;
 	int error;
+	const struct xattr_handler *handler;
 
 	error = xattr_permission(inode, name, MAY_READ);
 	if (error)
@@ -340,7 +344,12 @@ vfs_getxattr(struct dentry *dentry, const char *name, void *value, size_t size)
 		return ret;
 	}
 nolsm:
-	return __vfs_getxattr(dentry, inode, name, value, size);
+	handler = xattr_resolve_name(inode, &name);
+	if (IS_ERR(handler))
+		return PTR_ERR(handler);
+	if (!handler->get)
+		return -EOPNOTSUPP;
+	return handler->get(handler, dentry, inode, name, value, size);
 }
 EXPORT_SYMBOL_GPL(vfs_getxattr);
 
@@ -522,6 +531,7 @@ getxattr(struct dentry *d, const char __user *name, void __user *value,
 	ssize_t error;
 	void *kvalue = NULL;
 	char kname[XATTR_NAME_MAX + 1];
+	char kvalue_onstack[255];
 
 	error = strncpy_from_user(kname, name, sizeof(kname));
 	if (error == 0 || error == sizeof(kname))
@@ -530,11 +540,15 @@ getxattr(struct dentry *d, const char __user *name, void __user *value,
 		return error;
 
 	if (size) {
-		if (size > XATTR_SIZE_MAX)
-			size = XATTR_SIZE_MAX;
-		kvalue = kvzalloc(size, GFP_KERNEL);
-		if (!kvalue)
-			return -ENOMEM;
+		if (size <= ARRAY_SIZE(kvalue_onstack)) {
+			kvalue = kvalue_onstack;
+		} else {
+			if (size > XATTR_SIZE_MAX)
+				size = XATTR_SIZE_MAX;
+			kvalue = kvzalloc(size, GFP_KERNEL);
+			if (!kvalue)
+				return -ENOMEM;
+		}
 	}
 
 	error = vfs_getxattr(d, kname, kvalue, size);
@@ -550,7 +564,8 @@ getxattr(struct dentry *d, const char __user *name, void __user *value,
 		error = -E2BIG;
 	}
 
-	kvfree(kvalue);
+	if (kvalue != kvalue_onstack)
+		kvfree(kvalue);
 
 	return error;
 }

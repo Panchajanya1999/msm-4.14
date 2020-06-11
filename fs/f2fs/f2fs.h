@@ -537,6 +537,9 @@ enum {
 
 #define DEFAULT_RETRY_IO_COUNT	8	/* maximum retry read IO count */
 
+/* congestion wait timeout value, default: 6ms */
+#define	DEFAULT_IO_TIMEOUT	(msecs_to_jiffies(6))
+
 /* maximum retry quota flush count */
 #define DEFAULT_RETRY_QUOTA_FLUSH_COUNT		8
 
@@ -1331,6 +1334,9 @@ struct f2fs_sb_info {
 
 	/* Precomputed FS UUID checksum for seeding other checksums */
 	__u32 s_chksum_seed;
+
+	struct kmem_cache *inline_xattr_slab;	/* inline xattr entry */
+	unsigned int inline_xattr_slab_size;	/* default inline xattr slab size */
 
 	struct list_head list;
 };
