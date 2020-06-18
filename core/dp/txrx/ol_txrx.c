@@ -3082,8 +3082,7 @@ ol_txrx_peer_attach(struct cdp_vdev *pvdev, uint8_t *peer_mac_addr)
 #ifdef QCA_SUPPORT_PEER_DATA_RX_RSSI
 	peer->rssi_dbm = HTT_RSSI_INVALID;
 #endif
-	if ((QDF_GLOBAL_MONITOR_MODE == cds_get_conparam()) &&
-	    !pdev->self_peer) {
+	if (QDF_GLOBAL_MONITOR_MODE == cds_get_conparam()) {
 		pdev->self_peer = peer;
 		/*
 		 * No Tx in monitor mode, otherwise results in target assert.
@@ -3689,6 +3688,22 @@ static inline void ol_txrx_peer_free_tids(ol_txrx_peer_handle peer)
 }
 
 /**
+ * ol_txrx_peer_drop_pending_frames() - drop pending frames in the RX queue
+ * @peer: peer handle
+ *
+ * Drop pending packets pertaining to the peer from the RX thread queue.
+ *
+ * Return: None
+ */
+static void ol_txrx_peer_drop_pending_frames(struct ol_txrx_peer_t *peer)
+{
+	p_cds_sched_context sched_ctx = get_cds_sched_ctxt();
+
+	if (sched_ctx)
+		cds_drop_rxpkt_by_staid(sched_ctx, peer->local_id);
+}
+
+/**
  * ol_txrx_peer_release_ref() - release peer reference
  * @peer: peer handle
  *
@@ -3790,6 +3805,10 @@ int ol_txrx_peer_release_ref(ol_txrx_peer_handle peer,
 				    &peer->mac_addr.raw, peer, 0,
 				    qdf_atomic_read(&peer->ref_cnt));
 		peer_id = peer->local_id;
+
+		/* Drop all pending frames in the rx thread queue */
+		ol_txrx_peer_drop_pending_frames(peer);
+
 		/* remove the reference to the peer from the hash table */
 		ol_txrx_peer_find_hash_remove(pdev, peer);
 
