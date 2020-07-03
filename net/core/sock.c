@@ -1033,7 +1033,7 @@ set_rcvbuf:
 			cmpxchg(&sk->sk_pacing_status,
 				SK_PACING_NONE,
 				SK_PACING_NEEDED);
-		sk->sk_max_pacing_rate = val;
+		sk->sk_max_pacing_rate = (val == ~0U) ? ~0UL : val;
 		sk->sk_pacing_rate = min(sk->sk_pacing_rate,
 					 sk->sk_max_pacing_rate);
 		break;
@@ -1347,7 +1347,8 @@ int sock_getsockopt(struct socket *sock, int level, int optname,
 #endif
 
 	case SO_MAX_PACING_RATE:
-		v.val = sk->sk_max_pacing_rate;
+		/* 32bit version */
+		v.val = min_t(unsigned long, sk->sk_max_pacing_rate, ~0U);
 		break;
 
 	case SO_INCOMING_CPU:
@@ -1538,6 +1539,7 @@ struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 		cgroup_sk_alloc(&sk->sk_cgrp_data);
 		sock_update_classid(&sk->sk_cgrp_data);
 		sock_update_netprioidx(&sk->sk_cgrp_data);
+		sk_tx_queue_clear(sk);
 	}
 
 	return sk;
@@ -1740,6 +1742,7 @@ struct sock *sk_clone_lock(const struct sock *sk, const gfp_t priority)
 		 */
 		sk_refcnt_debug_inc(newsk);
 		sk_set_socket(newsk, NULL);
+		sk_tx_queue_clear(newsk);
 		newsk->sk_wq = NULL;
 
 		if (newsk->sk_prot->sockets_allocated)
@@ -2746,9 +2749,9 @@ void sock_init_data(struct socket *sock, struct sock *sk)
 	sk->sk_ll_usec		=	sysctl_net_busy_read;
 #endif
 
-	sk->sk_max_pacing_rate = ~0U;
-	sk->sk_pacing_rate = ~0U;
-	sk->sk_pacing_shift = 10;
+	sk->sk_max_pacing_rate = ~0UL;
+	sk->sk_pacing_rate = ~0UL;
+	WRITE_ONCE(sk->sk_pacing_shift, 10);
 	sk->sk_incoming_cpu = -1;
 	/*
 	 * Before updating sk_refcnt, we must commit prior changes to memory

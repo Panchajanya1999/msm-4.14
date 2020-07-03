@@ -280,6 +280,9 @@ static ssize_t f2fs_sbi_store(struct f2fs_attr *a,
 			struct f2fs_sb_info *sbi,
 			const char *buf, size_t count)
 {
+	if (!strcmp(a->attr.name, "cp_interval"))
+		return count;
+
 	return __sbi_store(a, sbi, buf, count);
 }
 
