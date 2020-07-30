@@ -180,6 +180,9 @@ static inline void timer_setup(struct timer_list *timer,
 		      (TIMER_DATA_TYPE)timer, flags);
 }
 
+#define timer_setup_on_stack(timer, callback)		\
+	__init_timer_on_stack((timer), (callback))
+	
 #define from_timer(var, callback_timer, timer_fieldname) \
 	container_of(callback_timer, typeof(*var), timer_fieldname)
 
