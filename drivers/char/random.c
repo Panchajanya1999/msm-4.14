@@ -1613,7 +1613,7 @@ static void try_to_generate_entropy(void)
 	if (stack.now == random_get_entropy())
 		return;
 
-	timer_setup_on_stack(&stack.timer, entropy_timer, 0);
+	timer_setup_on_stack(&stack.timer, entropy_timer);
 	while (!crng_ready()) {
 		if (!timer_pending(&stack.timer))
 			mod_timer(&stack.timer, jiffies+1);
