@@ -26,3 +26,8 @@ mkdir -p net/wireguard
 curl -A "$USER_AGENT" -LsS --connect-timeout 30 "https://git.zx2c4.com/wireguard-linux-compat/snapshot/wireguard-linux-compat-$VERSION.tar.xz" | tar -C "net/wireguard" -xJf - --strip-components=2 "wireguard-linux-compat-$VERSION/src"
 sed -i 's/tristate/bool/;s/default m/default y/;' net/wireguard/Kconfig
 touch net/wireguard/.check
+
+# A dirty hack to comment out a redefined function. I need it for purpose and I shall never recommend to anyone without knowing why I did this. 
+
+sed -i '344i/*' net/wireguard/compat/compat.h
+sed -i '373a*/' net/wireguard/compat/compat.h
