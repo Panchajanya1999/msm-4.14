@@ -328,7 +328,7 @@ __visible const u32 crypto_ft_tab[4][256] __cacheline_aligned = {
 	}
 };
 
-__visible const u32 crypto_fl_tab[4][256] __cacheline_aligned = {
+__visible const u32 crypto_fl_tab[4][256] = {
 	{
 		0x00000063, 0x0000007c, 0x00000077, 0x0000007b,
 		0x000000f2, 0x0000006b, 0x0000006f, 0x000000c5,

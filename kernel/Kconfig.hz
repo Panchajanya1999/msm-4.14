@@ -38,6 +38,14 @@ choice
 	 while also showing good interactive responsiveness even
 	 on SMP and NUMA systems and exactly dividing by both PAL and
 	 NTSC frame rates for video and multimedia work.
+	 
+	config HZ_500
+		bool "500 HZ"
+	help
+	 500 Hz is a balanced timer frequency. Provides fast interactivity
+	 on desktops and mobile devices with great smoothness without increasing 
+	 CPU power consumption and sacrificing the battery life on battery backed
+	 devices.
 
 	config HZ_1000
 		bool "1000 HZ"
@@ -52,6 +60,7 @@ config HZ
 	default 100 if HZ_100
 	default 250 if HZ_250
 	default 300 if HZ_300
+	default 500 if HZ_500
 	default 1000 if HZ_1000
 
 config SCHED_HRTICK
