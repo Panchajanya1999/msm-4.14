@@ -138,8 +138,9 @@ int pm_qos_update_target(struct pm_qos_constraints *c, struct plist_node *node,
 bool pm_qos_update_flags(struct pm_qos_flags *pqf,
 			 struct pm_qos_flags_request *req,
 			 enum pm_qos_req_action action, s32 val);
-void pm_qos_add_request(struct pm_qos_request *req, int pm_qos_class,
-			s32 value);
+void pm_qos_add_request_special(struct pm_qos_request *req, int pm_qos_class,
+			s32 value, const char* str);
+#define pm_qos_add_request(req, pm, value) pm_qos_add_request_special(req, pm, value, __func__)
 void pm_qos_update_request(struct pm_qos_request *req,
 			   s32 new_value);
 void pm_qos_update_request_timeout(struct pm_qos_request *req,

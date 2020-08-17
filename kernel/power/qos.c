@@ -272,7 +272,7 @@ static inline int pm_qos_set_value_for_cpus(struct pm_qos_constraints *c,
 {
 	struct pm_qos_request *req = NULL;
 	int cpu;
-	s32 qos_val[NR_CPUS] = { [0 ... (NR_CPUS - 1)] = c->default_value };
+	s32 qos_val[NR_CPUS] = { [0 ... 5] = c->default_value };
 
 	/*
 	 * pm_qos_constraints can be from different classes,
@@ -591,8 +591,8 @@ static void pm_qos_irq_notify(struct irq_affinity_notify *notify,
  * removal.
  */
 
-void pm_qos_add_request(struct pm_qos_request *req,
-			int pm_qos_class, s32 value)
+void pm_qos_add_request_special(struct pm_qos_request *req,
+			int pm_qos_class, s32 value, const char* str)
 {
 	if (!req) /*guard against callers passing in null */
 		return;
@@ -601,6 +601,8 @@ void pm_qos_add_request(struct pm_qos_request *req,
 		WARN(1, KERN_ERR "pm_qos_add_request() called for already added request\n");
 		return;
 	}
+
+	pr_info("AAAA: pm_qos_add_request called by: %s\n", str);
 
 	switch (req->type) {
 	case PM_QOS_REQ_AFFINE_CORES:
@@ -674,7 +676,7 @@ void pm_qos_add_request(struct pm_qos_request *req,
 	}
 #endif
 }
-EXPORT_SYMBOL_GPL(pm_qos_add_request);
+EXPORT_SYMBOL_GPL(pm_qos_add_request_special);
 
 /**
  * pm_qos_update_request - modifies an existing qos request
@@ -902,6 +904,15 @@ static ssize_t pm_qos_power_write(struct file *filp, const char __user *buf,
 		ret = kstrtos32_from_user(buf, count, 16, &value);
 		if (ret)
 			return ret;
+	}
+
+	switch (value) {
+		case 0x44:
+			value = 44;
+			break;
+		case 0x100:
+			return count;
+			break;
 	}
 
 	req = filp->private_data;
