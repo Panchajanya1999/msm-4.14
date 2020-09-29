@@ -159,7 +159,6 @@ struct stmmac_priv {
 	struct dentry *dbgfs_rings_status;
 	struct dentry *dbgfs_dma_cap;
 #endif
-	bool hw_offload_enabled;
 };
 
 struct stmmac_emb_smmu_cb_ctx {
