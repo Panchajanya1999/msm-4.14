@@ -19,6 +19,8 @@ ccflags-y := -fno-stack-protector -DDISABLE_BRANCH_PROFILING -ffixed-x18
 ldflags-y := -shared -nostdlib -soname=linux-vdso.so.1 \
 		--hash-style=sysv --build-id -n -T
 
+CFLAGS_REMOVE_vgettimeofday.o += $(CC_FLAGS_SCS)
+
 # Force -O2 to avoid libgcc dependencies
 CFLAGS_REMOVE_vgettimeofday.o = -pg -Os
 CFLAGS_vgettimeofday.o = -O2 -fPIC -fasynchronous-unwind-tables
