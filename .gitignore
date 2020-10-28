@@ -53,6 +53,8 @@ modules.builtin
 /vmlinuz
 /System.map
 /Module.markers
+/clang-llvm
+/Anykerne2
 
 #
 # RPM spec file (make rpm-pkg)
@@ -125,3 +127,7 @@ all.config
 # fetched Android config fragments
 kernel/configs/android-*.cfg
 /scripts/ufdt
+
+AnyKernel2/
+
+myscripts/
