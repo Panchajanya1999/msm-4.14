@@ -55,6 +55,7 @@ modules.builtin
 /Module.markers
 /clang-llvm
 /Anykerne2
+/out
 
 #
 # RPM spec file (make rpm-pkg)

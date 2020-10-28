@@ -1,0 +1,7 @@
+config MT7630
+	tristate "MT7630 USB WiFi"
+	depends on USB
+	default m
+	---help---
+	  Help message of MT7630
+

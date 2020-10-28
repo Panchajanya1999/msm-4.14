@@ -1,10 +1,10 @@
-make[1]: Entering directory '/mnt/Storage-VM/violet/msm-4.14/out'
+make[1]: Entering directory '/mnt/kernels/Violet/msm-4.14/out'
+  GEN     ./Makefile
 scripts/kconfig/conf  --silentoldconfig Kconfig
   CHK     include/config/kernel.release
-  UPD     include/config/kernel.release
+  GEN     ./Makefile
   CHK     include/generated/uapi/linux/version.h
   CHK     include/generated/utsrelease.h
-  UPD     include/generated/utsrelease.h
   Using .. as source for kernel
   CHK     scripts/mod/devicetable-offsets.h
   CHK     include/generated/timeconst.h
@@ -12,254 +12,28 @@ scripts/kconfig/conf  --silentoldconfig Kconfig
   CHK     include/generated/asm-offsets.h
   CALL    ../scripts/checksyscalls.sh
   CHK     include/generated/compile.h
-  SKIPPED include/generated/compile.h
-  CC      init/version.o
-  AR      init/built-in.o
-  CC      kernel/sys.o
-  CC      drivers/base/firmware_class.o
-  AR      drivers/base/built-in.o
-  CC      kernel/module.o
+  CHK     kernel/config_data.h
   CC      techpack/audio/ipc/apr.o
   CC      techpack/audio/ipc/apr_v2.o
   CC      techpack/audio/ipc/apr_tal_rpmsg.o
-  CHK     kernel/config_data.h
-  AR      kernel/built-in.o
   CC      techpack/audio/ipc/wcd-dsp-glink.o
+  DTC     arch/arm64/boot/dts/qcom/sm6150.dtb
   AR      techpack/audio/ipc/apr_dlkm.o
   AR      techpack/audio/ipc/wglink_dlkm.o
   AR      techpack/audio/ipc/built-in.o
   AR      techpack/audio/built-in.o
-  DTC     arch/arm64/boot/dts/qcom/sm6150.dtb
   AR      techpack/built-in.o
   DTC     arch/arm64/boot/dts/qcom/sm6150-idp-overlay.dtbo
-  CC      net/wireguard/main.o
-  CC      net/wireguard/noise.o
-  CC      net/wireguard/device.o
-  CC      net/wireguard/peer.o
-  CC      net/wireguard/timers.o
-  CC      net/wireguard/queueing.o
-  CC      net/wireguard/send.o
-  CC      net/wireguard/receive.o
-  CC      net/wireguard/socket.o
-  CC      net/wireguard/peerlookup.o
-  CC      net/wireguard/allowedips.o
-  CC      net/wireguard/ratelimiter.o
-  CC      net/wireguard/cookie.o
-  CC      net/wireguard/netlink.o
-  CC      net/wireguard/crypto/zinc/chacha20/chacha20.o
-  CC      net/wireguard/crypto/zinc/poly1305/poly1305.o
-  CC      net/wireguard/crypto/zinc/chacha20poly1305.o
-  CC      drivers/media/dvb-frontends/dvb-pll.o
-  CC      net/wireguard/crypto/zinc/blake2s/blake2s.o
-  CC      drivers/media/dvb-frontends/stv0299.o
-  CC      drivers/media/dvb-frontends/stb0899_drv.o
-  CC      net/wireguard/crypto/zinc/curve25519/curve25519.o
-  CC      drivers/media/dvb-frontends/stb0899_algo.o
-../drivers/media/dvb-frontends/stb0899_algo.c:929:14: warning: explicitly assigning value of variable of type 'u32' (aka 'unsigned int') to itself [-Wself-assign]
-                k_indirect = k_indirect;          /*kindirect = kindirect 10^-6*/
-                ~~~~~~~~~~ ^ ~~~~~~~~~~
-  CC      drivers/media/dvb-frontends/stb6100.o
-1 warning generated.
-  CC      drivers/media/dvb-frontends/sp8870.o
-  CC      drivers/media/dvb-frontends/cx22700.o
-  CC      drivers/media/dvb-frontends/s5h1432.o
-  CC      drivers/media/v4l2-core/v4l2-common.o
-  CC      drivers/media/tuners/tea5767.o
-  CC      drivers/media/tuners/tea5761.o
-  CC      drivers/media/dvb-frontends/cx24110.o
-  AR      net/wireguard/wireguard.o
-  AR      net/wireguard/built-in.o
-  AR      net/built-in.o
-  CC      drivers/media/dvb-frontends/tda8083.o
-  AR      drivers/media/v4l2-core/built-in.o
-  CC      drivers/media/tuners/msi001.o
-  CC      drivers/media/tuners/mt2060.o
-  CC      drivers/media/dvb-frontends/l64781.o
-  CC      drivers/media/tuners/mt2063.o
-  CC      drivers/media/dvb-frontends/dib3000mb.o
-  CC      drivers/media/tuners/mt2266.o
-  CC      drivers/media/tuners/qt1010.o
-  CC      drivers/media/dvb-frontends/dib3000mc.o
-  CC      drivers/media/dvb-frontends/dibx000_common.o
-  CC      drivers/media/tuners/mt2131.o
-  CC      drivers/media/dvb-frontends/dib7000m.o
-  CC      drivers/media/tuners/mxl5005s.o
-  CC      drivers/media/dvb-frontends/dib7000p.o
-  CC      drivers/media/tuners/mxl5007t.o
-  CC      drivers/media/dvb-frontends/dib8000.o
-../drivers/media/dvb-frontends/dib7000p.c:1874:15: warning: explicitly assigning value of variable of type 'int' to itself [-Wself-assign]
-        interleaving = interleaving;
-        ~~~~~~~~~~~~ ^ ~~~~~~~~~~~~
-  CC      drivers/media/dvb-frontends/dib9000.o
-  CC      drivers/media/tuners/max2165.o
-  CC      drivers/media/dvb-frontends/mt312.o
-1 warning generated.
-  CC      drivers/media/dvb-frontends/ves1820.o
-  CC      drivers/media/tuners/tda18218.o
-  CC      drivers/media/dvb-frontends/ves1x93.o
-  CC      drivers/media/dvb-frontends/tda1004x.o
-  CC      drivers/media/tuners/tda18212.o
-  CC      drivers/media/tuners/e4000.o
-  CC      drivers/media/dvb-frontends/sp887x.o
-  CC      drivers/media/tuners/fc2580.o
-  CC      drivers/media/tuners/tua9001.o
-  CC      drivers/media/tuners/si2157.o
-  CC      drivers/media/tuners/fc0011.o
-  CC      drivers/media/dvb-frontends/nxt6000.o
-  CC      drivers/media/tuners/fc0012.o
-  CC      drivers/media/tuners/fc0013.o
-  CC      drivers/media/dvb-frontends/mt352.o
-  CC      drivers/media/dvb-frontends/zl10036.o
-  CC      drivers/media/dvb-frontends/zl10039.o
-  CC      drivers/media/dvb-frontends/zl10353.o
-  CC      drivers/media/dvb-frontends/cx22702.o
-  CC      drivers/media/tuners/it913x.o
-  CC      drivers/media/dvb-frontends/drxd_firm.o
-  CC      drivers/media/dvb-frontends/drxd_hard.o
-  CC      drivers/media/dvb-frontends/tda10021.o
-  CC      drivers/media/tuners/r820t.o
-  CC      drivers/media/tuners/mxl301rf.o
-../drivers/media/dvb-frontends/drxd_hard.c:2144:10: warning: explicitly assigning value of variable of type 'int' to itself [-Wself-assign]
-                status = status;
-                ~~~~~~ ^ ~~~~~~
-../drivers/media/dvb-frontends/drxd_hard.c:2255:10: warning: explicitly assigning value of variable of type 'int' to itself [-Wself-assign]
-                status = status;
-                ~~~~~~ ^ ~~~~~~
-../drivers/media/dvb-frontends/drxd_hard.c:2322:10: warning: explicitly assigning value of variable of type 'int' to itself [-Wself-assign]
-                status = status;
-                ~~~~~~ ^ ~~~~~~
-  CC      drivers/media/tuners/qm1d1c0042.o
-  CC      drivers/media/dvb-frontends/tda10023.o
-  CC      drivers/media/dvb-frontends/stv0297.o
-  CC      drivers/media/tuners/m88rs6000t.o
-  CC      drivers/media/dvb-frontends/nxt200x.o
-3 warnings generated.
-  CC      drivers/media/dvb-frontends/or51211.o
-  CC      drivers/media/dvb-frontends/or51132.o
-  CC      drivers/media/dvb-frontends/bcm3510.o
-  CC      drivers/media/dvb-frontends/s5h1420.o
-  CC      drivers/media/dvb-frontends/lgdt330x.o
-  CC      drivers/media/dvb-frontends/lgdt3305.o
-  CC      drivers/media/dvb-frontends/lgdt3306a.o
-  CC      drivers/media/dvb-frontends/lg2160.o
-  CC      drivers/media/dvb-frontends/cx24123.o
-  CC      drivers/media/dvb-frontends/lnbh25.o
-  CC      drivers/media/dvb-frontends/lnbp21.o
-  CC      drivers/media/dvb-frontends/lnbp22.o
-  CC      drivers/media/dvb-frontends/isl6405.o
-  CC      drivers/media/dvb-frontends/isl6421.o
-  CC      drivers/media/dvb-frontends/tda10086.o
-  CC      drivers/media/dvb-frontends/tda826x.o
-  CC      drivers/media/dvb-frontends/tda8261.o
-  CC      drivers/media/dvb-frontends/dib0070.o
-  CC      drivers/media/dvb-frontends/dib0090.o
-  CC      drivers/media/dvb-frontends/tua6100.o
-  CC      drivers/media/dvb-frontends/s5h1409.o
-  CC      drivers/media/dvb-frontends/itd1000.o
-  CC      drivers/media/dvb-frontends/au8522_common.o
-  CC      drivers/media/dvb-frontends/au8522_dig.o
-  CC      drivers/media/dvb-frontends/au8522_decoder.o
-  CC      drivers/media/dvb-frontends/tda10048.o
-  CC      drivers/media/dvb-frontends/cx24113.o
-  CC      drivers/media/dvb-frontends/s5h1411.o
-  CC      drivers/media/dvb-frontends/lgs8gl5.o
-  CC      drivers/media/dvb-frontends/tda665x.o
-  CC      drivers/media/dvb-frontends/lgs8gxx.o
-  CC      drivers/media/dvb-frontends/atbm8830.o
-  CC      drivers/media/dvb-frontends/af9013.o
-  CC      drivers/media/dvb-frontends/cx24116.o
-  CC      drivers/media/dvb-frontends/cx24117.o
-  CC      drivers/media/dvb-frontends/cx24120.o
-  CC      drivers/media/dvb-frontends/si21xx.o
-  CC      drivers/media/dvb-frontends/si2168.o
-  CC      drivers/media/dvb-frontends/stv0288.o
-  CC      drivers/media/dvb-frontends/stb6000.o
-  CC      drivers/media/dvb-frontends/s921.o
-  CC      drivers/media/dvb-frontends/stv6110.o
-  CC      drivers/media/dvb-frontends/stv0900_core.o
-  CC      drivers/media/dvb-frontends/stv0900_sw.o
-  CC      drivers/media/dvb-frontends/stv090x.o
-  CC      drivers/media/dvb-frontends/stv6110x.o
-  CC      drivers/media/dvb-frontends/m88ds3103.o
-  CC      drivers/media/dvb-frontends/mn88472.o
-  CC      drivers/media/dvb-frontends/mn88473.o
-  CC      drivers/media/dvb-frontends/isl6423.o
-  CC      drivers/media/dvb-frontends/ec100.o
-  CC      drivers/media/dvb-frontends/ds3000.o
-  CC      drivers/media/dvb-frontends/ts2020.o
-  CC      drivers/media/dvb-frontends/mb86a16.o
-  CC      drivers/media/dvb-frontends/drx39xyj/drxj.o
-  CC      drivers/media/dvb-frontends/mb86a20s.o
-  CC      drivers/media/dvb-frontends/ix2505v.o
-../drivers/media/dvb-frontends/drx39xyj/drxj.c:11077:13: warning: equality comparison with extraneous parentheses [-Wparentheses-equality]
-        if ((*mode == DRX_POWER_UP)) {
-             ~~~~~~^~~~~~~~~~~~~~~
-../drivers/media/dvb-frontends/drx39xyj/drxj.c:11077:13: note: remove extraneous parentheses around the comparison to silence this warning
-        if ((*mode == DRX_POWER_UP)) {
-            ~      ^              ~
-../drivers/media/dvb-frontends/drx39xyj/drxj.c:11077:13: note: use '=' to turn this equality comparison into an assignment
-        if ((*mode == DRX_POWER_UP)) {
-                   ^~
-                   =
-  CC      drivers/media/dvb-frontends/stv0367.o
-  CC      drivers/media/dvb-frontends/cxd2820r_core.o
-  CC      drivers/media/dvb-frontends/cxd2820r_c.o
-../drivers/media/dvb-frontends/stv0367.c:1552:14: warning: explicitly assigning value of variable of type 'u32' (aka 'unsigned int') to itself [-Wself-assign]
-                        temporary =  temporary;
-                        ~~~~~~~~~ ^  ~~~~~~~~~
-1 warning generated.
-  CC      drivers/media/dvb-frontends/cxd2820r_t.o
-1 warning generated.
-  AR      drivers/media/dvb-frontends/drx39xyj/drx39xyj.o
-  AR      drivers/media/dvb-frontends/drx39xyj/built-in.o
-  CC      drivers/media/dvb-frontends/cxd2820r_t2.o
-  CC      drivers/media/dvb-frontends/cxd2841er.o
-  CC      drivers/media/dvb-frontends/drxk_hard.o
-  CC      drivers/media/dvb-frontends/tda18271c2dd.o
-  CC      drivers/media/dvb-frontends/stv0910.o
-  CC      drivers/media/dvb-frontends/stv6111.o
-../drivers/media/dvb-frontends/drxk_hard.c:6065:27: warning: equality comparison with extraneous parentheses [-Wparentheses-equality]
-        if ((state->m_drxk_state == DRXK_UNINITIALIZED)) {
-             ~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
-../drivers/media/dvb-frontends/drxk_hard.c:6065:27: note: remove extraneous parentheses around the comparison to silence this warning
-        if ((state->m_drxk_state == DRXK_UNINITIALIZED)) {
-            ~                    ^                    ~
-../drivers/media/dvb-frontends/drxk_hard.c:6065:27: note: use '=' to turn this equality comparison into an assignment
-        if ((state->m_drxk_state == DRXK_UNINITIALIZED)) {
-                                 ^~
-                                 =
-  CC      drivers/media/dvb-frontends/mxl5xx.o
-../drivers/media/dvb-frontends/tda18271c2dd.c:677:10: warning: explicitly assigning value of variable of type 'int' to itself [-Wself-assign]
-                status = status;
-                ~~~~~~ ^ ~~~~~~
-1 warning generated.
-  CC      drivers/media/dvb-frontends/si2165.o
-  CC      drivers/media/dvb-frontends/a8293.o
-  CC      drivers/media/dvb-frontends/sp2.o
-  CC      drivers/media/dvb-frontends/tda10071.o
-1 warning generated.
-  CC      drivers/media/dvb-frontends/m88rs2000.o
-  CC      drivers/media/dvb-frontends/af9033.o
-  CC      drivers/media/dvb-frontends/tc90522.o
-  CC      drivers/media/dvb-frontends/horus3a.o
-  CC      drivers/media/dvb-frontends/ascot2e.o
-  CC      drivers/media/dvb-frontends/helene.o
-  AR      drivers/media/dvb-frontends/stb0899.o
-  AR      drivers/media/dvb-frontends/drxd.o
-  AR      drivers/media/dvb-frontends/stv0900.o
-  AR      drivers/media/dvb-frontends/cxd2820r.o
-  AR      drivers/media/dvb-frontends/drxk.o
-  AR      drivers/media/dvb-frontends/built-in.o
   CC      drivers/staging/qcacld-3.0/core/hdd/src/wlan_hdd_main.o
-  AR      drivers/media/tuners/built-in.o
-  AR      drivers/media/built-in.o
   AR      drivers/staging/qcacld-3.0/wlan.o
   AR      drivers/staging/qcacld-3.0/built-in.o
   AR      drivers/staging/built-in.o
   AR      drivers/built-in.o
   GEN     .version
   CHK     include/generated/compile.h
-  SKIPPED include/generated/compile.h
+  UPD     include/generated/compile.h
+  CC      init/version.o
+  AR      init/built-in.o
   AR      built-in.o
   LTO     vmlinux.o
   MODPOST vmlinux.o
@@ -271,9 +45,15 @@ WARNING: EXPORT symbol "gsi_write_channel_scratch" [vmlinux] version generation 
   SYSMAP  System.map
   Building modules, stage 2.
   OBJCOPY arch/arm64/boot/Image
-  MODPOST 0 modules
-WARNING: EXPORT symbol "gsi_write_channel_scratch" [vmlinux] version generation failed, symbol will not be versioned.
+  LD [M]  drivers/aircrack/rtl8192eu/8192eu.lto.o
+  LD [M]  drivers/aircrack/rtl8812au/88XXau.lto.o
   GZIP    arch/arm64/boot/Image.gz
   DTC     arch/arm64/boot/dts/qcom/sm6150.dtb
   CAT     arch/arm64/boot/Image.gz-dtb
-make[1]: Leaving directory '/mnt/Storage-VM/violet/msm-4.14/out'
+  MODPOST 2 modules
+WARNING: EXPORT symbol "gsi_write_channel_scratch" [vmlinux] version generation failed, symbol will not be versioned.
+  CC      drivers/aircrack/rtl8192eu/8192eu.mod.o
+  CC      drivers/aircrack/rtl8812au/88XXau.mod.o
+  LD [M]  drivers/aircrack/rtl8812au/88XXau.ko
+  LD [M]  drivers/aircrack/rtl8192eu/8192eu.ko
+make[1]: Leaving directory '/mnt/kernels/Violet/msm-4.14/out'

@@ -33,7 +33,7 @@ err() {
 ##----------Basic Informations, COMPULSORY--------------##
 
 # The defult directory where the kernel should be placed
-KERNEL_DIR=/mnt/Storage-VM/violet/msm-4.14
+KERNEL_DIR=/mnt/kernels/Violet/msm-4.14
 
 # The name of the Kernel, to name the ZIP
 ZIPNAME="Team-420"
@@ -233,6 +233,7 @@ build_kernel() {
 			OBJDUMP=llvm-objdump \
 			STRIP=llvm-strip
 		)
+		
 	elif [ $COMPILER = "gcc" ]
 	then
 		MAKE+=(
