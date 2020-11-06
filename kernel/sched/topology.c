@@ -1250,6 +1250,7 @@ static int sched_domains_curr_level;
  *   SD_SHARE_PKG_RESOURCES - describes shared caches
  *   SD_NUMA                - describes NUMA topologies
  *   SD_SHARE_POWERDOMAIN   - describes shared power domain
+ *   SD_ASYM_CPUCAPACITY    - describes mixed capacity topologies
  *   SD_SHARE_CAP_STATES    - describes shared capacity states
  *
  * Odd one out, which beside describing the topology has a quirk also
@@ -1262,13 +1263,14 @@ static int sched_domains_curr_level;
 	 SD_SHARE_PKG_RESOURCES |	\
 	 SD_NUMA |			\
 	 SD_ASYM_PACKING |		\
+	 SD_ASYM_CPUCAPACITY |		\
 	 SD_SHARE_POWERDOMAIN |		\
 	 SD_SHARE_CAP_STATES)
 
 static struct sched_domain *
 sd_init(struct sched_domain_topology_level *tl,
 	const struct cpumask *cpu_map,
-	struct sched_domain *child, int dflags, int cpu)
+	struct sched_domain *child, int cpu)
 {
 	struct sd_data *sdd = &tl->data;
 	struct sched_domain *sd = *per_cpu_ptr(sdd->sd, cpu);
@@ -1287,10 +1289,7 @@ sd_init(struct sched_domain_topology_level *tl,
 		sd_flags = (*tl->sd_flags)();
 	if (WARN_ONCE(sd_flags & ~TOPOLOGY_SD_FLAGS,
 			"wrong sd_flags in topology description\n"))
-		sd_flags &= ~TOPOLOGY_SD_FLAGS;
-
-	/* Apply detected topology flags */
-	sd_flags |= dflags;
+		sd_flags &= TOPOLOGY_SD_FLAGS;
 
 	*sd = (struct sched_domain){
 		.min_interval		= sd_weight,
@@ -1798,9 +1797,9 @@ static void __sdt_free(const struct cpumask *cpu_map)
 
 static struct sched_domain *build_sched_domain(struct sched_domain_topology_level *tl,
 		const struct cpumask *cpu_map, struct sched_domain_attr *attr,
-		struct sched_domain *child, int dflags, int cpu)
+		struct sched_domain *child, int cpu)
 {
-	struct sched_domain *sd = sd_init(tl, cpu_map, child, dflags, cpu);
+	struct sched_domain *sd = sd_init(tl, cpu_map, child, cpu);
 
 	if (child) {
 		sd->level = child->level + 1;
@@ -1827,65 +1826,6 @@ static struct sched_domain *build_sched_domain(struct sched_domain_topology_leve
 }
 
 /*
- * Find the sched_domain_topology_level where all CPU capacities are visible
- * for all CPUs.
- */
-static struct sched_domain_topology_level
-*asym_cpu_capacity_level(const struct cpumask *cpu_map)
-{
-	int i, j, asym_level = 0;
-	bool asym = false;
-	struct sched_domain_topology_level *tl, *asym_tl = NULL;
-	unsigned long cap;
-
-	/* Is there any asymmetry? */
-	cap = arch_scale_cpu_capacity(NULL, cpumask_first(cpu_map));
-
-	for_each_cpu(i, cpu_map) {
-		if (arch_scale_cpu_capacity(NULL, i) != cap) {
-			asym = true;
-			break;
-		}
-	}
-
-	if (!asym)
-		return NULL;
-
-	/*
-	 * Examine topology from all CPU's point of views to detect the lowest
-	 * sched_domain_topology_level where a highest capacity CPU is visible
-	 * to everyone.
-	 */
-	for_each_cpu(i, cpu_map) {
-		unsigned long max_capacity = arch_scale_cpu_capacity(NULL, i);
-		int tl_id = 0;
-
-		for_each_sd_topology(tl) {
-			if (tl_id < asym_level)
-				goto next_level;
-
-			for_each_cpu_and(j, tl->mask(i), cpu_map) {
-				unsigned long capacity;
-
-				capacity = arch_scale_cpu_capacity(NULL, j);
-
-				if (capacity <= max_capacity)
-					continue;
-
-				max_capacity = capacity;
-				asym_level = tl_id;
-				asym_tl = tl;
-			}
-next_level:
-			tl_id++;
-		}
-	}
-
-	return asym_tl;
-}
-
-
-/*
  * Build sched domains for a given set of CPUs and attach the sched domains
  * to the individual CPUs
  */
@@ -1896,13 +1836,10 @@ build_sched_domains(const struct cpumask *cpu_map, struct sched_domain_attr *att
 	struct sched_domain *sd;
 	struct s_data d;
 	int i, ret = -ENOMEM;
-	struct sched_domain_topology_level *tl_asym;
 
 	alloc_state = __visit_domain_allocation_hell(&d, cpu_map);
 	if (alloc_state != sa_rootdomain)
 		goto error;
-
-	tl_asym = asym_cpu_capacity_level(cpu_map);
 
 	/* Set up domains for CPUs specified by the cpu_map: */
 	for_each_cpu(i, cpu_map) {
@@ -1910,13 +1847,7 @@ build_sched_domains(const struct cpumask *cpu_map, struct sched_domain_attr *att
 
 		sd = NULL;
 		for_each_sd_topology(tl) {
-			int dflags = 0;
-
-			if (tl == tl_asym)
-				dflags |= SD_ASYM_CPUCAPACITY;
-
-			sd = build_sched_domain(tl, cpu_map, attr, sd, dflags, i);
-
+			sd = build_sched_domain(tl, cpu_map, attr, sd, i);
 			if (tl == sched_domain_topology)
 				*per_cpu_ptr(d.sd, i) = sd;
 			if (tl->flags & SDTL_OVERLAP)

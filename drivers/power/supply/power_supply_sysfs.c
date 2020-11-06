@@ -444,7 +444,7 @@ static umode_t power_supply_attr_is_visible(struct kobject *kobj,
 {
 	struct device *dev = container_of(kobj, struct device, kobj);
 	struct power_supply *psy = dev_get_drvdata(dev);
-	umode_t mode = S_IRWXU | S_IRGRP | S_IROTH;
+	umode_t mode = S_IRUSR | S_IRGRP | S_IROTH;
 	int i;
 
 	if (attrno == POWER_SUPPLY_PROP_TYPE)

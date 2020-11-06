@@ -44,8 +44,6 @@ void crypto_chacha_init(u32 *state, struct chacha_ctx *ctx, u8 *iv);
 
 int crypto_chacha20_setkey(struct crypto_skcipher *tfm, const u8 *key,
 			   unsigned int keysize);
-int crypto_chacha12_setkey(struct crypto_skcipher *tfm, const u8 *key,
-			   unsigned int keysize);
 
 int crypto_chacha_crypt(struct skcipher_request *req);
 int crypto_xchacha_crypt(struct skcipher_request *req);
