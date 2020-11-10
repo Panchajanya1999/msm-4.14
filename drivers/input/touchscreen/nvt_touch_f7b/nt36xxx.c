@@ -27,7 +27,6 @@
 #include <linux/input/mt.h>
 #include <linux/of_gpio.h>
 #include <linux/of_irq.h>
-#include <linux/cpumask.h>
 
 #if defined(CONFIG_FB)
 #include <linux/notifier.h>
@@ -1203,8 +1202,6 @@ return:
 static int32_t nvt_ts_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
 	int32_t ret = 0;
-	int i;
-	cpumask_t nvt_sys_mask;
 #if ((TOUCH_KEY_NUM > 0) || WAKEUP_GESTURE)
 	int32_t retry = 0;
 #endif
@@ -1258,7 +1255,7 @@ static int32_t nvt_ts_probe(struct i2c_client *client, const struct i2c_device_i
 
 	//---create workqueue---
 	kthread_init_worker(&nvt_worker);
-	nvt_worker_thread = kthread_create(kthread_worker_fn, 
+	nvt_worker_thread = kthread_run(kthread_worker_fn, 
 					&nvt_worker, "nvt_worker_thread");
 	if(IS_ERR(nvt_worker_thread)) {
 		NVT_ERR("nvt_wq create workqueue failed\n");
@@ -1266,19 +1263,6 @@ static int32_t nvt_ts_probe(struct i2c_client *client, const struct i2c_device_i
 		goto err_create_nvt_wq_failed;
 	}
 	sched_setscheduler(nvt_worker_thread, SCHED_FIFO, &param);
-
-	cpumask_clear(&nvt_sys_mask);
-
-	/* Hardcode the cpumask and bind the display kthreads to little cores [ 1 - 5 ] */
-	for (i = 1; i <= 5; i++) {
-		cpumask_set_cpu(i, &nvt_sys_mask);
-	}
-
-	/* Bind workers to cpumasks */
-	kthread_bind_mask(nvt_worker_thread, &nvt_sys_mask);
-
-	/* Wake up the process on probing */
-	wake_up_process(nvt_worker_thread);
 	
 	kthread_init_work(&ts->nvt_work, &nvt_ts_work_func);
 
