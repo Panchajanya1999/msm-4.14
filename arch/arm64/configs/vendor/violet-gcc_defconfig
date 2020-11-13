@@ -1,6 +1,6 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/arm64 4.14.203 Kernel Configuration
+# Linux/arm64 4.14.206 Kernel Configuration
 #
 CONFIG_ARM64=y
 CONFIG_64BIT=y
@@ -5486,7 +5486,6 @@ CONFIG_PANIC_TIMEOUT=5
 # CONFIG_STACKTRACE is not set
 # CONFIG_WARN_ALL_UNSEEDED_RANDOM is not set
 CONFIG_HAVE_DEBUG_BUGVERBOSE=y
-CONFIG_DEBUG_BUGVERBOSE=y
 
 #
 # RCU Debugging
