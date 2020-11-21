@@ -1270,7 +1270,7 @@ CONFIG_RFKILL_LEDS=y
 # CONFIG_CAIF is not set
 # CONFIG_CEPH_LIB is not set
 # CONFIG_NFC is not set
-CONFIG_NFC_NQ=y
+# CONFIG_NFC_NQ is not set
 # CONFIG_NTAG_NQ is not set
 # CONFIG_PSAMPLE is not set
 # CONFIG_NET_IFE is not set
