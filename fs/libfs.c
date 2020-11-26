@@ -870,7 +870,7 @@ ssize_t simple_attr_write(struct file *file, const char __user *buf,
 			  size_t len, loff_t *ppos)
 {
 	struct simple_attr *attr;
-	unsigned long long val;
+	u64 val;
 	size_t size;
 	ssize_t ret;
 
@@ -888,9 +888,7 @@ ssize_t simple_attr_write(struct file *file, const char __user *buf,
 		goto out;
 
 	attr->set_buf[size] = '\0';
-	ret = kstrtoull(attr->set_buf, 0, &val);
-	if (ret)
-		goto out;
+	val = simple_strtoll(attr->set_buf, NULL, 0);
 	ret = attr->set(attr->data, val);
 	if (ret == 0)
 		ret = len; /* on success, claim we got the whole input */
@@ -1227,6 +1225,11 @@ bool is_empty_dir_inode(struct inode *inode)
 }
 
 #ifdef CONFIG_UNICODE
+/*
+ * Determine if the name of a dentry should be casefolded.
+ *
+ * Return: if names will need casefolding
+ */
 bool needs_casefold(const struct inode *dir)
 {
 	return IS_CASEFOLDED(dir) && dir->i_sb->s_encoding &&
@@ -1234,6 +1237,15 @@ bool needs_casefold(const struct inode *dir)
 }
 EXPORT_SYMBOL(needs_casefold);
 
+/**
+ * generic_ci_d_compare - generic d_compare implementation for casefolding filesystems
+ * @dentry:	dentry whose name we are checking against
+ * @len:	len of name of dentry
+ * @str:	str pointer to name of dentry
+ * @name:	Name to compare against
+ *
+ * Return: 0 if names match, 1 if mismatch, or -ERRNO
+ */
 int generic_ci_d_compare(const struct dentry *dentry, unsigned int len,
 			  const char *str, const struct qstr *name)
 {
@@ -1267,7 +1279,7 @@ int generic_ci_d_compare(const struct dentry *dentry, unsigned int len,
 	if (ret >= 0)
 		return ret;
 
-	if (sb_has_enc_strict_mode(sb))
+	if (sb_has_strict_encoding(sb))
 		return -EINVAL;
 fallback:
 	if (len != name->len)
@@ -1276,6 +1288,13 @@ fallback:
 }
 EXPORT_SYMBOL(generic_ci_d_compare);
 
+/**
+ * generic_ci_d_hash - generic d_hash implementation for casefolding filesystems
+ * @dentry:	dentry of the parent directory
+ * @str:	qstr of name whose hash we should fill in
+ *
+ * Return: 0 if hash was successful or unchanged, and -EINVAL on error
+ */
 int generic_ci_d_hash(const struct dentry *dentry, struct qstr *str)
 {
 	const struct inode *inode = READ_ONCE(dentry->d_inode);
@@ -1292,7 +1311,7 @@ int generic_ci_d_hash(const struct dentry *dentry, struct qstr *str)
 
 	return 0;
 err:
-	if (sb_has_enc_strict_mode(sb))
+	if (sb_has_strict_encoding(sb))
 		ret = -EINVAL;
 	else
 		ret = 0;
