@@ -235,7 +235,7 @@ void nvt_sw_reset_idle(void)
 	buf[1]=0xA5;
 	CTP_I2C_WRITE(ts->client, I2C_HW_Address, buf, 2);
 
-	usleep_range(15000, 15000);
+	msleep(15);
 }
 
 /*******************************************************
@@ -1074,7 +1074,7 @@ void nvt_stop_crc_reboot(void)
 			buf[0]=0x00;
 			buf[1]=0xA5;
 			CTP_I2C_WRITE(ts->client, I2C_HW_Address, buf, 2);
-			usleep_range(1000, 1000);
+			msleep(1);
 
 			//---clear CRC_ERR_FLAG---
 			buf[0] = 0xFF;
@@ -1131,7 +1131,7 @@ static int8_t nvt_ts_check_chip_ver_trim(void)
 		buf[0] = 0x00;
 		buf[1] = 0x35;
 		CTP_I2C_WRITE(ts->client, I2C_HW_Address, buf, 2);
-		usleep_range(10000, 10000);
+		msleep(10);
 
 		buf[0] = 0xFF;
 		buf[1] = 0x01;
@@ -1184,7 +1184,7 @@ static int8_t nvt_ts_check_chip_ver_trim(void)
 			}
 		}
 
-		usleep_range(10000, 10000);
+		msleep(10);
 	}
 
 out:
@@ -1238,7 +1238,7 @@ static int32_t nvt_ts_probe(struct i2c_client *client, const struct i2c_device_i
 	mutex_init(&ts->xbuf_lock);
 	mutex_init(&ts->pm_mutex);
 
-	usleep_range(10000, 10000);
+	msleep(10);
 
 	ret = nvt_ts_check_chip_ver_trim();
 	if (ret) {
