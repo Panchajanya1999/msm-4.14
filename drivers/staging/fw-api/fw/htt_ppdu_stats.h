@@ -584,6 +584,13 @@ typedef enum HTT_PPDU_STATS_SPATIAL_REUSE HTT_PPDU_STATS_SPATIAL_REUSE;
             ((_var) |= ((_val) << HTT_PPDU_STATS_COMMON_TLV_BSS_COLOR_ID_S)); \
     } while (0)
 
+#define HTT_PPDU_STATS_COMMON_TRIG_COOKIE_M    0x0000ffff
+#define HTT_PPDU_STATS_COMMON_TRIG_COOKIE_S    0
+
+#define HTT_PPDU_STATS_COMMON_TRIG_COOKIE_GET(_val) \
+        (((_val) & HTT_PPDU_STATS_COMMON_TRIG_COOKIE_M) >> \
+         HTT_PPDU_STATS_COMMON_TRIG_COOKIE_S)
+
 typedef struct {
     htt_tlv_hdr_t tlv_hdr;
 
@@ -735,6 +742,16 @@ typedef struct {
                      reserved2:         15;
         };
     };
+
+    /* Note: This is for tracking a UL OFDMA packet */
+    union {
+        A_UINT32 trig_cookie_info;
+        struct {
+            A_UINT32 trig_cookie: 16,
+                     trig_cookie_rsvd: 15,
+                     trig_cookie_valid: 1;
+        };
+    };
 } htt_ppdu_stats_common_tlv;
 
 #define HTT_PPDU_STATS_USER_COMMON_TLV_TID_NUM_M     0x000000ff
@@ -828,6 +845,19 @@ typedef struct {
          ((_var) |= ((_val) << HTT_PPDU_STATS_USER_COMMON_TLV_DELAYED_BA_S)); \
      } while (0)
 
+#define HTT_PPDU_STATS_USER_COMMON_TLV_IS_SQNUM_VALID_IN_BUFFER_M     0x00008000
+#define HTT_PPDU_STATS_USER_COMMON_TLV_IS_SQNUM_VALID_IN_BUFFER_S             15
+
+#define HTT_PPDU_STATS_USER_COMMON_TLV_IS_SQNUM_VALID_IN_BUFFER_GET(_var) \
+    (((_var) & HTT_PPDU_STATS_USER_COMMON_TLV_IS_SQNUM_VALID_IN_BUFFER_M) >> \
+    HTT_PPDU_STATS_USER_COMMON_TLV_IS_SQNUM_VALID_IN_BUFFER_S)
+
+#define HTT_PPDU_STATS_USER_COMMON_TLV_IS_SQNUM_VALID_IN_BUFFER_SET(_var, _val) \
+     do { \
+         HTT_CHECK_SET_VAL(HTT_PPDU_STATS_USER_COMMON_TLV_IS_SQNUM_VALID_IN_BUFFER, _val); \
+         ((_var) |= ((_val) << HTT_PPDU_STATS_USER_COMMON_TLV_IS_SQNUM_VALID_IN_BUFFER_S)); \
+     } while (0)
+
 #define HTT_PPDU_STATS_USER_COMMON_TLV_NUM_FRAMES_M     0xffff0000
 #define HTT_PPDU_STATS_USER_COMMON_TLV_NUM_FRAMES_S             16
 
@@ -893,12 +923,12 @@ typedef struct {
     union {
         A_UINT32 bw__mpdus_tried__mcast;
         struct {
-            A_UINT32 mcast:              1,
-                     mpdus_tried:        9,
-                     bw:                 4,
-                     delayed_ba:         1,
-                     reserved0:          1,
-                     num_frames:        16;
+            A_UINT32 mcast:                    1,
+                     mpdus_tried:              9,
+                     bw:                       4,
+                     delayed_ba:               1,
+                     is_sqno_valid_in_buffer:  1,
+                     num_frames:              16;
         };
     };
 
@@ -1485,26 +1515,15 @@ typedef struct {
         };
     };
 
-    /* Note: This is for tracking a UL OFDMA packet */
-    union {
-        A_UINT32 trig_cookie_info;
-        struct {
-            A_UINT32 trig_cookie: 16,
-                     trig_cookie_rsvd: 15,
-                     trig_cookie_valid: 1;
-        };
-    };
+    /*
+     * This is an unused word that can be safely renamed / used
+     * by any future feature.
+     */
+    A_UINT32 reserved4;
 } htt_ppdu_stats_user_rate_tlv;
-
-#define HTT_PPDU_STATS_USR_RATE_COOKIE_M    0x0000ffff
-#define HTT_PPDU_STATS_USR_RATE_COOKIE_S    0
 
 #define HTT_PPDU_STATS_USR_RATE_VALID_M     0x80000000
 #define HTT_PPDU_STATS_USR_RATE_VALID_S     31
-
-#define HTT_PPDU_STATS_USR_RATE_COOKIE_GET(_val) \
-        (((_val) & HTT_PPDU_STATS_USR_RATE_COOKIE_M) >> \
-         HTT_PPDU_STATS_USR_RATE_COOKIE_S)
 
 #define HTT_PPDU_STATS_USR_RATE_VALID_GET(_val) \
         (((_val) & HTT_PPDU_STATS_USR_RATE_VALID_M) >> \
