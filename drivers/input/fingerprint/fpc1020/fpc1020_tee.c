@@ -631,12 +631,6 @@ static int fpc1020_probe(struct platform_device *pdev)
 		goto exit;
 	}
 
-	if(fpsensor != 1){
-                 pr_err("Macle fpc1020_probe failed as fpsensor=%d(1=fp)\n", fpsensor);
-                 return -1;
-         }
-
-
 	fpc1020->dev = dev;
 	platform_set_drvdata(pdev, fpc1020);
 
@@ -782,7 +776,13 @@ static struct platform_driver fpc1020_driver = {
 
 static int __init fpc1020_init(void)
 {
-	int rc = platform_driver_register(&fpc1020_driver);
+	int rc;
+	if (fpsensor != 1) {
+                 pr_err("%s: Your FP scanner is Goodix. Disabling FPC", __func__);
+                 return -1;
+         }
+
+	rc = platform_driver_register(&fpc1020_driver);
 
 	if (!rc)
 		pr_info("%s OK\n", __func__);
