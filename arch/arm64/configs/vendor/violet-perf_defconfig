@@ -1509,7 +1509,7 @@ CONFIG_ANT_CHECK=y
 #
 # FingerprintCard fingerprint driver
 #
-CONFIG_FPR_FPC=y
+# CONFIG_FPR_FPC is not set
 
 #
 # SCSI device support
