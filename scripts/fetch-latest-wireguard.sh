@@ -29,5 +29,5 @@ touch net/wireguard/.check
 
 # A dirty hack to comment out a redefined function. I need it for purpose and I shall never recommend to anyone without knowing why I did this. 
 
-sed -i '344i/*' net/wireguard/compat/compat.h
-sed -i '373a*/' net/wireguard/compat/compat.h
+sed -i '341i/*' net/wireguard/compat/compat.h
+sed -i '369a*/' net/wireguard/compat/compat.h
