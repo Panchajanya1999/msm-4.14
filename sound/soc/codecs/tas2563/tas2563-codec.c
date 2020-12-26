@@ -50,6 +50,11 @@
 #include "tas2563.h"
 #include "tas2563-codec.h"
 
+#ifdef dev_info
+#undef dev_info
+#define dev_info(dev, fmt, arg...)	do { } while(0)
+#endif
+
 #define	PPC_DRIVER_CRCCHK			0x00000200
 #define	PPC_DRIVER_CONFDEV			0x00000000
 #define	PPC_DRIVER_MTPLLSRC			0x00000400
