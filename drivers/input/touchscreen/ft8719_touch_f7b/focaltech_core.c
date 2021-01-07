@@ -1841,6 +1841,7 @@ static struct i2c_driver fts_ts_driver = {
 		.name = FTS_DRIVER_NAME,
 		.owner = THIS_MODULE,
 		.of_match_table = fts_match_table,
+		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 	.id_table = fts_ts_id,
 };
