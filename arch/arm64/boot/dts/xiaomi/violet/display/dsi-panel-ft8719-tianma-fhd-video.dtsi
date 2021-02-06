@@ -1,5 +1,5 @@
 /* Copyright (c) 2018, The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -46,8 +46,7 @@
 		qcom,mdss-dsi-bl-min-level = <1>;
 		qcom,mdss-dsi-bl-max-level = <4095>;
 		qcom,mdss-brightness-max-level = <4095>;
-		qcom,mdss-dsi-reset-sequence = <1 4>, <0 1>, <1 10>;
-
+		qcom,mdss-dsi-reset-sequence = <1 4>, <0 1>, <1 12>;
 		qcom,mdss-dsi-display-timings {
 			timing@0 {
 				qcom,mdss-dsi-panel-width = <1080>;
@@ -70,6 +69,10 @@
 
 				39 01 00 00 00 00 02 00 90
 				39 01 00 00 00 00 0A CA FE FF 66 F6 FF 66 FB FF 32
+				39 01 00 00 00 00 02 00 B5
+				39 01 00 00 00 00 02 CA 09
+                                39 01 00 00 00 00 02 00 B2
+                                39 01 00 00 00 00 02 CA 0c
 
 				/*39 01 00 00 00 00 02 00 80
 				39 01 00 00 00 00 0B D9 F0 01 19 00 F8 0F 01 00 A4 01
@@ -85,11 +88,12 @@
 				15 01 00 00 00 00 02 35 00
 				15 01 00 00 5A 00 02 11 00
 				15 01 00 00 14 00 02 29 00
-				15 01 00 00 00 00 02 51 ff
+				15 01 00 00 00 00 02 51 B8
 				15 01 00 00 00 00 02 53 24
 				15 01 00 00 00 00 02 55 00
 				];
 				qcom,mdss-dsi-off-command = [
+				  15 01 00 00 00 00 02 53 24
 				  15 01 00 00 14 00 02 28 00
 				  15 01 00 00 78 00 02 10 00
 				  39 01 00 00 00 00 02 00 00
@@ -121,6 +125,22 @@
 				qcom,mdss-dsi-cabc_still-on-command = [
 				39 01 00 00 00 00 02 55 02
 				];
+				qcom,mdss-dsi-hbm1-on-command = [
+				15 01 00 00 00 00 02 53 2c
+				15 01 00 00 00 00 02 51 CC
+				];
+				qcom,mdss-dsi-hbm2-on-command = [
+				15 01 00 00 00 00 02 53 2c
+				15 01 00 00 00 00 02 51 E6
+				];
+				qcom,mdss-dsi-hbm3-on-command = [
+				15 01 00 00 00 00 02 53 2c
+				15 01 00 00 00 00 02 51 FF
+				];
+				qcom,mdss-dsi-hbm-off-command = [
+				15 01 00 00 00 00 02 53 2c
+				15 01 00 00 00 00 02 51 B8
+				];
 				qcom,mdss-dsi-on-command-state = "dsi_lp_mode";
 				qcom,mdss-dsi-off-command-state = "dsi_lp_mode";
 				qcom,mdss-dsi-cabc-on-command-state = "dsi_hs_mode";
@@ -131,6 +151,10 @@
 				qcom,mdss-dsi-srgb-off-command-state = "dsi_hs_mode";
 				qcom,mdss-dsi-cabc_movie-on-command-state = "dsi_hs_mode";
 				qcom,mdss-dsi-cabc_still-on-command-state = "dsi_hs_mode";
+				qcom,mdss-dsi-hbm1-on-command-state = "dsi_hs_mode";
+				qcom,mdss-dsi-hbm2-on-command-state = "dsi_hs_mode";
+				qcom,mdss-dsi-hbm3-on-command-state = "dsi_hs_mode";
+				qcom,mdss-dsi-hbm-off-command-state = "dsi_hs_mode";
 			};
 		};
 	};

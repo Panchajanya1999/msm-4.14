@@ -1,5 +1,5 @@
 /* Copyright (c) 2018, The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -91,10 +91,10 @@
 			        15 01 00 00 00 00 02 1c fa
 			        15 01 00 00 00 00 02 ff 10
 			        15 01 00 00 00 00 02 b0 01
-                    15 01 00 00 00 00 02 51 ff
-                    39 01 00 00 00 00 03 68 03 04
-                    15 01 00 00 00 00 02 53 2c
-                    15 01 00 00 00 00 02 55 00
+                                15 01 00 00 00 00 02 51 b8
+                                39 01 00 00 00 00 03 68 06 04
+                                15 01 00 00 00 00 02 53 2c
+                                15 01 00 00 00 00 02 55 00
 			        05 01 00 00 00 00 02 29 00
 			        05 01 00 00 46 00 02 11 00];
 				qcom,mdss-dsi-off-command = [
@@ -117,8 +117,6 @@
 				15 00 00 00 00 00 02 05 04
 				15 00 00 00 00 00 02 05 2D
 				15 00 00 00 00 00 02 06 00
-				//PWM Feq=30KHz
-				15 00 00 00 00 00 02 07 60
 				//resolution 1080*2340
 				15 00 00 00 00 00 02 11 01
 				15 00 00 00 00 00 02 12 8A
@@ -162,9 +160,6 @@
 				15 01 00 00 00 00 02 41 E5
 				15 01 00 00 00 00 02 FF 10
 				15 00 00 00 00 00 02 FB 01
-				15 00 00 00 00 00 02 51 FF
-				//Dimming Enable
-				15 00 00 00 00 00 02 53 2C
 				15 01 00 00 00 00 02 55 01
 		                ];
 		                qcom,mdss-dsi-cabc-off-command = [
@@ -179,8 +174,6 @@
 				15 00 00 00 00 00 02 05 04
 				15 00 00 00 00 00 02 05 2D
 				15 00 00 00 00 00 02 06 00
-				//PWM Feq=30KHz
-				15 00 00 00 00 00 02 07 60
 				//resolution 1080*2340
 				15 00 00 00 00 00 02 11 01
 				15 00 00 00 00 00 02 12 8A
@@ -223,9 +216,6 @@
 				15 01 00 00 00 00 02 67 B3
 				15 01 00 00 00 00 02 FF 10
 				15 00 00 00 00 00 02 FB 01
-				15 00 00 00 00 00 02 51 FF
-				//Dimming Enable
-				15 00 00 00 00 00 02 53 2C
 				15 01 00 00 00 00 02 55 03
 				];
 				qcom,mdss-dsi-cabc_still-on-command = [
@@ -236,8 +226,6 @@
 				15 00 00 00 00 00 02 05 04
 				15 00 00 00 00 00 02 05 2D
 				15 00 00 00 00 00 02 06 00
-				//PWM Feq=30KHz
-				15 00 00 00 00 00 02 07 60
 				//resolution 1080*2340
 				15 00 00 00 00 00 02 11 01
 				15 00 00 00 00 00 02 12 8A
@@ -281,10 +269,19 @@
 				15 01 00 00 00 00 02 54 66
 				15 01 00 00 00 00 02 FF 10
 				15 00 00 00 00 00 02 FB 01
-				15 00 00 00 00 00 02 51 FF
-				//Dimming Enable
-				15 00 00 00 00 00 02 53 2C
 				15 01 00 00 00 00 02 55 02
+				];
+				qcom,mdss-dsi-hbm1-on-command = [
+				15 01 00 00 00 00 02 51 CC
+				];
+				qcom,mdss-dsi-hbm2-on-command = [
+				15 01 00 00 00 00 02 51 E6
+				];
+				qcom,mdss-dsi-hbm3-on-command = [
+				15 01 00 00 00 00 02 51 FF
+				];
+				qcom,mdss-dsi-hbm-off-command = [
+				15 01 00 00 00 00 02 51 B8
 				];
 				qcom,mdss-dsi-on-command-state = "dsi_lp_mode";
 				qcom,mdss-dsi-off-command-state = "dsi_hs_mode";
@@ -296,6 +293,10 @@
 		                qcom,mdss-dsi-cabc-off-command-state = "dsi_hs_mode";
 				qcom,mdss-dsi-cabc_movie-on-command-state = "dsi_hs_mode";
 				qcom,mdss-dsi-cabc_still-on-command-state = "dsi_hs_mode";
+				qcom,mdss-dsi-hbm1-on-command-state = "dsi_hs_mode";
+				qcom,mdss-dsi-hbm2-on-command-state = "dsi_hs_mode";
+				qcom,mdss-dsi-hbm3-on-command-state = "dsi_hs_mode";
+				qcom,mdss-dsi-hbm-off-command-state = "dsi_hs_mode";
 			};
 		};
 	};
