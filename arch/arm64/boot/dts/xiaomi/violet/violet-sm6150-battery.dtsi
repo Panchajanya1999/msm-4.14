@@ -8,6 +8,7 @@
 &mtp_batterydata {
     #include "battery/LC_M6300_ATL4000mAh_3633204_FG.dtsi"
     #include "battery/LC_M6300_Sunwoda4000mAh_3632066_FG.dtsi"
+    #include "battery/LC_M6300_Coslight_4000mAh_3884533_FG.dtsi"
 };
 
 &pm6150_qg {
