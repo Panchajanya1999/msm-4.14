@@ -3,7 +3,6 @@ qcom,3632066_LC_M6300_Sunwoda_4000mAh_FG {
     qcom,max-voltage-uv = <4400000>;
     qcom,fg-cc-cv-threshold-uv = <4390000>;
     qcom,fastchg-current-ma = <3000>;
-    qcom,nom-batt-capacity-mah = <4000>;
     qcom,batt-id-kohm = <330>;
     qcom,battery-beta = <3380>;
     qcom,battery-therm-kohm = <10>;
@@ -23,7 +22,7 @@ qcom,3632066_LC_M6300_Sunwoda_4000mAh_FG {
 	/* COOL = 5 DegC, WARM = 45 DegC */
 	qcom,jeita-soft-thresholds = <0x5295 0x20C5>;
 	/* COLD = 0 DegC, HOT = 60 DegC */
-	qcom,jeita-hard-thresholds = <0x5830 0x14A6>;
+	qcom,jeita-hard-thresholds = <0x58DE 0x14A6>;
 
 	qcom,fcc1-temp-lut {
 		qcom,lut-col-legend = <0 10 25 40 50>;
