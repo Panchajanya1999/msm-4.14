@@ -2021,7 +2021,7 @@ static int qg_psy_set_property(struct power_supply *psy,
 			pr_warn("Capacity learning active!\n");
 			return 0;
 		}
-		if (pval->intval <= 0 || pval->intval > chip->cl->nom_cap_uah) {
+		if (pval->intval <= 0) {
 			pr_err("charge_full is out of bounds\n");
 			return -EINVAL;
 		}
