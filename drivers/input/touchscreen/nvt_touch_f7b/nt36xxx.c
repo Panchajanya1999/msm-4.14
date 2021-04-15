@@ -151,7 +151,6 @@ int32_t CTP_I2C_READ(struct i2c_client *client, uint16_t address, uint8_t *buf, 
 {
 	struct i2c_msg msgs[2];
 	int32_t ret = -1;
-	int32_t retries = 0;
 
 	mutex_lock(&ts->xbuf_lock);
 
@@ -165,16 +164,7 @@ int32_t CTP_I2C_READ(struct i2c_client *client, uint16_t address, uint8_t *buf, 
 	msgs[1].len   = len - 1;
 	msgs[1].buf   = ts->xbuf;
 
-	while (retries < 5) {
-		ret = i2c_transfer(client->adapter, msgs, 2);
-		if (ret == 2)	break;
-		retries++;
-	}
-
-	if (unlikely(retries == 5)) {
-		NVT_ERR("error, ret=%d\n", ret);
-		ret = -EIO;
-	}
+	ret = i2c_transfer(client->adapter, msgs, 2);
 	memcpy(buf + 1, ts->xbuf, len - 1);
 
 	mutex_unlock(&ts->xbuf_lock);
@@ -193,7 +183,6 @@ int32_t CTP_I2C_WRITE(struct i2c_client *client, uint16_t address, uint8_t *buf,
 {
 	struct i2c_msg msg;
 	int32_t ret = -1;
-	int32_t retries = 0;
 
 	mutex_lock(&ts->xbuf_lock);
 
@@ -203,16 +192,7 @@ int32_t CTP_I2C_WRITE(struct i2c_client *client, uint16_t address, uint8_t *buf,
 	memcpy(ts->xbuf, buf, len);
 	msg.buf   = ts->xbuf;
 
-	while (retries < 5) {
-		ret = i2c_transfer(client->adapter, &msg, 1);
-		if (ret == 1)	break;
-		retries++;
-	}
-
-	if (unlikely(retries == 5)) {
-		NVT_ERR("error, ret=%d\n", ret);
-		ret = -EIO;
-	}
+	ret = i2c_transfer(client->adapter, &msg, 1);
 
 	mutex_unlock(&ts->xbuf_lock);
 
