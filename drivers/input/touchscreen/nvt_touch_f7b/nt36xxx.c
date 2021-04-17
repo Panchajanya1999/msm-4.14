@@ -250,38 +250,24 @@ return:
 int32_t nvt_clear_fw_status(void)
 {
 	uint8_t buf[3] = {0};
-	int32_t i = 0;
-	const int32_t retry = 20;
 
-	for (i = 0; i < retry; i++) {
-		//---set xdata index to EVENT BUF ADDR---
-		buf[0] = 0xFF;
-		buf[1] = (ts->mmap->EVENT_BUF_ADDR >> 16) & 0xFF;
-		buf[2] = (ts->mmap->EVENT_BUF_ADDR >> 8) & 0xFF;
-		CTP_I2C_WRITE(ts->client, I2C_FW_Address, buf, 3);
+	//---set xdata index to EVENT BUF ADDR---
+	buf[0] = 0xFF;
+	buf[1] = (ts->mmap->EVENT_BUF_ADDR >> 16) & 0xFF;
+	buf[2] = (ts->mmap->EVENT_BUF_ADDR >> 8) & 0xFF;
+	CTP_I2C_WRITE(ts->client, I2C_FW_Address, buf, 3);
 
-		//---clear fw status---
-		buf[0] = EVENT_MAP_HANDSHAKING_or_SUB_CMD_BYTE;
-		buf[1] = 0x00;
-		CTP_I2C_WRITE(ts->client, I2C_FW_Address, buf, 2);
+	//---clear fw status---
+	buf[0] = EVENT_MAP_HANDSHAKING_or_SUB_CMD_BYTE;
+	buf[1] = 0x00;
+	CTP_I2C_WRITE(ts->client, I2C_FW_Address, buf, 2);
 
-		//---read fw status---
-		buf[0] = EVENT_MAP_HANDSHAKING_or_SUB_CMD_BYTE;
-		buf[1] = 0xFF;
-		CTP_I2C_READ(ts->client, I2C_FW_Address, buf, 2);
+	//---read fw status---
+	buf[0] = EVENT_MAP_HANDSHAKING_or_SUB_CMD_BYTE;
+	buf[1] = 0xFF;
+	CTP_I2C_READ(ts->client, I2C_FW_Address, buf, 2);
 
-		if (buf[1] == 0x00)
-			break;
-
-		msleep(10);
-	}
-
-	if (i >= retry) {
-		NVT_ERR("failed, i=%d, buf[1]=0x%02X\n", i, buf[1]);
-		return -1;
-	} else {
-		return 0;
-	}
+	return 0;
 }
 
 /*******************************************************
@@ -294,33 +280,19 @@ return:
 int32_t nvt_check_fw_status(void)
 {
 	uint8_t buf[3] = {0};
-	int32_t i = 0;
-	const int32_t retry = 50;
 
-	for (i = 0; i < retry; i++) {
-		//---set xdata index to EVENT BUF ADDR---
-		buf[0] = 0xFF;
-		buf[1] = (ts->mmap->EVENT_BUF_ADDR >> 16) & 0xFF;
-		buf[2] = (ts->mmap->EVENT_BUF_ADDR >> 8) & 0xFF;
-		CTP_I2C_WRITE(ts->client, I2C_FW_Address, buf, 3);
+	//---set xdata index to EVENT BUF ADDR---
+	buf[0] = 0xFF;
+	buf[1] = (ts->mmap->EVENT_BUF_ADDR >> 16) & 0xFF;
+	buf[2] = (ts->mmap->EVENT_BUF_ADDR >> 8) & 0xFF;
+	CTP_I2C_WRITE(ts->client, I2C_FW_Address, buf, 3);
 
-		//---read fw status---
-		buf[0] = EVENT_MAP_HANDSHAKING_or_SUB_CMD_BYTE;
-		buf[1] = 0x00;
-		CTP_I2C_READ(ts->client, I2C_FW_Address, buf, 2);
+	//---read fw status---
+	buf[0] = EVENT_MAP_HANDSHAKING_or_SUB_CMD_BYTE;
+	buf[1] = 0x00;
+	CTP_I2C_READ(ts->client, I2C_FW_Address, buf, 2);
 
-		if ((buf[1] & 0xF0) == 0xA0)
-			break;
-
-		msleep(10);
-	}
-
-	if (i >= retry) {
-		NVT_ERR("failed, i=%d, buf[1]=0x%02X\n", i, buf[1]);
-		return -1;
-	} else {
-		return 0;
-	}
+	return 0;
 }
 
 /*******************************************************
@@ -334,28 +306,11 @@ int32_t nvt_check_fw_reset_state(RST_COMPLETE_STATE check_reset_state)
 {
 	uint8_t buf[2] = {0};
 	int32_t ret = 0;
-	int32_t retry = 0;
 
-	while (1) {
-		msleep(10);
-
-		//---read reset state---
-		buf[0] = EVENT_MAP_RESET_COMPLETE;
-		buf[1] = 0x00;
-		CTP_I2C_READ(ts->client, I2C_FW_Address, buf, 6);
-
-		if ((buf[1] >= check_reset_state) && (buf[1] <= RESET_STATE_MAX)) {
-			ret = 0;
-			break;
-		}
-
-		retry++;
-		if(unlikely(retry > 100)) {
-			NVT_ERR("error, retry=%d, buf[1]=0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X\n", retry, buf[1], buf[2], buf[3], buf[4], buf[5]);
-			ret = -1;
-			break;
-		}
-	}
+	//---read reset state---
+	buf[0] = EVENT_MAP_RESET_COMPLETE;
+	buf[1] = 0x00;
+	ret = CTP_I2C_READ(ts->client, I2C_FW_Address, buf, 2);
 
 	return ret;
 }
@@ -497,43 +452,14 @@ static ssize_t nvt_flash_read(struct file *file, char __user *buff, size_t count
 	i2c_wr = str[0] >> 7;
 
 	if (i2c_wr == 0) {	//I2C write
-		while (retries < 20) {
-			ret = CTP_I2C_WRITE(ts->client, (str[0] & 0x7F), &str[2], str[1]);
-			if (ret == 1)
-				break;
-			else
-				NVT_ERR("error, retries=%d, ret=%d\n", retries, ret);
-
-			retries++;
-		}
-
-		if (unlikely(retries == 20)) {
-			NVT_ERR("error, ret = %d\n", ret);
-			return -EIO;
-		}
-
+		ret = CTP_I2C_WRITE(ts->client, (str[0] & 0x7F), &str[2], str[1]);
 		return ret;
 	} else if (i2c_wr == 1) {	//I2C read
-		while (retries < 20) {
-			ret = CTP_I2C_READ(ts->client, (str[0] & 0x7F), &str[2], str[1]);
-			if (ret == 2)
-				break;
-			else
-				NVT_ERR("error, retries=%d, ret=%d\n", retries, ret);
 
-			retries++;
-		}
+		ret = CTP_I2C_READ(ts->client, (str[0] & 0x7F), &str[2], str[1]);
 
-		// copy buff to user if i2c transfer
-		if (retries < 20) {
-			if (copy_to_user(buff, str, count))
-				return -EFAULT;
-		}
-
-		if (unlikely(retries == 20)) {
-			NVT_ERR("error, ret = %d\n", ret);
-			return -EIO;
-		}
+		if (copy_to_user(buff, str, count))
+			return -EFAULT;
 
 		return ret;
 	} else {
@@ -870,17 +796,7 @@ static void nvt_ts_work_func(struct work_struct *work)
 
 	mutex_lock(&ts->lock);
 
-	while(i++ < 5) {
-		ret = CTP_I2C_READ(ts->client, I2C_FW_Address, point_data, POINT_DATA_LEN + 1);
-		if (ret < 0) {
-			if (i == 5) {
-				NVT_ERR("CTP_I2C_READ failed.(%d)\n", ret);
-				goto XFER_ERROR;
-			}
-			msleep(50);
-		} else
-			break;
-	}
+	ret = CTP_I2C_READ(ts->client, I2C_FW_Address, point_data, POINT_DATA_LEN + 1);
 
 
 #if NVT_TOUCH_ESD_PROTECT
@@ -1244,7 +1160,7 @@ static int32_t nvt_ts_probe(struct i2c_client *client, const struct i2c_device_i
 	}
 	INIT_WORK(&ts->nvt_work, nvt_ts_work_func);
 
-    INIT_WORK(&ts->fb_notify_work, tp_fb_notifier_resume_work);
+	INIT_WORK(&ts->fb_notify_work, tp_fb_notifier_resume_work);
 
 	//---allocate input device---
 	ts->input_dev = input_allocate_device();
