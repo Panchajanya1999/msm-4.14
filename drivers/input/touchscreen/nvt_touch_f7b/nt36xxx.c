@@ -210,7 +210,7 @@ return:
 *******************************************************/
 void nvt_sw_reset_idle(void)
 {
-	uint8_t buf[4]={0};
+	uint8_t buf[2]={0};
 
 	//---write i2c cmds to reset idle---
 	buf[0]=0x00;
@@ -229,7 +229,7 @@ return:
 *******************************************************/
 void nvt_bootloader_reset(void)
 {
-	uint8_t buf[8] = {0};
+	uint8_t buf[2] = {0};
 
 	//---write i2c cmds to reset---
 	buf[0] = 0x00;
@@ -249,7 +249,7 @@ return:
 *******************************************************/
 int32_t nvt_clear_fw_status(void)
 {
-	uint8_t buf[8] = {0};
+	uint8_t buf[3] = {0};
 	int32_t i = 0;
 	const int32_t retry = 20;
 
@@ -293,7 +293,7 @@ return:
 *******************************************************/
 int32_t nvt_check_fw_status(void)
 {
-	uint8_t buf[8] = {0};
+	uint8_t buf[3] = {0};
 	int32_t i = 0;
 	const int32_t retry = 50;
 
@@ -332,7 +332,7 @@ return:
 *******************************************************/
 int32_t nvt_check_fw_reset_state(RST_COMPLETE_STATE check_reset_state)
 {
-	uint8_t buf[8] = {0};
+	uint8_t buf[2] = {0};
 	int32_t ret = 0;
 	int32_t retry = 0;
 
@@ -402,7 +402,7 @@ return:
 *******************************************************/
 int32_t nvt_get_fw_info(void)
 {
-	uint8_t buf[64] = {0};
+	uint8_t buf[20] = {0};
 	uint32_t retry_count = 0;
 	int32_t ret = 0;
 
