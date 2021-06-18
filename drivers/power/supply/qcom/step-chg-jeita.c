@@ -63,7 +63,6 @@ struct step_chg_info {
 	int			jeita_fv_index;
 	int			step_index;
 	int			get_config_retry_count;
-	int			last_vol;
 
 	struct step_chg_cfg	*step_chg_config;
 	struct jeita_fcc_cfg	*jeita_fcc_config;
@@ -624,9 +623,6 @@ update_time:
 }
 
 #define JEITA_SUSPEND_HYST_UV		50000
-#define JEITA_WARM_VOL		4100000
-#define JEITA_GOOD_VOL		4400000
-
 static int handle_jeita(struct step_chg_info *chip)
 {
 	union power_supply_propval pval = {0, };
@@ -730,14 +726,6 @@ static int handle_jeita(struct step_chg_info *chip)
 
 set_jeita_fv:
 	vote(chip->fv_votable, JEITA_VOTER, fv_uv ? true : false, fv_uv);
-
-	if (fv_uv == JEITA_GOOD_VOL && chip->last_vol == JEITA_WARM_VOL) {
-		rc = power_supply_set_property(chip->batt_psy,
-				POWER_SUPPLY_PROP_FORCE_RECHARGE, &pval);
-		if (rc < 0)
-			pr_err("Can't force recharge from batt warm to good ,rc=%d\n", rc);
-	}
-	chip->last_vol = fv_uv;
 
 update_time:
 	chip->jeita_last_update_time = ktime_get();
