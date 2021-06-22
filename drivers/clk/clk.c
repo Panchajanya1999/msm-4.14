@@ -51,10 +51,12 @@ static struct hlist_head *all_lists[] = {
 	NULL,
 };
 
+#ifdef CONFIG_DEBUG_FS
 static struct hlist_head *orphan_list[] = {
 	&clk_orphan_list,
 	NULL,
 };
+#endif
 
 struct clk_handoff_vdd {
 	struct list_head list;
