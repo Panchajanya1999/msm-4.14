@@ -1415,7 +1415,7 @@ static int tas2563_set_samplerate(struct tas2563_priv *pTAS2563, int samplerate)
 				TAS2563_TDMConfigurationReg0_SAMPRATE31_Mask,
 				TAS2563_TDMConfigurationReg0_SAMPRATE31_88_2_96kHz);
 			break;
-	case 19200:
+	case 192000:
 			pTAS2563->update_bits(pTAS2563,
 				TAS2563_TDMConfigurationReg0,
 				TAS2563_TDMConfigurationReg0_SAMPRATERAMP_Mask,
@@ -1425,7 +1425,7 @@ static int tas2563_set_samplerate(struct tas2563_priv *pTAS2563, int samplerate)
 				TAS2563_TDMConfigurationReg0_SAMPRATE31_Mask,
 				TAS2563_TDMConfigurationReg0_SAMPRATE31_176_4_192kHz);
 			break;
-	case 17640:
+	case 176400:
 			pTAS2563->update_bits(pTAS2563,
 				TAS2563_TDMConfigurationReg0,
 				TAS2563_TDMConfigurationReg0_SAMPRATERAMP_Mask,
