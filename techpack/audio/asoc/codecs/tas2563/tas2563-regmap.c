@@ -22,7 +22,7 @@
 
 #ifdef CONFIG_TAS2563_REGMAP
 
-#define DEBUG
+#define DEBUG 0
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/init.h>

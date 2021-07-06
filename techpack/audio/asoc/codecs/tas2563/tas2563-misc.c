@@ -22,7 +22,7 @@
 
 #ifdef CONFIG_TAS2563_MISC
 
-#define DEBUG
+#define DEBUG 0
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/init.h>
@@ -45,7 +45,7 @@
 #include "tas2563-misc.h"
 #include <linux/dma-mapping.h>
 
-static int g_logEnable = 1;
+static int g_logEnable = 0;
 static struct tas2563_priv *g_tas2563;
 
 static int tas2563_file_open(struct inode *inode, struct file *file)
