@@ -1137,4 +1137,43 @@ config RELR
 	  well as compatible NM and OBJCOPY utilities (llvm-nm and llvm-objcopy
 	  are compatible).
 
+config ARCH_HAS_VLA_CHECKS
+	bool "This architecture support VLA detection"
+	help
+	  An architecture should select this to detect Variable Length Arrays 
+	  in kernel. This is a part of C-99 standard but can have unintended
+	  consequences.
+
+choice
+	prompt "VLA (Variable Length Array) detection in kernel"
+	depends on ARCH_HAS_VLA_CHECKS
+	default VLA_NONE
+	help
+	  VLAs allow for array lengths to be determined at run-time rathe than 
+	  at compile times. This is bad because this might lead to some run-
+	  time overheads and some specific security issues.
+
+config VLA_NONE
+	bool "No VLA checks"
+
+config VLA_WARN_ON_DETECT
+	bool "Warn upon detection of VLA"
+	help
+	  This option enables the compiler to spit a warning when it detects
+	  a Variable Length Array. This is a modification to a commit in
+	  kernel.org by Kees Cook in 4.20-rc1:
+
+		https://kutt.it/CR692l
+	  
+	  Use it if you do not want your compilation to stop upon detection.
+
+config VLA_ERROR_ON_DETECT
+	bool "Stop compilation upon detection of VLA"
+	help
+	   This option enables the compiler to stop compilation when it detects
+	   a Variable Length Array.
+
+endchoice
+
+
 source "kernel/gcov/Kconfig"
