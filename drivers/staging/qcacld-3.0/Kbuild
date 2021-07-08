@@ -3296,6 +3296,7 @@ ccflags-y += -Wframe-larger-than=4096
 endif
 endif
 ccflags-y += -Wmissing-prototypes
+ccflags-$(CONFIG_ARCH_HAS_VLA_CHECKS) += $(call cc-disable-warning, vla)
 
 ifeq ($(call cc-option-yn, -Wheader-guard), y)
 ccflags-y += -Wheader-guard
