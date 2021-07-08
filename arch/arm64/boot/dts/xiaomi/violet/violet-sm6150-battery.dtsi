@@ -12,7 +12,7 @@
 };
 
 &pm6150_qg {
-    qcom,qg-iterm-ma = <350>;
+    qcom,qg-iterm-ma = <100>;
     qcom,s3-entry-ibat-ua = <18000>;
     qcom,s3-exit-ibat-ua = <38000>;
     qcom,vbatt-cutoff-mv = <3400>;
