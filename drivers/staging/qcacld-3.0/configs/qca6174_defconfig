@@ -750,3 +750,6 @@ CONFIG_SAP_DHCP_FW_IND := y
 #Enable FW Offload
 CONFIG_WLAN_FW_OFFLOAD := y
 
+#Enable size optimize from genoa.pci.perf_defconfig
+CONFIG_ENABLE_SIZE_OPTIMIZE := y
+
