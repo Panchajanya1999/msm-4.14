@@ -304,7 +304,7 @@ CONFIG_QCA_WIFI_QCA8074 := y
 CONFIG_QCA_WIFI_QCA8074_VP := y
 CONFIG_DP_INTR_POLL_BASED := y
 CONFIG_TX_PER_PDEV_DESC_POOL := y
-CONFIG_DP_TRACE := y
+CONFIG_DP_TRACE := n
 CONFIG_FEATURE_TSO := y
 CONFIG_TSO_DEBUG_LOG_ENABLE := y
 CONFIG_DP_LFR := y
@@ -349,7 +349,7 @@ endif
 # Feature flags which are not (currently) configurable via Kconfig
 
 #Whether to build debug version
-BUILD_DEBUG_VERSION := y
+BUILD_DEBUG_VERSION := n
 
 #Enable this flag to build driver in diag version
 BUILD_DIAG_VERSION := y
@@ -366,19 +366,19 @@ else
 endif
 
 # Compile all log levels by default
-CONFIG_WLAN_LOG_FATAL := y
-CONFIG_WLAN_LOG_ERROR := y
-CONFIG_WLAN_LOG_WARN := y
-CONFIG_WLAN_LOG_INFO := y
-CONFIG_WLAN_LOG_DEBUG := y
-CONFIG_WLAN_LOG_ENTER := y
-CONFIG_WLAN_LOG_EXIT := y
+CONFIG_WLAN_LOG_FATAL := n
+CONFIG_WLAN_LOG_ERROR := n
+CONFIG_WLAN_LOG_WARN := n
+CONFIG_WLAN_LOG_INFO := n
+CONFIG_WLAN_LOG_DEBUG := n
+CONFIG_WLAN_LOG_ENTER := n
+CONFIG_WLAN_LOG_EXIT := n
 
 #Enable OL debug and wmi unified functions
 CONFIG_ATH_PERF_PWR_OFFLOAD := y
 
 #Disable packet log
-CONFIG_REMOVE_PKT_LOG := n
+CONFIG_REMOVE_PKT_LOG := y
 
 #Enable 11AC TX
 ifeq ($(CONFIG_ROME_IF),pci)
@@ -539,7 +539,7 @@ CONFIG_QCA_SIGNED_SPLIT_BINARY_SUPPORT := n
 CONFIG_QCA_SINGLE_BINARY_SUPPORT := n
 
 #Enable collecting target RAM dump after kernel panic
-CONFIG_TARGET_RAMDUMP_AFTER_KERNEL_PANIC := y
+CONFIG_TARGET_RAMDUMP_AFTER_KERNEL_PANIC := n
 
 #Flag to enable/disable secure firmware feature
 CONFIG_FEATURE_SECURE_FIRMWARE := n
@@ -555,13 +555,13 @@ CONFIG_WLAN_DFS_STATIC_MEM_ALLOC := y
 CONFIG_FEATURE_HTC_CREDIT_HISTORY := y
 
 #Flag to enable MTRACE feature
-CONFIG_TRACE_RECORD_FEATURE := y
+CONFIG_TRACE_RECORD_FEATURE := n
 
 #Flag to enable p2p debug feature
-CONFIG_WLAN_FEATURE_P2P_DEBUG := y
+CONFIG_WLAN_FEATURE_P2P_DEBUG := n
 
 #Flag to enable roam debug log
-CONFIG_FEATURE_ROAM_DEBUG := y
+CONFIG_FEATURE_ROAM_DEBUG := n
 
 #Flag to enable DFS Master feature
 CONFIG_WLAN_DFS_MASTER_ENABLE := y
@@ -570,7 +570,7 @@ CONFIG_WLAN_DFS_MASTER_ENABLE := y
 CONFIG_WLAN_WEXT_SUPPORT_ENABLE := y
 
 #Flag to enable/disable MTRACE feature
-CONFIG_ENABLE_MTRACE_LOG := y
+CONFIG_ENABLE_MTRACE_LOG := n
 
 #Flag to enable nud tracking feature
 CONFIG_WLAN_NUD_TRACKING := y
@@ -596,7 +596,7 @@ CONFIG_FEATURE_WLAN_WAPI := y
 CONFIG_AGEIE_ON_SCAN_RESULTS := y
 
 #Flag to enable FW log parsing support feature
-CONFIG_FEATURE_FW_LOG_PARSING := y
+CONFIG_FEATURE_FW_LOG_PARSING := n
 
 CONFIG_PTT_SOCK_SVC_ENABLE := y
 CONFIG_SOFTAP_CHANNEL_RANGE := y
@@ -678,7 +678,7 @@ ifeq ($(CONFIG_LITHIUM), y)
 endif
 
 #Flag to enable hdd memory dump feature
-CONFIG_FEATURE_MEMDUMP_ENABLE := y
+CONFIG_FEATURE_MEMDUMP_ENABLE := n
 
 #Flag to enable/disable WLAN D0-WOW
 ifeq ($(CONFIG_PCI_MSM), y)
@@ -709,7 +709,7 @@ CONFIG_DESC_DUP_DETECT_DEBUG := y
 CONFIG_DEBUG_RX_RING_BUFFER := y
 endif
 
-CONFIG_DP_TRACE := y
+CONFIG_DP_TRACE := n
 
 ifeq ($(CONFIG_CNSS), y)
 ifeq ($(CONFIG_CNSS_SDIO), y)
