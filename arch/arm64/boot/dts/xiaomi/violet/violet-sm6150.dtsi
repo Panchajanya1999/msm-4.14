@@ -77,3 +77,47 @@
 		<1900800>,
 		<2016000>;
 };
+
+/* Simple Thermal */
+&soc {
+	qcom,msm-thermal-simple {
+		compatible = "qcom,msm-thermal-simple";
+		qcom,poll-ms = <3000>;
+		qcom,start-delay = <5>;
+
+		zone@0 {
+			reg = <0>;
+			qcom,silver-khz = <1708800>;
+			qcom,gold-khz = <1900800>;
+			qcom,trip-deg = <65000>;
+		};
+
+		zone@1 {
+			reg = <1>;
+			qcom,silver-khz = <1593600>;
+			qcom,gold-khz = <1516800>;
+			qcom,trip-deg = <70000>;
+		};
+
+		zone@2 {
+			reg = <2>;
+			qcom,silver-khz = <1593600>;
+			qcom,gold-khz = <1363200>;
+			qcom,trip-deg = <73500>;
+		};
+
+		zone@3 {
+			reg = <3>;
+			qcom,silver-khz = <1363200>;
+			qcom,gold-khz = <1209600>;
+			qcom,trip-deg = <76500>;
+		};
+
+		zone@4 {
+			reg = <4>;
+			qcom,silver-khz = <1017600>;
+			qcom,gold-khz = <979200>;
+			qcom,trip-deg = <85500>;
+		};
+	};
+};
