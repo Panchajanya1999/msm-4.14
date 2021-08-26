@@ -79,14 +79,14 @@
 		zone@0 {
 			reg = <0>;
 			qcom,silver-khz = <1708800>;
-			qcom,gold-khz = <1900800>;
+			qcom,gold-khz = <1708800>;
 			qcom,trip-deg = <65000>;
 		};
 
 		zone@1 {
 			reg = <1>;
 			qcom,silver-khz = <1593600>;
-			qcom,gold-khz = <1516800>;
+			qcom,gold-khz = <1708800>;
 			qcom,trip-deg = <70000>;
 		};
 
