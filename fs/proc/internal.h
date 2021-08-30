@@ -201,7 +201,7 @@ extern const struct inode_operations proc_link_inode_operations;
 extern const struct inode_operations proc_pid_link_inode_operations;
 extern const struct file_operations proc_reclaim_operations;
 
-void proc_init_kmemcache(void);
+extern void proc_init_inodecache(void);
 void set_proc_pid_nlink(void);
 extern struct inode *proc_get_inode(struct super_block *, struct proc_dir_entry *);
 extern int proc_fill_super(struct super_block *);
