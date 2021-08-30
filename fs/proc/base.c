@@ -356,7 +356,7 @@ static int proc_pid_wchan(struct seq_file *m, struct pid_namespace *ns,
 
 	wchan = get_wchan(task);
 	if (wchan && !lookup_symbol_name(wchan, symname)) {
-		seq_puts(m, symname);
+		seq_printf(m, "%s", symname);
 		return 0;
 	}
 
