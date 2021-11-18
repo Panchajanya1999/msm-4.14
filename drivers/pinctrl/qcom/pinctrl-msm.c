@@ -2019,7 +2019,7 @@ static void msm_pinctrl_resume(void)
 	}
 #endif
 
-	if (!msm_show_resume_irq_mask)
+	if (1)
 		return;
 
 	raw_spin_lock_irqsave(&pctrl->lock, flags);

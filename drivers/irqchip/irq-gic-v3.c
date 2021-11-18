@@ -449,7 +449,7 @@ static void gic_show_resume_irq(struct gic_chip_data *gic)
 	if (base == NULL)
 		return;
 
-	if (!msm_show_resume_irq_mask)
+	if (1)
 		return;
 
 	for (i = 0; i * 32 < gic->irq_nr; i++) {
