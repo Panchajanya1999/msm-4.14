@@ -1395,7 +1395,7 @@ static int binder_inc_node_nilocked(struct binder_node *node, int strong,
 			    !(node->proc &&
 			      node == node->proc->context->binder_context_mgr_node &&
 			      node->has_strong_ref)) {
-				pr_err("invalid inc strong node for %d\n",
+				pr_debug("invalid inc strong node for %d\n",
 					node->debug_id);
 				return -EINVAL;
 			}
@@ -1422,7 +1422,7 @@ static int binder_inc_node_nilocked(struct binder_node *node, int strong,
 			node->local_weak_refs++;
 		if (!node->has_weak_ref && list_empty(&node->work.entry)) {
 			if (target_list == NULL) {
-				pr_err("invalid inc weak node for %d\n",
+				pr_debug("invalid inc weak node for %d\n",
 					node->debug_id);
 				return -EINVAL;
 			}
@@ -2151,7 +2151,7 @@ static void binder_send_failed_reply(struct binder_transaction *t,
 				 * are sent without blocking for responses.
 				 * Just ignore the 2nd error in this case.
 				 */
-				pr_warn("Unexpected reply error: %u\n",
+				pr_debug("Unexpected reply error: %u\n",
 					target_thread->reply_error.cmd);
 			}
 			binder_inner_proc_unlock(target_thread->proc);
@@ -2414,7 +2414,7 @@ static void binder_transaction_buffer_release(struct binder_proc *proc,
 		object_size = binder_get_object(proc, buffer,
 						object_offset, &object);
 		if (object_size == 0) {
-			pr_err("transaction release %d bad object at offset %lld, size %zd\n",
+			pr_debug("transaction release %d bad object at offset %lld, size %zd\n",
 			       debug_id, (u64)object_offset, buffer->data_size);
 			continue;
 		}
@@ -2428,7 +2428,7 @@ static void binder_transaction_buffer_release(struct binder_proc *proc,
 			fp = to_flat_binder_object(hdr);
 			node = binder_get_node(proc, fp->binder);
 			if (node == NULL) {
-				pr_err("transaction release %d bad node %016llx\n",
+				pr_debug("transaction release %d bad node %016llx\n",
 				       debug_id, (u64)fp->binder);
 				break;
 			}
@@ -2450,7 +2450,7 @@ static void binder_transaction_buffer_release(struct binder_proc *proc,
 				hdr->type == BINDER_TYPE_HANDLE, &rdata);
 
 			if (ret) {
-				pr_err("transaction release %d bad handle %d, ret = %d\n",
+				pr_debug("transaction release %d bad handle %d, ret = %d\n",
 				 debug_id, fp->handle, ret);
 				break;
 			}
@@ -2491,20 +2491,20 @@ static void binder_transaction_buffer_release(struct binder_proc *proc,
 						     NULL,
 						     num_valid);
 			if (!parent) {
-				pr_err("transaction release %d bad parent offset",
+				pr_debug("transaction release %d bad parent offset",
 				       debug_id);
 				continue;
 			}
 			fd_buf_size = sizeof(u32) * fda->num_fds;
 			if (fda->num_fds >= SIZE_MAX / sizeof(u32)) {
-				pr_err("transaction release %d invalid number of fds (%lld)\n",
+				pr_debug("transaction release %d invalid number of fds (%lld)\n",
 				       debug_id, (u64)fda->num_fds);
 				continue;
 			}
 			if (fd_buf_size > parent->length ||
 			    fda->parent_offset > parent->length - fd_buf_size) {
 				/* No space for all file descriptors here. */
-				pr_err("transaction release %d not enough space for %lld fds in buffer\n",
+				pr_debug("transaction release %d not enough space for %lld fds in buffer\n",
 				       debug_id, (u64)fda->num_fds);
 				continue;
 			}
@@ -2533,7 +2533,7 @@ static void binder_transaction_buffer_release(struct binder_proc *proc,
 			}
 		} break;
 		default:
-			pr_err("transaction release %d bad object type %x\n",
+			pr_debug("transaction release %d bad object type %x\n",
 				debug_id, hdr->type);
 			break;
 		}
@@ -3804,10 +3804,10 @@ static int binder_thread_write(struct binder_proc *proc,
 			break;
 		}
 		case BC_ATTEMPT_ACQUIRE:
-			pr_err("BC_ATTEMPT_ACQUIRE not supported\n");
+			pr_debug("BC_ATTEMPT_ACQUIRE not supported\n");
 			return -EINVAL;
 		case BC_ACQUIRE_RESULT:
-			pr_err("BC_ACQUIRE_RESULT not supported\n");
+			pr_debug("BC_ACQUIRE_RESULT not supported\n");
 			return -EINVAL;
 
 		case BC_FREE_BUFFER: {
@@ -4107,7 +4107,7 @@ static int binder_thread_write(struct binder_proc *proc,
 		} break;
 
 		default:
-			pr_err("%d:%d unknown command %d\n",
+			pr_debug("%d:%d unknown command %d\n",
 			       proc->pid, thread->pid, cmd);
 			return -EINVAL;
 		}
@@ -4608,7 +4608,7 @@ static void binder_release_work(struct binder_proc *proc,
 		case BINDER_WORK_NODE:
 			break;
 		default:
-			pr_err("unexpected work type, %d, not freed\n",
+			pr_debug("unexpected work type, %d, not freed\n",
 			       wtype);
 			break;
 		}
@@ -4893,7 +4893,7 @@ static int binder_ioctl_set_ctx_mgr(struct file *filp,
 
 	mutex_lock(&context->context_mgr_node_lock);
 	if (context->binder_context_mgr_node) {
-		pr_err("BINDER_SET_CONTEXT_MGR already set\n");
+		pr_debug("BINDER_SET_CONTEXT_MGR already set\n");
 		ret = -EBUSY;
 		goto out;
 	}
@@ -4902,7 +4902,7 @@ static int binder_ioctl_set_ctx_mgr(struct file *filp,
 		goto out;
 	if (uid_valid(context->binder_context_mgr_uid)) {
 		if (!uid_eq(context->binder_context_mgr_uid, curr_euid)) {
-			pr_err("BINDER_SET_CONTEXT_MGR bad uid %d != %d\n",
+			pr_debug("BINDER_SET_CONTEXT_MGR bad uid %d != %d\n",
 			       from_kuid(&init_user_ns, curr_euid),
 			       from_kuid(&init_user_ns,
 					 context->binder_context_mgr_uid));
@@ -5265,9 +5265,9 @@ static long binder_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 err:
 	if (thread)
 		thread->looper_need_return = false;
-	wait_event_interruptible(binder_user_error_wait, binder_stop_on_user_error < 2);
+	ret = wait_event_interruptible(binder_user_error_wait, binder_stop_on_user_error < 2);
 	if (ret && ret != -EINTR)
-		pr_info("%d:%d ioctl %x %lx returned %d\n", proc->pid, current->pid, cmd, arg, ret);
+		pr_debug("%d:%d ioctl %x %lx returned %d\n", proc->pid, current->pid, cmd, arg, ret);
 err_unlocked:
 	trace_binder_ioctl_done(ret);
 	return ret;
@@ -5346,7 +5346,7 @@ static int binder_mmap(struct file *filp, struct vm_area_struct *vma)
 	return 0;
 
 err_bad_arg:
-	pr_err("%s: %d %lx-%lx %s failed %d\n", __func__,
+	pr_debug("%s: %d %lx-%lx %s failed %d\n", __func__,
 	       proc->pid, vma->vm_start, vma->vm_end, failure_string, ret);
 	return ret;
 }
@@ -5443,7 +5443,7 @@ static int binder_open(struct inode *nodp, struct file *filp)
 
 			error = PTR_ERR(binderfs_entry);
 			if (error != -EEXIST) {
-				pr_warn("Unable to create file %s in binderfs (error %d)\n",
+				pr_debug("Unable to create file %s in binderfs (error %d)\n",
 					strbuf, error);
 			}
 		}
