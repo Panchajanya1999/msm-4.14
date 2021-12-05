@@ -152,6 +152,12 @@ config QCOM_DLOAD_MODE
 	  make the kernel reboot on a kernel panic - that must be
 	  enabled via another mechanism.
 
+config FORCE_WARM_REBOOT
+	bool "Force enable warm reboot"
+	help
+	 This forces warm reboot via config. You can either force warm reboot
+	 via devicetree or enable it via config.
+
 config POWER_RESET_QNAP
 	bool "QNAP power-off driver"
 	depends on OF_GPIO && PLAT_ORION

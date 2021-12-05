@@ -702,6 +702,9 @@ skip_sysfs_create:
 
 	force_warm_reboot = of_property_read_bool(dev->of_node,
 						"qcom,force-warm-reboot");
+#ifdef CONFIG_FORCE_WARM_REBOOT
+	force_warm_reboot = true;
+#endif
 
 	return 0;
 
