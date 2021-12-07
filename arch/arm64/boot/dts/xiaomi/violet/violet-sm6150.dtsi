@@ -28,7 +28,7 @@
         fstab {
             vendor {
 		dev = "/dev/block/platform/soc/7c4000.sdhci/by-name/vendor";
-                fsmgr_flags = "wait,avb";
+                fsmgr_flags = "wait";
             };
             persist {
 		compatible = "android,persist";
