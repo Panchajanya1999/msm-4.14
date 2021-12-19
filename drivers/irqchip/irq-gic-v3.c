@@ -449,9 +449,6 @@ static void gic_show_resume_irq(struct gic_chip_data *gic)
 	if (base == NULL)
 		return;
 
-	if (1)
-		return;
-
 	for (i = 0; i * 32 < gic->irq_nr; i++) {
 		enabled = readl_relaxed(base + GICD_ICENABLER + i * 4);
 		pending[i] = readl_relaxed(base + GICD_ISPENDR + i * 4);
@@ -470,7 +467,9 @@ static void gic_show_resume_irq(struct gic_chip_data *gic)
 		else if (desc->action && desc->action->name)
 			name = desc->action->name;
 
-		pr_warn("%s: %d triggered %s\n", __func__, irq, name);
+		if (!msm_show_resume_irq_mask)
+			pr_warn("%s: %d triggered %s\n", __func__, irq, name);
+		log_irq_wakeup_reason(irq);
 	}
 }
 
