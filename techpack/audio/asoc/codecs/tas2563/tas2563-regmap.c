@@ -330,18 +330,18 @@ static void irq_work_routine(struct work_struct *work)
 	int nCounter = 2;
 	int nResult = 0;
 
-	dev_info(pTAS2563->dev, "%s\n", __func__);
+	dev_dbg(pTAS2563->dev, "%s\n", __func__);
 #ifdef CONFIG_TAS2563_CODEC
 	mutex_lock(&pTAS2563->codec_lock);
 #endif
 
 	if (pTAS2563->mbRuntimeSuspend) {
-		dev_info(pTAS2563->dev, "%s, Runtime Suspended\n", __func__);
+		dev_dbg(pTAS2563->dev, "%s, Runtime Suspended\n", __func__);
 		goto end;
 	}
 
 	if (pTAS2563->mnPowerState == TAS2563_POWER_SHUTDOWN) {
-		dev_info(pTAS2563->dev, "%s, device not powered\n", __func__);
+		dev_dbg(pTAS2563->dev, "%s, device not powered\n", __func__);
 		goto end;
 	}
 
@@ -603,7 +603,7 @@ static int tas2563_i2c_probe(struct i2c_client *pClient,
 	unsigned int nValue = 0;
 	const char *pFWName;
 
-	dev_info(&pClient->dev, "%s enter\n", __func__);
+	dev_dbg(&pClient->dev, "%s enter\n", __func__);
 
 	pTAS2563 = devm_kzalloc(&pClient->dev, sizeof(struct tas2563_priv), GFP_KERNEL);
 	if (!pTAS2563) {
@@ -661,7 +661,7 @@ static int tas2563_i2c_probe(struct i2c_client *pClient,
 	msleep(1);
 	nResult = tas2563_dev_read(pTAS2563, TAS2563_RevisionandPGID, &nValue);
 	pTAS2563->mnPGID = nValue;
-	dev_info(pTAS2563->dev, "PGID: %d\n", pTAS2563->mnPGID);
+	dev_dbg(pTAS2563->dev, "PGID: %d\n", pTAS2563->mnPGID);
 	pFWName = TAS2563_FW_NAME;
 
 	if (gpio_is_valid(pTAS2563->mnIRQGPIO)) {
@@ -703,7 +703,7 @@ static int tas2563_i2c_probe(struct i2c_client *pClient,
 #ifdef CONFIG_TAS2563_CODEC
 	mutex_init(&pTAS2563->codec_lock);
 	tas2563_register_codec(pTAS2563);
-	dev_info(pTAS2563->dev, "register codec");
+	dev_dbg(pTAS2563->dev, "register codec");
 #endif
 
 #ifdef CONFIG_TAS2563_MISC
@@ -731,7 +731,7 @@ static int tas2563_i2c_remove(struct i2c_client *pClient)
 {
 	struct tas2563_priv *pTAS2563 = i2c_get_clientdata(pClient);
 
-	dev_info(pTAS2563->dev, "%s\n", __func__);
+	dev_dbg(pTAS2563->dev, "%s\n", __func__);
 
 #ifdef CONFIG_TAS2563_CODEC
 	tas2563_deregister_codec(pTAS2563);

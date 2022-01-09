@@ -57,7 +57,7 @@ static int tas2563_file_open(struct inode *inode, struct file *file)
 
 	file->private_data = (void *)pTAS2563;
 	if (g_logEnable)
-		dev_info(pTAS2563->dev,	"%s\n", __func__);
+		dev_dbg(pTAS2563->dev,	"%s\n", __func__);
 	return 0;
 }
 
@@ -66,7 +66,7 @@ static int tas2563_file_release(struct inode *inode, struct file *file)
 	struct tas2563_priv *pTAS2563 = (struct tas2563_priv *)file->private_data;
 
 	if (g_logEnable)
-		dev_info(pTAS2563->dev,	"%s\n", __func__);
+		dev_dbg(pTAS2563->dev,	"%s\n", __func__);
 	file->private_data = (void *)NULL;
 	module_put(THIS_MODULE);
 
@@ -86,7 +86,7 @@ static ssize_t tas2563_file_read(struct file *file, char *buf, size_t count, lof
 	switch (pTAS2563->mnDBGCmd) {
 	case TIAUDIO_CMD_REG_READ: {
 		if (g_logEnable)
-			dev_info(pTAS2563->dev, "TIAUDIO_CMD_REG_READ: current_reg = 0x%x, count=%d\n",
+			dev_dbg(pTAS2563->dev, "TIAUDIO_CMD_REG_READ: current_reg = 0x%x, count=%d\n",
 				pTAS2563->mnCurrentReg, (int)count);
 		if (count == 1) {
 			ret = pTAS2563->read(pTAS2563, pTAS2563->mnCurrentReg, &nValue);
@@ -95,7 +95,7 @@ static ssize_t tas2563_file_read(struct file *file, char *buf, size_t count, lof
 
 			value = (u8)nValue;
 			if (g_logEnable)
-				dev_info(pTAS2563->dev, "TIAUDIO_CMD_REG_READ: nValue=0x%x, value=0x%x\n", nValue, value);
+				dev_dbg(pTAS2563->dev, "TIAUDIO_CMD_REG_READ: nValue=0x%x, value=0x%x\n", nValue, value);
 			ret = copy_to_user(buf, &value, 1);
 			if (ret != 0) {
 				/* Failed to copy all the data, exit */
@@ -160,7 +160,7 @@ static ssize_t tas2563_file_write(struct file *file, const char *buf, size_t cou
 			if (len == 1) {
 				ret = pTAS2563->write(pTAS2563, reg, p_kBuf[5]);
 				if (g_logEnable)
-					dev_info(pTAS2563->dev, "TIAUDIO_CMD_REG_WITE, Reg=0x%x, Val=0x%x\n", reg, p_kBuf[5]);
+					dev_dbg(pTAS2563->dev, "TIAUDIO_CMD_REG_WITE, Reg=0x%x, Val=0x%x\n", reg, p_kBuf[5]);
 			} else
 				ret = pTAS2563->bulk_write(pTAS2563, reg, &p_kBuf[5], len);
 		} else
@@ -175,7 +175,7 @@ static ssize_t tas2563_file_write(struct file *file, const char *buf, size_t cou
 				+ ((unsigned int)p_kBuf[3] << 8)
 				+ (unsigned int)p_kBuf[4];
 			if (g_logEnable)
-				dev_info(pTAS2563->dev, "TIAUDIO_CMD_REG_READ whole=0x%x\n", pTAS2563->mnCurrentReg);
+				dev_dbg(pTAS2563->dev, "TIAUDIO_CMD_REG_READ whole=0x%x\n", pTAS2563->mnCurrentReg);
 		} else
 			dev_err(pTAS2563->dev, "read len fail.\n");
 	break;
@@ -216,7 +216,7 @@ int tas2563_register_misc(struct tas2563_priv *pTAS2563)
 	if (ret)
 		dev_err(pTAS2563->dev, "TAS2563 misc fail: %d\n", ret);
 
-	dev_info(pTAS2563->dev, "%s, leave\n", __func__);
+	dev_dbg(pTAS2563->dev, "%s, leave\n", __func__);
 
 	return ret;
 }

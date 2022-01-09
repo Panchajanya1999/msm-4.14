@@ -107,7 +107,7 @@ static unsigned int tas2563_codec_read(struct snd_soc_codec *codec,
 		dev_err(pTAS2563->dev, "%s, ERROR, reg=0x%x, E=%d\n",
 			__func__, reg, nResult);
 	else
-		dev_info(pTAS2563->dev, "%s, reg: 0x%x, value: 0x%x\n",
+		dev_dbg(pTAS2563->dev, "%s, reg: 0x%x, value: 0x%x\n",
 				__func__, reg, value);
 
 	if (nResult >= 0)
@@ -352,9 +352,9 @@ static int doMultiRegCheckSum(struct tas2563_priv *pTAS2563,
 	}
 
 	nResult = isYRAM(pTAS2563, &TCRCData, nBook, nPage, nReg, len);
-	dev_info(pTAS2563->dev, "isYRAM: nBook 0x%x, nPage 0x%x, nReg 0x%x\n", nBook, nPage, nReg);
-	dev_info(pTAS2563->dev, "isYRAM: TCRCData.mnLen 0x%x, len 0x%x, nResult %d\n", TCRCData.mnLen, len, nResult);
-	dev_info(pTAS2563->dev, "TCRCData.mnOffset %x\n", TCRCData.mnOffset);
+	dev_dbg(pTAS2563->dev, "isYRAM: nBook 0x%x, nPage 0x%x, nReg 0x%x\n", nBook, nPage, nReg);
+	dev_dbg(pTAS2563->dev, "isYRAM: TCRCData.mnLen 0x%x, len 0x%x, nResult %d\n", TCRCData.mnLen, len, nResult);
+	dev_dbg(pTAS2563->dev, "TCRCData.mnOffset %x\n", TCRCData.mnOffset);
 	if (nResult == 1) {
 		if (len == 1) {
 			dev_err(pTAS2563->dev, "firmware error\n");
@@ -403,7 +403,7 @@ static int tas2563_load_block(struct tas2563_priv *pTAS2563, struct TBlock *pBlo
 	int nRetry = 6;
 	unsigned char *pData = pBlock->mpData;
 
-	dev_info(pTAS2563->dev, "TAS2563 load block: Type = %d, commands = %d\n",
+	dev_dbg(pTAS2563->dev, "TAS2563 load block: Type = %d, commands = %d\n",
 		pBlock->mnType, pBlock->mnCommands);
 start:
 	if (pBlock->mbPChkSumPresent) {
@@ -491,7 +491,7 @@ start:
 
 		nResult = 0;
 		pTAS2563->mnErrCode &= ~ERROR_PRAM_CRCCHK;
-		dev_info(pTAS2563->dev, "Block[0x%x] PChkSum match\n", pBlock->mnType);
+		dev_dbg(pTAS2563->dev, "Block[0x%x] PChkSum match\n", pBlock->mnType);
 	}
 
 	if (pBlock->mbYChkSumPresent) {
@@ -509,7 +509,7 @@ start:
 */
 		pTAS2563->mnErrCode &= ~ERROR_YRAM_CRCCHK;
 		nResult = 0;
-		dev_info(pTAS2563->dev, "Block[0x%x] YChkSum match\n", pBlock->mnType);
+		dev_dbg(pTAS2563->dev, "Block[0x%x] YChkSum match\n", pBlock->mnType);
 	}
 
 check:
@@ -534,7 +534,7 @@ static int tas2563_load_data(struct tas2563_priv *pTAS2563, struct TData *pData,
 	unsigned int nBlock;
 	struct TBlock *pBlock;
 
-	dev_info(pTAS2563->dev,
+	dev_dbg(pTAS2563->dev,
 		"TAS2563 load data: %s, Blocks = %d, Block Type = %d\n", pData->mpName, pData->mnBlocks, nType);
 
 	for (nBlock = 0; nBlock < pData->mnBlocks; nBlock++) {
@@ -609,7 +609,7 @@ static int tas2563_load_configuration(struct tas2563_priv *pTAS2563,
 	struct TConfiguration *pCurrentConfiguration = NULL;
 	struct TConfiguration *pNewConfiguration = NULL;
 
-	dev_info(pTAS2563->dev, "%s: %d\n", __func__, nConfiguration);
+	dev_dbg(pTAS2563->dev, "%s: %d\n", __func__, nConfiguration);
 
 	if ((!pTAS2563->mpFirmware->mpPrograms) ||
 		(!pTAS2563->mpFirmware->mpConfigurations)) {
@@ -628,7 +628,7 @@ static int tas2563_load_configuration(struct tas2563_priv *pTAS2563,
 	if ((!pTAS2563->mbLoadConfigurationPrePowerUp)
 		&& (nConfiguration == pTAS2563->mnCurrentConfiguration)
 		&& (!bLoadSame)) {
-		dev_info(pTAS2563->dev, "Configuration %d is already loaded\n",
+		dev_dbg(pTAS2563->dev, "Configuration %d is already loaded\n",
 			nConfiguration);
 		nResult = 0;
 		goto end;
@@ -649,7 +649,7 @@ static int tas2563_load_configuration(struct tas2563_priv *pTAS2563,
 		pTAS2563->mbLoadConfigurationPrePowerUp = false;
 		nResult = tas2563_load_coefficient(pTAS2563, pTAS2563->mnCurrentConfiguration, nConfiguration, true);
 	} else {
-		dev_info(pTAS2563->dev,
+		dev_dbg(pTAS2563->dev,
 			"TAS2563 was powered down, will load coefficient when power up\n");
 		pTAS2563->mbLoadConfigurationPrePowerUp = true;
 		pTAS2563->mnNewConfiguration = nConfiguration;
@@ -674,13 +674,13 @@ static int tas2563_load_calibration(struct tas2563_priv *pTAS2563,	char *pFileNa
 	unsigned char pBuffer[1000];
 	int nSize = 0;
 
-	dev_info(pTAS2563->dev, "%s:\n", __func__);
+	dev_dbg(pTAS2563->dev, "%s:\n", __func__);
 
 	fs = get_fs();
 	set_fs(KERNEL_DS);
 	nFile = sys_open(pFileName, O_RDONLY, 0);
 
-	dev_info(pTAS2563->dev, "TAS2563 calibration file = %s, handle = %d\n",
+	dev_dbg(pTAS2563->dev, "TAS2563 calibration file = %s, handle = %d\n",
 		pFileName, nFile);
 
 	if (nFile >= 0) {
@@ -697,13 +697,13 @@ static int tas2563_load_calibration(struct tas2563_priv *pTAS2563,	char *pFileNa
 		goto end;
 
 	tas2563_clear_firmware(pTAS2563->mpCalFirmware);
-	dev_info(pTAS2563->dev, "TAS2563 calibration file size = %d\n", nSize);
+	dev_dbg(pTAS2563->dev, "TAS2563 calibration file size = %d\n", nSize);
 	nResult = fw_parse(pTAS2563, pTAS2563->mpCalFirmware, pBuffer, nSize);
 
 	if (nResult)
 		dev_err(pTAS2563->dev, "TAS2563 calibration file is corrupt\n");
 	else
-		dev_info(pTAS2563->dev, "TAS2563 calibration: %d calibrations\n",
+		dev_dbg(pTAS2563->dev, "TAS2563 calibration: %d calibrations\n",
 			pTAS2563->mpCalFirmware->mnCalibrations);
 end:
 
@@ -722,7 +722,7 @@ static int tas2563_codec_write(struct snd_soc_codec *codec, unsigned int reg,
 		dev_err(pTAS2563->dev, "%s, ERROR, reg=0x%x, E=%d\n",
 			__func__, reg, nResult);
 	else
-		dev_info(pTAS2563->dev, "%s, reg: 0x%x, 0x%x\n",
+		dev_dbg(pTAS2563->dev, "%s, reg: 0x%x, 0x%x\n",
 			__func__, reg, value);
 
 	return nResult;
@@ -731,14 +731,14 @@ static int tas2563_codec_write(struct snd_soc_codec *codec, unsigned int reg,
 
 static void fw_print_header(struct tas2563_priv *pTAS2563, struct TFirmware *pFirmware)
 {
-	dev_info(pTAS2563->dev, "FW Size       = %d", pFirmware->mnFWSize);
-	dev_info(pTAS2563->dev, "Checksum      = 0x%04X", pFirmware->mnChecksum);
-	dev_info(pTAS2563->dev, "PPC Version   = 0x%04X", pFirmware->mnPPCVersion);
-	dev_info(pTAS2563->dev, "FW  Version    = 0x%04X", pFirmware->mnFWVersion);
-	dev_info(pTAS2563->dev, "Driver Version= 0x%04X", pFirmware->mnDriverVersion);
-	dev_info(pTAS2563->dev, "Timestamp     = %d", pFirmware->mnTimeStamp);
-	dev_info(pTAS2563->dev, "DDC Name      = %s", pFirmware->mpDDCName);
-	dev_info(pTAS2563->dev, "Description   = %s", pFirmware->mpDescription);
+	dev_dbg(pTAS2563->dev, "FW Size       = %d", pFirmware->mnFWSize);
+	dev_dbg(pTAS2563->dev, "Checksum      = 0x%04X", pFirmware->mnChecksum);
+	dev_dbg(pTAS2563->dev, "PPC Version   = 0x%04X", pFirmware->mnPPCVersion);
+	dev_dbg(pTAS2563->dev, "FW  Version    = 0x%04X", pFirmware->mnFWVersion);
+	dev_dbg(pTAS2563->dev, "Driver Version= 0x%04X", pFirmware->mnDriverVersion);
+	dev_dbg(pTAS2563->dev, "Timestamp     = %d", pFirmware->mnTimeStamp);
+	dev_dbg(pTAS2563->dev, "DDC Name      = %s", pFirmware->mpDDCName);
+	dev_dbg(pTAS2563->dev, "Description   = %s", pFirmware->mpDescription);
 }
 
 inline unsigned int fw_convert_number(unsigned char *pData)
@@ -766,7 +766,7 @@ static int fw_parse_header(struct tas2563_priv *pTAS2563,
 
 	pFirmware->mnFWSize = fw_convert_number(pData);
 	pData += 4;
-	dev_info(pTAS2563->dev, "firmware size: %d", pFirmware->mnFWSize);
+	dev_dbg(pTAS2563->dev, "firmware size: %d", pFirmware->mnFWSize);
 
 	pFirmware->mnChecksum = fw_convert_number(pData);
 	pData += 4;
@@ -782,7 +782,7 @@ static int fw_parse_header(struct tas2563_priv *pTAS2563,
 
 	pFirmware->mnTimeStamp = fw_convert_number(pData);
 	pData += 4;
-	dev_info(pTAS2563->dev, "FW timestamp: %d", pFirmware->mnTimeStamp);
+	dev_dbg(pTAS2563->dev, "FW timestamp: %d", pFirmware->mnTimeStamp);
 
 	memcpy(pFirmware->mpDDCName, pData, 64);
 	pData += 64;
@@ -822,11 +822,11 @@ static int fw_parse_block_data(struct tas2563_priv *pTAS2563, struct TFirmware *
 	unsigned char *pDataStart = pData;
 	unsigned int n;
 
-	dev_info(pTAS2563->dev, "%s, %d", __func__, __LINE__);
+	dev_dbg(pTAS2563->dev, "%s, %d", __func__, __LINE__);
 
 	pBlock->mnType = fw_convert_number(pData);
 	pData += 4;
-	dev_info(pTAS2563->dev, "%s, %d", __func__, __LINE__);
+	dev_dbg(pTAS2563->dev, "%s, %d", __func__, __LINE__);
 
 	if (pFirmware->mnDriverVersion >= PPC_DRIVER_CRCCHK) {
 		pBlock->mbPChkSumPresent = pData[0];
@@ -851,7 +851,7 @@ static int fw_parse_block_data(struct tas2563_priv *pTAS2563, struct TFirmware *
 	n = pBlock->mnCommands * 4;
 	pBlock->mpData = kmemdup(pData, n, GFP_KERNEL);
 	pData += n;
-	dev_info(pTAS2563->dev, "%s, %d", __func__, __LINE__);
+	dev_dbg(pTAS2563->dev, "%s, %d", __func__, __LINE__);
 	return pData - pDataStart;
 }
 
@@ -862,7 +862,7 @@ static int fw_parse_data(struct tas2563_priv *pTAS2563, struct TFirmware *pFirmw
 	unsigned int nBlock;
 	unsigned int n;
 
-	dev_info(pTAS2563->dev, "%s, %d", __func__, __LINE__);
+	dev_dbg(pTAS2563->dev, "%s, %d", __func__, __LINE__);
 	memcpy(pImageData->mpName, pData, 64);
 	pData += 64;
 
@@ -914,7 +914,7 @@ static int fw_parse_program_data(struct tas2563_priv *pTAS2563,
 
 		pProgram->mnI2sMode = pData[0];
 		pData++;
-		dev_info(pTAS2563->dev, "FW i2sMode: %d", pProgram->mnI2sMode);
+		dev_dbg(pTAS2563->dev, "FW i2sMode: %d", pProgram->mnI2sMode);
 
 		pProgram->mnISnsPD = pData[0];
 		pData++;
@@ -927,7 +927,7 @@ static int fw_parse_program_data(struct tas2563_priv *pTAS2563,
 
 		n = fw_parse_data(pTAS2563, pFirmware, &(pProgram->mData), pData);
 		pData += n;
-		dev_info(pTAS2563->dev, "program data number: %d", n);
+		dev_dbg(pTAS2563->dev, "program data number: %d", n);
 	}
 
 end:
@@ -973,11 +973,11 @@ static int fw_parse_configuration_data(struct tas2563_priv *pTAS2563,
 
 		pConfiguration->mnProgram = pData[0];
 		pData++;
-		dev_info(pTAS2563->dev, "configuration, mnProgram: %d", pConfiguration->mnProgram);
+		dev_dbg(pTAS2563->dev, "configuration, mnProgram: %d", pConfiguration->mnProgram);
 
 		pConfiguration->mnSamplingRate = fw_convert_number(pData);
 		pData += 4;
-		dev_info(pTAS2563->dev, "configuration samplerate: %d", pConfiguration->mnSamplingRate);
+		dev_dbg(pTAS2563->dev, "configuration samplerate: %d", pConfiguration->mnSamplingRate);
 
 		//if (pFirmware->mnDriverVersion >= PPC_DRIVER_MTPLLSRC) {
 			pConfiguration->mnPLLSrc = pData[0];
@@ -989,7 +989,7 @@ static int fw_parse_configuration_data(struct tas2563_priv *pTAS2563,
 
 		pConfiguration->mnFsRate = (pData[0] << 8) + pData[1];
 		pData += 2;
-		dev_info(pTAS2563->dev, "Fs rate: %d", pConfiguration->mnFsRate);
+		dev_dbg(pTAS2563->dev, "Fs rate: %d", pConfiguration->mnFsRate);
 
 		n = fw_parse_data(pTAS2563, pFirmware, &(pConfiguration->mData), pData);
 		pData += n;
@@ -1048,7 +1048,7 @@ static int fw_parse(struct tas2563_priv *pTAS2563,
 	int nPosition = 0;
 
 	nPosition = fw_parse_header(pTAS2563, pFirmware, pData, nSize);
-	dev_info(pTAS2563->dev, "header size: %d, line: %d\n", nPosition, __LINE__);
+	dev_dbg(pTAS2563->dev, "header size: %d, line: %d\n", nPosition, __LINE__);
 	if (nPosition < 0) {
 		dev_err(pTAS2563->dev, "Firmware: Wrong Header");
 		return -EINVAL;
@@ -1064,14 +1064,14 @@ static int fw_parse(struct tas2563_priv *pTAS2563,
 	nPosition = 0;
 
 	nPosition = fw_parse_program_data(pTAS2563, pFirmware, pData);
-	dev_info(pTAS2563->dev, "program size: %d, line: %d\n", nPosition, __LINE__);
+	dev_dbg(pTAS2563->dev, "program size: %d, line: %d\n", nPosition, __LINE__);
 
 	pData += nPosition;
 	nSize -= nPosition;
 	nPosition = 0;
 
 	nPosition = fw_parse_configuration_data(pTAS2563, pFirmware, pData);
-	dev_info(pTAS2563->dev, "config size: %d, line: %d\n", nPosition, __LINE__);
+	dev_dbg(pTAS2563->dev, "config size: %d, line: %d\n", nPosition, __LINE__);
 
 	pData += nPosition;
 	nSize -= nPosition;
@@ -1079,7 +1079,7 @@ static int fw_parse(struct tas2563_priv *pTAS2563,
 
 	if (nSize > 64)
 		nPosition = fw_parse_calibration_data(pTAS2563, pFirmware, pData);
-	dev_info(pTAS2563->dev, "calib size: %d, line: %d\n", nPosition, __LINE__);
+	dev_dbg(pTAS2563->dev, "calib size: %d, line: %d\n", nPosition, __LINE__);
 	return 0;
 }
 
@@ -1091,7 +1091,7 @@ static int tas2563_codec_suspend(struct snd_soc_codec *codec)
 
 	mutex_lock(&pTAS2563->codec_lock);
 
-	dev_info(pTAS2563->dev, "%s\n", __func__);
+	dev_dbg(pTAS2563->dev, "%s\n", __func__);
 	pTAS2563->runtime_suspend(pTAS2563);
 
 	mutex_unlock(&pTAS2563->codec_lock);
@@ -1105,7 +1105,7 @@ static int tas2563_codec_resume(struct snd_soc_codec *codec)
 
 	mutex_lock(&pTAS2563->codec_lock);
 
-	dev_info(pTAS2563->dev, "%s\n", __func__);
+	dev_dbg(pTAS2563->dev, "%s\n", __func__);
 	pTAS2563->runtime_resume(pTAS2563);
 
 	mutex_unlock(&pTAS2563->codec_lock);
@@ -1119,7 +1119,7 @@ static int tas2563_set_power_state(struct tas2563_priv *pTAS2563, int state)
 	const char *pFWName;
 	struct TProgram *pProgram;
 
-	dev_info(pTAS2563->dev, "set power state: %d\n", state);
+	dev_dbg(pTAS2563->dev, "set power state: %d\n", state);
 
 	if ((pTAS2563->mpFirmware->mnPrograms == 0)
 		|| (pTAS2563->mpFirmware->mnConfigurations == 0)) {
@@ -1146,7 +1146,7 @@ static int tas2563_set_power_state(struct tas2563_priv *pTAS2563, int state)
 	*/
 
 	pProgram = &(pTAS2563->mpFirmware->mpPrograms[pTAS2563->mnCurrentProgram]);
-	dev_info(pTAS2563->dev, "%s, state: %d, mbPowerup %d\n", __func__, state, pTAS2563->mbPowerUp);
+	dev_dbg(pTAS2563->dev, "%s, state: %d, mbPowerup %d\n", __func__, state, pTAS2563->mbPowerUp);
 	if (state != TAS2563_POWER_SHUTDOWN) {
 		if (!pTAS2563->mbPowerUp) {
 			if (!pTAS2563->mbCalibrationLoaded) {
@@ -1156,7 +1156,7 @@ static int tas2563_set_power_state(struct tas2563_priv *pTAS2563, int state)
 			}
 
 			if (pTAS2563->mbLoadConfigurationPrePowerUp) {
-				dev_info(pTAS2563->dev, "load coefficient before power\n");
+				dev_dbg(pTAS2563->dev, "load coefficient before power\n");
 				pTAS2563->mbLoadConfigurationPrePowerUp = false;
 				nResult = tas2563_load_coefficient(pTAS2563,
 					pTAS2563->mnCurrentConfiguration, pTAS2563->mnNewConfiguration, false);
@@ -1178,12 +1178,12 @@ static int tas2563_set_power_state(struct tas2563_priv *pTAS2563, int state)
 		if (nResult < 0)
 			return nResult;
 		pTAS2563->mbPowerUp = true;
-		dev_info(pTAS2563->dev, "set ICN to -90dB\n");
+		dev_dbg(pTAS2563->dev, "set ICN to -90dB\n");
 		nResult = pTAS2563->bulk_write(pTAS2563, TAS2563_ICN_REG, pICN, 4);
 		if(nResult < 0)
 			return nResult;
 
-		dev_info(pTAS2563->dev, "set ICN delay\n");
+		dev_dbg(pTAS2563->dev, "set ICN delay\n");
 		nResult = pTAS2563->bulk_write(pTAS2563, TAS2563_ICN_DELAY, pICNDelay, 4);
 		break;
 
@@ -1227,10 +1227,10 @@ static int tas2563_dac_event(struct snd_soc_dapm_widget *w,
 
 	switch (event) {
 	case SND_SOC_DAPM_POST_PMU:
-		dev_info(pTAS2563->dev, "SND_SOC_DAPM_POST_PMU\n");
+		dev_dbg(pTAS2563->dev, "SND_SOC_DAPM_POST_PMU\n");
 		break;
 	case SND_SOC_DAPM_PRE_PMD:
-		dev_info(pTAS2563->dev, "SND_SOC_DAPM_PRE_PMD\n");
+		dev_dbg(pTAS2563->dev, "SND_SOC_DAPM_PRE_PMD\n");
 		break;
 	}
 
@@ -1256,13 +1256,13 @@ static int tas2563_mute(struct snd_soc_dai *dai, int mute)
 	struct snd_soc_codec *codec = dai->codec;
 	struct tas2563_priv *pTAS2563 = snd_soc_codec_get_drvdata(codec);
 
-        dev_info(pTAS2563->dev, "%s\n", __func__);
+        dev_dbg(pTAS2563->dev, "%s\n", __func__);
 	mutex_lock(&pTAS2563->codec_lock);
 	if (mute) {
-                dev_info(pTAS2563->dev, "mute: %s\n", __func__);
+                dev_dbg(pTAS2563->dev, "mute: %s\n", __func__);
 		tas2563_set_power_state(pTAS2563, TAS2563_POWER_SHUTDOWN);
 	} else {
-                dev_info(pTAS2563->dev, "unmute: %s\n", __func__);
+                dev_dbg(pTAS2563->dev, "unmute: %s\n", __func__);
 		tas2563_set_power_state(pTAS2563, TAS2563_POWER_ACTIVE);
 	}
 	mutex_unlock(&pTAS2563->codec_lock);
@@ -1285,7 +1285,7 @@ static int tas2563_slot_config(struct snd_soc_codec *codec, struct tas2563_priv 
 static int tas2563_set_slot(struct tas2563_priv *pTAS2563, int slot_width)
 {
 	int ret = 0;
-	dev_info(pTAS2563->dev, "%s, slot_width:%d\n", __func__, slot_width);
+	dev_dbg(pTAS2563->dev, "%s, slot_width:%d\n", __func__, slot_width);
 
 	switch (slot_width) {
 	case 16:
@@ -1314,7 +1314,7 @@ static int tas2563_set_slot(struct tas2563_priv *pTAS2563, int slot_width)
 	break;
 
 	default:
-		dev_info(pTAS2563->dev, "slot width not supported");
+		dev_dbg(pTAS2563->dev, "slot width not supported");
 		ret = -EINVAL;
 	}
 
@@ -1327,7 +1327,7 @@ static int tas2563_set_slot(struct tas2563_priv *pTAS2563, int slot_width)
 static int tas2563_set_bitwidth(struct tas2563_priv *pTAS2563, int bitwidth)
 {
 	int slot_width_tmp = 0;
-	dev_info(pTAS2563->dev, "%s %d\n", __func__, __LINE__);
+	dev_dbg(pTAS2563->dev, "%s %d\n", __func__, __LINE__);
 
 	switch (bitwidth) {
 	case SNDRV_PCM_FORMAT_S16_LE:
@@ -1359,14 +1359,14 @@ static int tas2563_set_bitwidth(struct tas2563_priv *pTAS2563, int bitwidth)
 		break;
 
 	default:
-		dev_info(pTAS2563->dev, "Not supported params format\n");
+		dev_dbg(pTAS2563->dev, "Not supported params format\n");
 	}
 
 	/* If machine driver did not call set slot width */
 	if (pTAS2563->mnSlot_width == 0)
 		tas2563_set_slot(pTAS2563, slot_width_tmp);
 
-	dev_info(pTAS2563->dev, "mnCh_size: %d\n", pTAS2563->mnCh_size);
+	dev_dbg(pTAS2563->dev, "mnCh_size: %d\n", pTAS2563->mnCh_size);
 	pTAS2563->mnPCMFormat = bitwidth;
 
 	return 0;
@@ -1436,7 +1436,7 @@ static int tas2563_set_samplerate(struct tas2563_priv *pTAS2563, int samplerate)
 				TAS2563_TDMConfigurationReg0_SAMPRATE31_176_4_192kHz);
 			break;
 	default:
-			dev_info(pTAS2563->dev, "%s, unsupported sample rate, %d\n", __func__, samplerate);
+			dev_dbg(pTAS2563->dev, "%s, unsupported sample rate, %d\n", __func__, samplerate);
 
 	}
 
@@ -1448,12 +1448,12 @@ int tas2563_load_default(struct tas2563_priv *pTAS2563)
 {
 	int ret = 0;
 	
-	dev_info(pTAS2563->dev, "%s, %d, ret = %d", __func__, __LINE__, ret);
+	dev_dbg(pTAS2563->dev, "%s, %d, ret = %d", __func__, __LINE__, ret);
 
 	ret = tas2563_set_slot(pTAS2563, pTAS2563->mnSlot_width);
 	if (ret < 0)
 		goto end;
-	dev_info(pTAS2563->dev, "%s, %d, ret = %d", __func__, __LINE__, ret);
+	dev_dbg(pTAS2563->dev, "%s, %d, ret = %d", __func__, __LINE__, ret);
 
 	/* proper TX format */
 	ret = pTAS2563->write(pTAS2563, TAS2563_TDMConfigurationReg4, 0x01);
@@ -1469,12 +1469,12 @@ int tas2563_load_default(struct tas2563_priv *pTAS2563)
 
 	if (ret < 0)
 		goto end;
-	dev_info(pTAS2563->dev, "%s, %d, ret = %d", __func__, __LINE__, ret);
+	dev_dbg(pTAS2563->dev, "%s, %d, ret = %d", __func__, __LINE__, ret);
 
 	ret = tas2563_set_bitwidth(pTAS2563, pTAS2563->mnPCMFormat);
 	if (ret < 0)
 		goto end;
-	dev_info(pTAS2563->dev, "%s, %d, ret = %d", __func__, __LINE__, ret);
+	dev_dbg(pTAS2563->dev, "%s, %d, ret = %d", __func__, __LINE__, ret);
 
 	ret = tas2563_set_samplerate(pTAS2563, pTAS2563->mnSamplingRate);
 	if (ret < 0)
@@ -1482,7 +1482,7 @@ int tas2563_load_default(struct tas2563_priv *pTAS2563)
 
 end:
 /* power up failed, restart later */
-	dev_info(pTAS2563->dev, "%s, %d, ret = %d", __func__, __LINE__, ret);
+	dev_dbg(pTAS2563->dev, "%s, %d, ret = %d", __func__, __LINE__, ret);
 	if (ret < 0)
 		schedule_delayed_work(&pTAS2563->irq_work,
 				msecs_to_jiffies(1000));
@@ -1544,7 +1544,7 @@ static int tas2563_load_coefficient(struct tas2563_priv *pTAS2563,
 	if (nPrevConfig < 0)
 		pPrevConfiguration = NULL;
 	else if (nPrevConfig == nNewConfig) {
-		dev_info(pTAS2563->dev, "%s, config [%d] already loaded\n",
+		dev_dbg(pTAS2563->dev, "%s, config [%d] already loaded\n",
 			__func__, nNewConfig);
 		goto end;
 	} else
@@ -1554,14 +1554,14 @@ static int tas2563_load_coefficient(struct tas2563_priv *pTAS2563,
 	pTAS2563->mnCurrentConfiguration = nNewConfig;
 	pTAS2563->mnCurrentSampleRate = pNewConfiguration->mnSamplingRate;
 
-	dev_info(pTAS2563->dev, "load configuration %s conefficient pre block\n",
+	dev_dbg(pTAS2563->dev, "load configuration %s conefficient pre block\n",
 		pNewConfiguration->mpName);
 	nResult = tas2563_load_data(pTAS2563, &(pNewConfiguration->mData), TAS2563_BLOCK_CFG_PRE_DEV_A);
 	if (nResult < 0)
 		goto end;
 
 //prog_coefficient:
-	dev_info(pTAS2563->dev, "load new configuration: %s, coeff block data\n",
+	dev_dbg(pTAS2563->dev, "load new configuration: %s, coeff block data\n",
 		pNewConfiguration->mpName);
 	nResult = tas2563_load_data(pTAS2563, &(pNewConfiguration->mData),
 		TAS2563_BLOCK_CFG_COEFF_DEV_A);
@@ -1576,12 +1576,12 @@ static int tas2563_load_coefficient(struct tas2563_priv *pTAS2563,
 
 	if (bRestorePower) {
 		pTAS2563->clearIRQ(pTAS2563);
-		dev_info(pTAS2563->dev, "device powered up, load startup\n");
+		dev_dbg(pTAS2563->dev, "device powered up, load startup\n");
 		nResult = tas2563_set_power_state(pTAS2563, TAS2563_POWER_MUTE);
 		if (nResult < 0)
 			goto end;
 
-		dev_info(pTAS2563->dev,
+		dev_dbg(pTAS2563->dev,
 			"device powered up, load unmute\n");
 		nResult = tas2563_set_power_state(pTAS2563, TAS2563_POWER_ACTIVE);
 		if (nResult < 0)
@@ -1655,7 +1655,7 @@ void tas2563_fw_ready(const struct firmware *pFW, void *pContext)
 	mutex_lock(&pTAS2563->file_lock);
 #endif
 
-	dev_info(pTAS2563->dev, "%s:\n", __func__);
+	dev_dbg(pTAS2563->dev, "%s:\n", __func__);
 
 	if (unlikely(!pFW) || unlikely(!pFW->data)) {
 		dev_err(pTAS2563->dev, "%s firmware is not loaded.\n",
@@ -1666,7 +1666,7 @@ void tas2563_fw_ready(const struct firmware *pFW, void *pContext)
 	if (pTAS2563->mpFirmware->mpConfigurations) {
 		nProgram = pTAS2563->mnCurrentProgram;
 		nSampleRate = pTAS2563->mnCurrentSampleRate;
-		dev_info(pTAS2563->dev, "clear current firmware\n");
+		dev_dbg(pTAS2563->dev, "clear current firmware\n");
 		tas2563_clear_firmware(pTAS2563->mpFirmware);
 	}
 
@@ -1690,7 +1690,7 @@ void tas2563_fw_ready(const struct firmware *pFW, void *pContext)
 	}
 
 	if (nProgram >= pTAS2563->mpFirmware->mnPrograms) {
-		dev_info(pTAS2563->dev,
+		dev_dbg(pTAS2563->dev,
 			"no previous program, set to default\n");
 		nProgram = 0;
 	}
@@ -1757,7 +1757,7 @@ static bool tas2563_get_coefficient_in_block(struct tas2563_priv *pTAS2563,
 
 	if (bFound) {
 		*pnValue = nCoefficient;
-		dev_info(pTAS2563->dev, "%s, B[0x%x]P[0x%x]R[0x%x]=0x%x\n", __func__,
+		dev_dbg(pTAS2563->dev, "%s, B[0x%x]P[0x%x]R[0x%x]=0x%x\n", __func__,
 			TAS2563_BOOK_ID(nReg), TAS2563_PAGE_ID(nReg), TAS2563_PAGE_REG(nReg),
 			nCoefficient);
 	}
@@ -1796,10 +1796,10 @@ int tas2563_set_program(struct tas2563_priv *pTAS2563,
 			if (pTAS2563->mpFirmware->mpConfigurations[nConfiguration].mnProgram == nProgram) {
 				if (nSampleRate == 0) {
 					bFound = true;
-					dev_info(pTAS2563->dev, "find default configuration %d\n", nConfiguration);
+					dev_dbg(pTAS2563->dev, "find default configuration %d\n", nConfiguration);
 				} else if (nSampleRate == pTAS2563->mpFirmware->mpConfigurations[nConfiguration].mnSamplingRate) {
 					bFound = true;
-					dev_info(pTAS2563->dev, "find matching configuration %d\n", nConfiguration);
+					dev_dbg(pTAS2563->dev, "find matching configuration %d\n", nConfiguration);
 				} else {
 					nConfiguration++;
 				}
@@ -1825,7 +1825,7 @@ int tas2563_set_program(struct tas2563_priv *pTAS2563,
 
 	pProgram = &(pTAS2563->mpFirmware->mpPrograms[nProgram]);
 	if (pTAS2563->mbPowerUp) {
-		dev_info(pTAS2563->dev,
+		dev_dbg(pTAS2563->dev,
 			"device powered up, power down to load program %d (%s)\n",
 			nProgram, pProgram->mpName);
 		if (hrtimer_active(&pTAS2563->mtimerwork))
@@ -1848,7 +1848,7 @@ int tas2563_set_program(struct tas2563_priv *pTAS2563,
 	if (nResult < 0)
 		goto end;
 
-	dev_info(pTAS2563->dev, "load program %d (%s)\n", nProgram, pProgram->mpName);
+	dev_dbg(pTAS2563->dev, "load program %d (%s)\n", nProgram, pProgram->mpName);
 	nResult = tas2563_load_data(pTAS2563, &(pProgram->mData), TAS2563_BLOCK_PGM_DEV_A);
 	if (nResult < 0)
 		goto end;
@@ -1867,11 +1867,11 @@ int tas2563_set_program(struct tas2563_priv *pTAS2563,
 				TAS2563_PowerControl_VSNSPower_Active |
 				TAS2563_PowerControl_ISNSPower_Active);
 	if (nResult < 0)
-		dev_info(pTAS2563->dev, "Enable IV Data Failed: %s\n", __func__);
+		dev_dbg(pTAS2563->dev, "Enable IV Data Failed: %s\n", __func__);
 
 	if (pTAS2563->mbPowerUp) {
 //		pTAS2563->clearIRQ(pTAS2563);
-//		dev_info(pTAS2563->dev, "device powered up, load startup\n");
+//		dev_dbg(pTAS2563->dev, "device powered up, load startup\n");
 		nResult = tas2563_set_power_state(pTAS2563, TAS2563_POWER_MUTE);
 
 		if (nResult < 0)
@@ -1883,7 +1883,7 @@ int tas2563_set_program(struct tas2563_priv *pTAS2563,
 				goto end;
 			}
 		}
-		dev_info(pTAS2563->dev, "device powered up, load unmute\n");
+		dev_dbg(pTAS2563->dev, "device powered up, load unmute\n");
 		tas2563_set_power_state(pTAS2563, TAS2563_POWER_ACTIVE);
 		if (nResult < 0)
 			goto end;
@@ -1926,7 +1926,7 @@ static int tas2563_set_calibration(struct tas2563_priv *pTAS2563, int nCalibrati
 	if (nCalibration == 0x00FF) {
 		nResult = tas2563_load_calibration(pTAS2563, TAS2563_CAL_NAME);
 		if (nResult < 0) {
-			dev_info(pTAS2563->dev, "load new calibration file %s fail %d\n",
+			dev_dbg(pTAS2563->dev, "load new calibration file %s fail %d\n",
 				TAS2563_CAL_NAME, nResult);
 			goto end;
 		}
@@ -1951,13 +1951,13 @@ static int tas2563_set_calibration(struct tas2563_priv *pTAS2563, int nCalibrati
 		if (pTAS2563->mbBypassTMax) {
 			bFound = tas2563_find_Tmax_in_configuration(pTAS2563, pConfiguration, &nTmax);
 			if (bFound && (nTmax == TAS2563_COEFFICIENT_TMAX)) {
-				dev_info(pTAS2563->dev, "%s, config[%s] bypass load calibration\n",
+				dev_dbg(pTAS2563->dev, "%s, config[%s] bypass load calibration\n",
 					__func__, pConfiguration->mpName);
 				goto end;
 			}
 		}
 
-		dev_info(pTAS2563->dev, "%s, load calibration\n", __func__);
+		dev_dbg(pTAS2563->dev, "%s, load calibration\n", __func__);
 		nResult = tas2563_load_data(pTAS2563, &(pCalibration->mData), TAS2563_BLOCK_CFG_COEFF_DEV_A);
 		if (nResult < 0)
 			goto end;
@@ -2056,7 +2056,7 @@ static int tas2563_configuration_get(struct snd_kcontrol *pKcontrol,
 	mutex_lock(&pTAS2563->codec_lock);
 
 	pValue->value.integer.value[0] = pTAS2563->mnCurrentConfiguration;
-	dev_info(pTAS2563->dev, "tas2563_configuration_get = %d\n",
+	dev_dbg(pTAS2563->dev, "tas2563_configuration_get = %d\n",
 		pTAS2563->mnCurrentConfiguration);
 
 	mutex_unlock(&pTAS2563->codec_lock);
@@ -2077,7 +2077,7 @@ static int tas2563_configuration_put(struct snd_kcontrol *pKcontrol,
 
 	mutex_lock(&pTAS2563->codec_lock);
 
-	dev_info(pTAS2563->dev, "%s = %d\n", __func__, nConfiguration);
+	dev_dbg(pTAS2563->dev, "%s = %d\n", __func__, nConfiguration);
 	ret = tas2563_set_config(pTAS2563, nConfiguration);
 
 	mutex_unlock(&pTAS2563->codec_lock);
@@ -2094,7 +2094,7 @@ static int tas2563_hw_params(struct snd_pcm_substream *substream,
 	int ret = 0;
 	int blr_clk_ratio;
 
-	dev_info(pTAS2563->dev, "%s, format: %d\n", __func__,
+	dev_dbg(pTAS2563->dev, "%s, format: %d\n", __func__,
 		params_format(params));
 
 	mutex_lock(&pTAS2563->codec_lock);
@@ -2102,16 +2102,16 @@ static int tas2563_hw_params(struct snd_pcm_substream *substream,
 	ret = tas2563_set_bitwidth(pTAS2563, params_format(params));
 	if(ret < 0)
 	{
-		dev_info(pTAS2563->dev, "set bitwidth failed, %d\n", ret);
+		dev_dbg(pTAS2563->dev, "set bitwidth failed, %d\n", ret);
 		goto ret;
 	}
 
 	blr_clk_ratio = params_channels(params) * pTAS2563->mnCh_size;
-	dev_info(pTAS2563->dev, "blr_clk_ratio: %d\n", blr_clk_ratio);
+	dev_dbg(pTAS2563->dev, "blr_clk_ratio: %d\n", blr_clk_ratio);
 	if(blr_clk_ratio != 0)
 		tas2563_slot_config(pTAS2563->codec, pTAS2563, blr_clk_ratio);
 
-	dev_info(pTAS2563->dev, "%s, sample rate: %d\n", __func__,
+	dev_dbg(pTAS2563->dev, "%s, sample rate: %d\n", __func__,
 		params_rate(params));
 
 	ret = tas2563_set_samplerate(pTAS2563, params_rate(params));
@@ -2137,11 +2137,11 @@ static int tas2563_set_fmt(struct tas2563_priv *pTAS2563, unsigned int fmt)
 
 	switch (fmt & SND_SOC_DAIFMT_INV_MASK) {
 	case SND_SOC_DAIFMT_NB_NF:
-		dev_info(pTAS2563->dev, "INV format: NBNF\n");
+		dev_dbg(pTAS2563->dev, "INV format: NBNF\n");
 		asi_cfg_1 |= TAS2563_TDMConfigurationReg1_RXEDGE_Rising;
 		break;
 	case SND_SOC_DAIFMT_IB_NF:
-		dev_info(pTAS2563->dev, "INV format: IBNF\n");
+		dev_dbg(pTAS2563->dev, "INV format: IBNF\n");
 		asi_cfg_1 |= TAS2563_TDMConfigurationReg1_RXEDGE_Falling;
 		break;
 	default:
@@ -2186,7 +2186,7 @@ static int tas2563_set_dai_fmt(struct snd_soc_dai *dai, unsigned int fmt)
 	struct tas2563_priv *pTAS2563 = snd_soc_codec_get_drvdata(codec);
 	int ret = 0;
 
-	dev_info(pTAS2563->dev, "%s, format=0x%x\n", __func__, fmt);
+	dev_dbg(pTAS2563->dev, "%s, format=0x%x\n", __func__, fmt);
 
 	mutex_lock(&pTAS2563->codec_lock);
 
@@ -2204,7 +2204,7 @@ static int tas2563_set_dai_tdm_slot(struct snd_soc_dai *dai,
 	struct snd_soc_codec *codec = dai->codec;
 	struct tas2563_priv *pTAS2563 = snd_soc_codec_get_drvdata(codec);
 
-	dev_info(pTAS2563->dev, "%s, tx_mask:%d, rx_mask:%d, slots:%d, slot_width:%d",
+	dev_dbg(pTAS2563->dev, "%s, tx_mask:%d, rx_mask:%d, slots:%d, slot_width:%d",
 			__func__, tx_mask, rx_mask, slots, slot_width);
 
 	ret = tas2563_set_slot(pTAS2563, slot_width);
@@ -2225,7 +2225,7 @@ static int tas2563_program_get(struct snd_kcontrol *pKcontrol,
 	mutex_lock(&pTAS2563->codec_lock);
 
 	pValue->value.integer.value[0] = pTAS2563->mnCurrentProgram;
-	dev_info(pTAS2563->dev, "tas2563_program_get = %d\n",
+	dev_dbg(pTAS2563->dev, "tas2563_program_get = %d\n",
 		pTAS2563->mnCurrentProgram);
 
 	mutex_unlock(&pTAS2563->codec_lock);
@@ -2267,7 +2267,7 @@ static int tas2563_calibration_get(struct snd_kcontrol *pKcontrol,
 	mutex_lock(&pTAS2563->codec_lock);
 
 	pValue->value.integer.value[0] = pTAS2563->mnCurrentCalibration;
-	dev_info(pTAS2563->dev,
+	dev_dbg(pTAS2563->dev,
 		"tas2563_calibration_get = %d\n",
 		pTAS2563->mnCurrentCalibration);
 
@@ -2393,7 +2393,7 @@ int tas2563_register_codec(struct tas2563_priv *pTAS2563)
 {
 	int nResult = 0;
 
-	dev_info(pTAS2563->dev, "%s, enter\n", __func__);
+	dev_dbg(pTAS2563->dev, "%s, enter\n", __func__);
 	nResult = snd_soc_register_codec(pTAS2563->dev,
 		&soc_codec_driver_tas2563,
 		tas2563_dai_driver, ARRAY_SIZE(tas2563_dai_driver));
