@@ -427,7 +427,9 @@ static void update_msoc(struct qpnp_qg *chip)
 			chip->msoc += chip->dt.delta_soc;
 	} else if (chip->catch_up_soc < chip->msoc) {
 		/* SOC dropped */
-		chip->msoc -= chip->dt.delta_soc;
+		if ((input_present == false)) {
+			chip->msoc -= chip->dt.delta_soc;
+		}
 	}
 	chip->msoc = CAP(0, 100, chip->msoc);
 
