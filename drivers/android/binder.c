@@ -2790,7 +2790,7 @@ err_translate_fd_failed:
 					      offset, sizeof(fd));
 		task_close_fd(target_proc, fd);
 	}
-	return target_fd;
+	return target_fd > 0 ? -EINVAL : target_fd;
 }
 
 static int binder_fixup_parent(struct binder_transaction *t,
