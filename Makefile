@@ -797,7 +797,6 @@ KBUILD_CFLAGS += $(call cc-disable-warning, unused-but-set-variable)
 endif
 
 ifeq ($(ld-name),lld)
-LDFLAGS += -O2
 LDFLAGS += -z norelro
 endif
 
