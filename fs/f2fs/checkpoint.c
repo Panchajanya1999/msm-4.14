@@ -1059,13 +1059,13 @@ int f2fs_sync_dirty_inodes(struct f2fs_sb_info *sbi, enum inode_type type)
 	struct inode *inode;
 	struct f2fs_inode_info *fi;
 	bool is_dir = (type == DIR_INODE);
-	unsigned long ino = 0;
+	unsigned long ino = 0, retry_count = DEFAULT_RETRY_SYNC_DIR_COUNT;
 
 	trace_f2fs_sync_dirty_inodes_enter(sbi->sb, is_dir,
 				get_pages(sbi, is_dir ?
 				F2FS_DIRTY_DENTS : F2FS_DIRTY_DATA));
 retry:
-	if (unlikely(f2fs_cp_error(sbi))) {
+	if (unlikely(f2fs_cp_error(sbi) || (is_dir && !retry_count))) {
 		trace_f2fs_sync_dirty_inodes_exit(sbi->sb, is_dir,
 				get_pages(sbi, is_dir ?
 				F2FS_DIRTY_DENTS : F2FS_DIRTY_DATA));
@@ -1096,10 +1096,13 @@ retry:
 
 		iput(inode);
 		/* We need to give cpu to another writers. */
-		if (ino == cur_ino)
-			cond_resched();
-		else
+		if (ino == cur_ino) {
+			retry_count--;
+			io_schedule_timeout(DEFAULT_IO_TIMEOUT);
+		} else {
+			retry_count = DEFAULT_RETRY_SYNC_DIR_COUNT;
 			ino = cur_ino;
+		}
 	} else {
 		/*
 		 * We should submit bio, since it exists several
