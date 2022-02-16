@@ -54,7 +54,6 @@
 
 &clock_cpucc {
     qcom,cpufreq-table-0 =
-		<1209600>,
 		<1363200>,
 		<1593600>,
 		<1708800>;
@@ -106,7 +105,7 @@
 
 		zone@4 {
 			reg = <4>;
-			qcom,silver-khz = <1209600>;
+			qcom,silver-khz = <1363200>;
 			qcom,gold-khz = <1017600>;
 			qcom,trip-deg = <85500>;
 		};
