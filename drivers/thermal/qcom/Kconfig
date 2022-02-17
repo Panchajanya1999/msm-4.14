@@ -148,3 +148,12 @@ config MSM_THERMAL_SIMPLE
 	  This driver can only be configured via the device tree; it cannot be
 	  configured at runtime. Configuration instructions can be found in the
 	  accompanying documentation.
+
+config QTI_BUS_SCALING_COOLING_DEVICE
+	tristate "QTI DDR bus scaling cooling device driver"
+	depends on THERMAL_OF && QCOM_BUS_SCALING
+	help
+	   This enables the QTI DDR bus scaling cooling devices. These cooling
+	   devices will be used by QTI chipset to place a DDR state request
+	   to meet the performance requirement under thermally constrained
+	   conditions.
