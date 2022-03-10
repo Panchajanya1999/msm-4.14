@@ -325,6 +325,10 @@
 #define KASAN_ABI_VERSION 3
 #endif
 
+#ifdef CONFIG_SHADOW_CALL_STACK
+#define __noscs __attribute__((__no_sanitize__("shadow-call-stack")))
+#endif
+
 /*
  * Older GCCs (< 5) don't support __has_attribute, so instead of checking
  * __has_attribute(__no_sanitize_address__) do a GCC version check.

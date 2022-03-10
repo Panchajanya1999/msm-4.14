@@ -697,7 +697,7 @@ config CFI_CLANG_SHADOW
 config ARCH_SUPPORTS_SHADOW_CALL_STACK
 	bool
 	help
-	  An architecture should select this if it supports Clang's Shadow
+	  An architecture should select this if it supports the compiler's Shadow
 	  Call Stack, has asm/scs.h, and implements runtime support for shadow
 	  stack switching.
 
@@ -713,15 +713,16 @@ config ROP_PROTECTION_NONE
 	bool "None"
 
 config SHADOW_CALL_STACK
-	bool "Clang Shadow Call Stack"
+	bool "Shadow Call Stack"
 	depends on ARCH_SUPPORTS_SHADOW_CALL_STACK
 	help
-	  This option enables Clang's Shadow Call Stack, which uses a
-	  shadow stack to protect function return addresses from being
-	  overwritten by an attacker. More information can be found from
-	  Clang's documentation:
+	  This option enables the compiler's Shadow Call Stack, which
+	  uses a shadow stack to protect function return addresses from
+	  being overwritten by an attacker. More information can be found
+	  in the  compiler's documentation:
 
-	    https://clang.llvm.org/docs/ShadowCallStack.html
+	  - Clang: https://clang.llvm.org/docs/ShadowCallStack.html
+	  - GCC: https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html#Instrumentation-Options
 
 	  Note that security guarantees in the kernel differ from the ones
 	  documented for user space. The kernel must store addresses of shadow
