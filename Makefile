@@ -1283,7 +1283,7 @@ endif
 endif
 
 # Disable clang-specific config options when using a different compiler
-clang-specific-configs := LTO_CLANG CFI_CLANG SHADOW_CALL_STACK INIT_STACK_ALL_ZERO FORTIFY_SOURCE RELR
+clang-specific-configs := LTO_CLANG CFI_CLANG INIT_STACK_ALL_ZERO FORTIFY_SOURCE RELR
 
 PHONY += check-clang-specific-options
 check-clang-specific-options: $(KCONFIG_CONFIG) FORCE
