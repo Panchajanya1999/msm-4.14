@@ -22,24 +22,14 @@
 
 &firmware {
     android {
+        boot_devices = "soc/7c4000.sdhci";
         vbmeta {
             parts = "vbmeta,boot,recovery,system,vendor,dtbo";
         };
         fstab {
             vendor {
-		dev = "/dev/block/platform/soc/7c4000.sdhci/by-name/vendor";
-                fsmgr_flags = "wait";
+                status = "disabled";
             };
-            persist {
-		compatible = "android,persist";
-		dev = "/dev/block/platform/soc/7c4000.sdhci/by-name/persist";
-		type = "ext4";
-		mnt_point = "/mnt/vendor/persist";
-		mnt_flags = "nosuid,nodev,noatime,barrier=1";
-		fsmgr_flags = "wait";
-		status = "ok";
-	    };
-
         };
     };
 };

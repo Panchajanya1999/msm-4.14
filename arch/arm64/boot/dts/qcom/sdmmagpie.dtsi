@@ -466,6 +466,7 @@
 
 	firmware: firmware {
 		android {
+			boot_devices = "soc/7c4000.sdhci";
 			compatible = "android,firmware";
 			vbmeta {
 				compatible = "android,vbmeta";
@@ -474,12 +475,7 @@
 			fstab {
 				compatible = "android,fstab";
 				vendor {
-					compatible = "android,vendor";
-					dev = "/dev/block/platform/soc/1d84000.ufshc/by-name/vendor";
-					type = "ext4";
-					mnt_flags = "ro,barrier=1,discard";
-					fsmgr_flags = "wait,slotselect,avb";
-					status = "ok";
+                        status = "disabled";
 				};
 			};
 		};
